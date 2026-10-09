@@ -1,0 +1,66 @@
+# =========================
+# Unity
+# =========================
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+*.private
+*.private.meta
+^*.private.[0-9]+$
+^*.private.[0-9]+.meta$
+.vs/
+.idea/
+.gradle/
+ExportedObj/
+.consulo/
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+sysinfo.txt
+*.apk
+*.aab
+*.unitypackage
+*.app
+crashlytics-build.properties
+[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# =========================
+# .NET Core / ASP.NET / C#
+# =========================
+[Bb]in/
+[Oo]bj/
+*.userprefs
+*.user
+.vs/
+.vscode/
+*.log
+appsettings.Development.json
+appsettings.Secret.json
+
+# =========================
+# OS generated files
+# =========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
