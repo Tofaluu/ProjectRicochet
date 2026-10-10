@@ -4,6 +4,8 @@ using Ricochet.Client.Network;
 using Ricochet.Client.Scratchpad;
 using SharedLogic;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace Ricochet.Client.UI
@@ -139,6 +141,7 @@ namespace Ricochet.Client.UI
 
         private void OnLockInClicked()
         {
+            ClearButtonFocus();
             _network.SubmitSolution(_scratchpad.Moves.ToArray());
             _feedbackText.text = $"Submitted {_scratchpad.Moves.Count} moves...";
         }
@@ -146,9 +149,18 @@ namespace Ricochet.Client.UI
         // Toggles this player's vote to end the round early; the server ends it once everyone has voted.
         private void OnDoneClicked()
         {
+            ClearButtonFocus();
             // Flip locally for instant feedback; the next LobbyState confirms it.
             _iAmDone = !_iAmDone;
             _network.SetDone(_iAmDone);
+        }
+
+        // A clicked button stays selected, and the UI treats Enter as "press the selected button".
+        // Deselect so Enter only ever means Lock In (see Update), never a second click.
+        private static void ClearButtonFocus()
+        {
+            if (EventSystem.current != null)
+                EventSystem.current.SetSelectedGameObject(null);
         }
 
         private void OnStatusChanged(string status)
@@ -282,7 +294,12 @@ namespace Ricochet.Client.UI
             int moveCount = _scratchpad.Moves.Count;
             bool beatsBest = _bestPlayer == null || moveCount < _bestMoves;
             _lockInButton.interactable = !_roundOver && _scratchpad.IsSolved && beatsBest;
-            _lockInLabel.text = _scratchpad.IsSolved ? $"Lock In ({moveCount} moves)" : "Lock In";
+            _lockInLabel.text = _scratchpad.IsSolved ? $"Lock In ({moveCount} moves) [Enter]" : "Lock In";
+
+            Keyboard keyboard = Keyboard.current;
+            if (_lockInButton.interactable && keyboard != null
+                && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame))
+                OnLockInClicked();
 
             // The leader has nothing to give up on, so they don't get the button at all.
             _doneButton.gameObject.SetActive(!_iAmLeading);
