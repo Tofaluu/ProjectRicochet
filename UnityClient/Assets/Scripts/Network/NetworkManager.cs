@@ -27,7 +27,7 @@ namespace Ricochet.Client.Network
         /// <summary>(round number, board)</summary>
         public event Action<int, RoundSetup> RoundStarted;
         /// <summary>(round number, seconds remaining)</summary>
-        public event Action<int, float> TimerStarted;
+        public event Action<int, float> TimerUpdated;
         /// <summary>(round number, player name, move count)</summary>
         public event Action<int, string, int> NewBestSolution;
         /// <summary>(reason)</summary>
@@ -124,8 +124,8 @@ namespace Ricochet.Client.Network
                     RoundStarted?.Invoke(round, setup);
                 });
             });
-            _connection.On<int, double>(HubMethods.TimerStarted,
-                (round, seconds) => Post(() => TimerStarted?.Invoke(round, (float)seconds)));
+            _connection.On<int, double>(HubMethods.TimerUpdated,
+                (round, seconds) => Post(() => TimerUpdated?.Invoke(round, (float)seconds)));
             _connection.On<int, string, int>(HubMethods.NewBestSolution,
                 (round, player, moves) => Post(() => NewBestSolution?.Invoke(round, player, moves)));
             _connection.On<string>(HubMethods.SolutionRejected,

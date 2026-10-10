@@ -29,8 +29,11 @@ namespace SharedLogic
         /// <summary>(int roundNumber, byte[] board)</summary>
         public const string RoundStarted = "RoundStarted";
 
-        /// <summary>(int roundNumber, double secondsRemaining). The first valid solution starts the countdown.</summary>
-        public const string TimerStarted = "TimerStarted";
+        /// <summary>
+        /// (int roundNumber, double secondsRemaining). Sent when the first valid solution starts the
+        /// countdown and whenever a better solution extends it.
+        /// </summary>
+        public const string TimerUpdated = "TimerUpdated";
 
         /// <summary>(int roundNumber, string playerName, int moveCount)</summary>
         public const string NewBestSolution = "NewBestSolution";
