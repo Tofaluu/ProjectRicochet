@@ -3,7 +3,8 @@
     "rootNamespace": "Ricochet.Client",
     "references": [
         "SharedLogic",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

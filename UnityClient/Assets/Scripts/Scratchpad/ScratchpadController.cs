@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using Ricochet.Client.Board;
 using SharedLogic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 namespace Ricochet.Client.Scratchpad
 {
@@ -35,11 +37,25 @@ namespace Ricochet.Client.Scratchpad
         private bool _dragging;
         private Vector3 _dragStart;
 
+        public IReadOnlyList<Move> Moves => _moves;
+        public bool IsSolved => _solved;
+
+        /// <summary>False while playing online, where the server decides the board.</summary>
+        public bool AllowNewBoard { get; set; } = true;
+
         private void Start()
         {
             if (_camera == null)
                 _camera = Camera.main;
-            NewBoard();
+            if (_round == null)
+                NewBoard();
+        }
+
+        /// <summary>Shows a board from elsewhere (e.g. the server) and clears the move list.</summary>
+        public void LoadRound(RoundSetup round)
+        {
+            _currentSeed = 0;
+            ShowRound(round);
         }
 
         private void NewBoard()
@@ -47,7 +63,12 @@ namespace Ricochet.Client.Scratchpad
             _currentSeed = _seed != 0 ? _seed : Random.Range(1, int.MaxValue);
             RoundSetup generated = BoardGenerator.GenerateRound(new System.Random(_currentSeed));
             // Go through the wire format so the scratchpad sees exactly what a networked client would.
-            _round = BoardCodec.Decode(BoardCodec.Encode(generated));
+            ShowRound(BoardCodec.Decode(BoardCodec.Encode(generated)));
+        }
+
+        private void ShowRound(RoundSetup round)
+        {
+            _round = round;
             _boardView.Build(_round, _round.Robots);
             FrameCamera();
             ResetBoard();
@@ -106,7 +127,7 @@ namespace Ricochet.Client.Scratchpad
         private void HandleKeyboard()
         {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null)
+            if (keyboard == null || IsTypingInUI())
                 return;
 
             if (keyboard.digit1Key.wasPressedThisFrame) Select(RobotColor.Red);
@@ -122,7 +143,17 @@ namespace Ricochet.Client.Scratchpad
 
             if (keyboard.zKey.wasPressedThisFrame || keyboard.backspaceKey.wasPressedThisFrame) Undo();
             if (keyboard.rKey.wasPressedThisFrame) ResetBoard();
-            if (keyboard.nKey.wasPressedThisFrame) NewBoard();
+            if (keyboard.nKey.wasPressedThisFrame && AllowNewBoard) NewBoard();
+        }
+
+        // Typing a name into an input field shouldn't also move robots.
+        private static bool IsTypingInUI()
+        {
+            EventSystem eventSystem = EventSystem.current;
+            if (eventSystem == null || eventSystem.currentSelectedGameObject == null)
+                return false;
+            InputField field = eventSystem.currentSelectedGameObject.GetComponent<InputField>();
+            return field != null && field.isFocused;
         }
 
         // Press on a robot to select it; release after dragging to move it in the drag's main direction.
@@ -188,8 +219,9 @@ namespace Ricochet.Client.Scratchpad
                 $"Get {goal} to the big diamond\n" +
                 $"{status}\n" +
                 $"Selected: {_selected}\n" +
-                $"Seed: {_currentSeed}\n\n" +
-                "Click / 1-4 / Tab: select\nArrows / WASD / drag: move\nZ: undo   R: reset   N: new board";
+                (_currentSeed != 0 ? $"Seed: {_currentSeed}\n\n" : "Online board\n\n") +
+                "Click / 1-4 / Tab: select\nArrows / WASD / drag: move\nZ: undo   R: reset" +
+                (AllowNewBoard ? "   N: new board" : "");
 
             var style = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.UpperLeft, fontSize = 16 };
             GUI.Box(new Rect(10, 10, 300, 200), text, style);
