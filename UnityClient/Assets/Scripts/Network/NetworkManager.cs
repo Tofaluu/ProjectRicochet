@@ -15,10 +15,13 @@ namespace Ricochet.Client.Network
     /// </summary>
     public class NetworkManager : MonoBehaviour
     {
-        [SerializeField] private string _serverUrl = "http://localhost:5022" + HubMethods.HubPath;
+        public const string DefaultServer = "http://localhost:5022";
+
+        [SerializeField] private string _serverUrl = DefaultServer + HubMethods.HubPath;
 
         private readonly ConcurrentQueue<Action> _mainThreadQueue = new ConcurrentQueue<Action>();
         private HubConnection _connection;
+        private string _connectedUrl;
 
         public event Action<LobbyState> LobbyStateChanged;
         /// <summary>(round number, board)</summary>
@@ -37,6 +40,28 @@ namespace Ricochet.Client.Network
         public bool IsInLobby { get; private set; }
         public int CurrentRound { get; private set; }
 
+        /// <summary>
+        /// Hub URL. Accepts a bare host or base address (e.g. a tunnel URL pasted by a player):
+        /// the scheme defaults to https (http for localhost) and the hub path is appended.
+        /// </summary>
+        public string ServerUrl
+        {
+            get => _serverUrl;
+            set => _serverUrl = NormalizeServerUrl(value);
+        }
+
+        public static string NormalizeServerUrl(string input)
+        {
+            string url = (input ?? "").Trim().TrimEnd('/');
+            if (url.Length == 0)
+                url = DefaultServer;
+            if (!url.Contains("://"))
+                url = (url.StartsWith("localhost") || url.StartsWith("127.0.0.1") ? "http://" : "https://") + url;
+            if (!url.EndsWith(HubMethods.HubPath, StringComparison.OrdinalIgnoreCase))
+                url += HubMethods.HubPath;
+            return url;
+        }
+
         private void Awake()
         {
             // Keep processing server messages (and the timer) while the window is unfocused.
@@ -47,7 +72,7 @@ namespace Ricochet.Client.Network
         {
             try
             {
-                if (_connection == null || _connection.State == HubConnectionState.Disconnected)
+                if (_connection == null || _connection.State == HubConnectionState.Disconnected || _connectedUrl != _serverUrl)
                     await ConnectAsync();
 
                 SetStatus("Joining " + lobbyCode + "...");
@@ -83,8 +108,10 @@ namespace Ricochet.Client.Network
             if (old != null)
                 _ = old.DisposeAsync();
 
+            IsInLobby = false;
             HubConnection connection = new HubConnectionBuilder().WithUrl(_serverUrl).Build();
             _connection = connection;
+            _connectedUrl = _serverUrl;
 
             _connection.On<LobbyState>(HubMethods.LobbyState,
                 state => Post(() => LobbyStateChanged?.Invoke(state)));
