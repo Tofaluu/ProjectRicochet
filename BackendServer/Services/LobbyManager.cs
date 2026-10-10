@@ -20,6 +20,12 @@ namespace BackendServer.Services
         /// <summary>Pause between a round ending and the next board.</summary>
         public double IntermissionSeconds { get; set; } = 3;
 
+        /// <summary>
+        /// Clients replay the winning solution at this many seconds per move; the next board
+        /// waits for the replay plus <see cref="IntermissionSeconds"/>.
+        /// </summary>
+        public double ReplayStepSeconds { get; set; } = 1;
+
         public int MaxSolutionMoves { get; set; } = 64;
     }
 
@@ -54,6 +60,7 @@ namespace BackendServer.Services
         public string? BestConnectionId { get; set; }
         public string? BestPlayerName { get; set; }
         public int BestMoveCount { get; set; }
+        public byte[] BestMoves { get; set; } = Array.Empty<byte>();
     }
 
     /// <summary>
@@ -258,6 +265,7 @@ namespace BackendServer.Services
             lobby.BestConnectionId = connectionId;
             lobby.BestPlayerName = playerName;
             lobby.BestMoveCount = moveCount;
+            lobby.BestMoves = MoveCodec.Encode(moves);
             return null;
         }
 
@@ -265,6 +273,7 @@ namespace BackendServer.Services
         {
             string? winnerName;
             int moveCount;
+            byte[] bestMoves;
             LobbyState state;
             while (true)
             {
@@ -287,22 +296,21 @@ namespace BackendServer.Services
                     return;
 
                 lobby.Phase = RoundPhase.Intermission;
-                winnerName = null;
                 // The point only goes to the best solver if they're still here.
                 if (lobby.BestConnectionId != null && lobby.Players.TryGetValue(lobby.BestConnectionId, out Player? winner))
-                {
                     winner.Score++;
-                    winnerName = winner.Name;
-                }
+                winnerName = lobby.BestPlayerName;
                 moveCount = lobby.BestMoveCount;
+                bestMoves = lobby.BestMoves;
                 state = SnapshotLocked(lobby);
             }
 
             IClientProxy group = _hub.Clients.Group(lobby.Code);
-            await group.SendAsync(HubMethods.RoundEnded, roundNumber, winnerName, moveCount);
+            await group.SendAsync(HubMethods.RoundEnded, roundNumber, winnerName, moveCount, bestMoves, _options.ReplayStepSeconds);
             await group.SendAsync(HubMethods.LobbyState, state);
 
-            await Task.Delay(TimeSpan.FromSeconds(_options.IntermissionSeconds));
+            // Give everyone time to watch the winning solution before the next board.
+            await Task.Delay(TimeSpan.FromSeconds(moveCount * _options.ReplayStepSeconds + _options.IntermissionSeconds));
 
             int nextRound;
             byte[] board;
@@ -326,6 +334,7 @@ namespace BackendServer.Services
             lobby.BestConnectionId = null;
             lobby.BestPlayerName = null;
             lobby.BestMoveCount = 0;
+            lobby.BestMoves = Array.Empty<byte>();
         }
 
         private static LobbyState SnapshotLocked(Lobby lobby)

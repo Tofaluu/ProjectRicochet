@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using Ricochet.Client.Board;
 using SharedLogic;
@@ -36,9 +37,15 @@ namespace Ricochet.Client.Scratchpad
 
         private bool _dragging;
         private Vector3 _dragStart;
+        private Coroutine _replay;
 
         public IReadOnlyList<Move> Moves => _moves;
         public bool IsSolved => _solved;
+
+        /// <summary>True from <see cref="PlayReplay"/> until the next board loads; player input is ignored.</summary>
+        public bool IsReplaying { get; private set; }
+        /// <summary>How many replay moves have been shown so far.</summary>
+        public int ReplayStep { get; private set; }
 
         /// <summary>False while playing online, where the server decides the board.</summary>
         public bool AllowNewBoard { get; set; } = true;
@@ -54,8 +61,53 @@ namespace Ricochet.Client.Scratchpad
         /// <summary>Shows a board from elsewhere (e.g. the server) and clears the move list.</summary>
         public void LoadRound(RoundSetup round)
         {
+            StopReplay();
             _currentSeed = 0;
             ShowRound(round);
+        }
+
+        /// <summary>
+        /// Puts the robots back at the round's start and plays <paramref name="moves"/> one every
+        /// <paramref name="stepSeconds"/>, e.g. the winning solution at the end of an online round.
+        /// The board stays locked on the final position until the next <see cref="LoadRound"/>.
+        /// </summary>
+        public void PlayReplay(IReadOnlyList<Move> moves, float stepSeconds)
+        {
+            StopReplay();
+            _replay = StartCoroutine(ReplayRoutine(moves, stepSeconds));
+        }
+
+        private IEnumerator ReplayRoutine(IReadOnlyList<Move> moves, float stepSeconds)
+        {
+            IsReplaying = true;
+            _dragging = false;
+            ResetBoard();
+            ReplayStep = 0;
+
+            // A short beat on the starting position so the first move is easy to follow.
+            yield return new WaitForSeconds(Mathf.Min(0.5f, stepSeconds));
+            foreach (Move move in moves)
+            {
+                Select(move.Robot);
+                if (GameRules.TryMove(_round.Grid, _robots, move, out RobotPositions next))
+                {
+                    _moves.Add(move);
+                    _robots = next;
+                    _boardView.ShowRobots(_robots, instant: false);
+                }
+                ReplayStep++;
+                yield return new WaitForSeconds(stepSeconds);
+            }
+            _replay = null;
+        }
+
+        private void StopReplay()
+        {
+            if (_replay != null)
+                StopCoroutine(_replay);
+            _replay = null;
+            IsReplaying = false;
+            ReplayStep = 0;
         }
 
         private void NewBoard()
@@ -120,6 +172,8 @@ namespace Ricochet.Client.Scratchpad
 
         private void Update()
         {
+            if (IsReplaying)
+                return;
             HandleKeyboard();
             HandlePointer();
         }
@@ -214,7 +268,8 @@ namespace Ricochet.Client.Scratchpad
 
             Target target = _round.Target;
             string goal = target.Robot.HasValue ? target.Robot.Value + " robot" : "any robot";
-            string status = _solved ? $"SOLVED in {_moves.Count} moves!" : $"Moves: {_moves.Count}";
+            string status = IsReplaying ? $"Replaying winning solution ({_moves.Count} moves)"
+                : _solved ? $"SOLVED in {_moves.Count} moves!" : $"Moves: {_moves.Count}";
             string text =
                 $"Get {goal} to the big diamond\n" +
                 $"{status}\n" +

@@ -41,7 +41,12 @@ namespace SharedLogic
         /// <summary>(string reason). Sent only to the player whose submission was rejected.</summary>
         public const string SolutionRejected = "SolutionRejected";
 
-        /// <summary>(int roundNumber, string winnerName, int moveCount). winnerName is null if the winner left.</summary>
+        /// <summary>
+        /// (int roundNumber, string winnerName, int moveCount, byte[] winningMoves, double replayStepSeconds).
+        /// winnerName is the best solver (they only score if still in the lobby). Clients replay
+        /// winningMoves (<see cref="MoveCodec"/>) from the round's start, one move per step; the
+        /// next round starts after the replay.
+        /// </summary>
         public const string RoundEnded = "RoundEnded";
     }
 

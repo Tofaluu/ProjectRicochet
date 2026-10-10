@@ -32,8 +32,8 @@ namespace Ricochet.Client.Network
         public event Action<int, string, int> NewBestSolution;
         /// <summary>(reason)</summary>
         public event Action<string> SolutionRejected;
-        /// <summary>(round number, winner name or null, move count)</summary>
-        public event Action<int, string, int> RoundEnded;
+        /// <summary>(round number, winner name, move count, winning moves, replay seconds per move)</summary>
+        public event Action<int, string, int, Move[], float> RoundEnded;
         /// <summary>Human-readable connection status for the UI.</summary>
         public event Action<string> StatusChanged;
 
@@ -130,8 +130,11 @@ namespace Ricochet.Client.Network
                 (round, player, moves) => Post(() => NewBestSolution?.Invoke(round, player, moves)));
             _connection.On<string>(HubMethods.SolutionRejected,
                 reason => Post(() => SolutionRejected?.Invoke(reason)));
-            _connection.On<int, string, int>(HubMethods.RoundEnded,
-                (round, winner, moves) => Post(() => RoundEnded?.Invoke(round, winner, moves)));
+            _connection.On<int, string, int, byte[], double>(HubMethods.RoundEnded, (round, winner, count, moveData, step) =>
+            {
+                Move[] moves = MoveCodec.Decode(moveData);
+                Post(() => RoundEnded?.Invoke(round, winner, count, moves, (float)step));
+            });
 
             _connection.Closed += error =>
             {
