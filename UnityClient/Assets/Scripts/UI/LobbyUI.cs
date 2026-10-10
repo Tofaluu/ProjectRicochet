@@ -40,6 +40,7 @@ namespace Ricochet.Client.UI
         private int _round;
         private bool _roundOver;
         private float _timerEnd = -1f;
+        private float _timerExtendedUntil = -1f;
         private string _bestPlayer;
         private int _bestMoves;
         private int _submittedMoveCount;
@@ -90,7 +91,7 @@ namespace Ricochet.Client.UI
             _network.StatusChanged += OnStatusChanged;
             _network.LobbyStateChanged += OnLobbyState;
             _network.RoundStarted += OnRoundStarted;
-            _network.TimerStarted += OnTimerStarted;
+            _network.TimerUpdated += OnTimerUpdated;
             _network.NewBestSolution += OnNewBest;
             _network.SolutionRejected += OnRejected;
             _network.RoundEnded += OnRoundEnded;
@@ -101,7 +102,7 @@ namespace Ricochet.Client.UI
             _network.StatusChanged -= OnStatusChanged;
             _network.LobbyStateChanged -= OnLobbyState;
             _network.RoundStarted -= OnRoundStarted;
-            _network.TimerStarted -= OnTimerStarted;
+            _network.TimerUpdated -= OnTimerUpdated;
             _network.NewBestSolution -= OnNewBest;
             _network.SolutionRejected -= OnRejected;
             _network.RoundEnded -= OnRoundEnded;
@@ -170,10 +171,14 @@ namespace Ricochet.Client.UI
             _scratchpad.LoadRound(setup);
         }
 
-        private void OnTimerStarted(int round, float secondsRemaining)
+        private void OnTimerUpdated(int round, float secondsRemaining)
         {
-            if (round == _round)
-                _timerEnd = Time.time + secondsRemaining;
+            if (round != _round)
+                return;
+            // A later update means a better solution bought everyone more time.
+            if (_timerEnd >= 0f)
+                _timerExtendedUntil = Time.time + 2f;
+            _timerEnd = Time.time + secondsRemaining;
         }
 
         private void OnNewBest(int round, string player, int moves)
@@ -213,7 +218,11 @@ namespace Ricochet.Client.UI
             else if (_timerEnd < 0f)
                 text.Append("No solution yet — timer starts on the first one");
             else
+            {
                 text.Append($"Time left: {Mathf.Max(0f, _timerEnd - Time.time):0}s");
+                if (Time.time < _timerExtendedUntil)
+                    text.Append("  (+time!)");
+            }
             if (_bestPlayer != null)
                 text.Append($"\nBest: {_bestPlayer} ({_bestMoves} moves)");
             _roundText.text = text.ToString();

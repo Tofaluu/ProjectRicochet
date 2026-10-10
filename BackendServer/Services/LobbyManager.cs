@@ -8,8 +8,14 @@ namespace BackendServer.Services
 {
     public class GameOptions
     {
-        /// <summary>How long other players get after the first valid solution.</summary>
-        public double TimerSeconds { get; set; } = 45;
+        /// <summary>Timer started by the first valid solution of a round.</summary>
+        public double FirstTimerSeconds { get; set; } = 60;
+
+        /// <summary>
+        /// Each strictly better solution after that tops the timer up to at least this much,
+        /// so nobody can be sniped in the last seconds. It never shortens the timer.
+        /// </summary>
+        public double ExtensionSeconds { get; set; } = 45;
 
         /// <summary>Pause between a round ending and the next board.</summary>
         public double IntermissionSeconds { get; set; } = 3;
@@ -134,7 +140,7 @@ namespace BackendServer.Services
             await caller.SendAsync(HubMethods.RoundStarted, round, board);
             if (phase == RoundPhase.TimerRunning)
             {
-                await caller.SendAsync(HubMethods.TimerStarted, round, secondsLeft);
+                await caller.SendAsync(HubMethods.TimerUpdated, round, secondsLeft);
                 await caller.SendAsync(HubMethods.NewBestSolution, round, bestName, bestMoves);
             }
         }
@@ -171,13 +177,14 @@ namespace BackendServer.Services
             string? rejection;
             Lobby? lobby;
             bool timerStarted = false;
+            double? secondsLeft = null;
             string playerName = "";
             int moveCount = 0;
 
             lock (_gate)
             {
                 rejection = TryAcceptLocked(connectionId, roundNumber, moveData, out lobby, out timerStarted,
-                    out playerName, out moveCount);
+                    out secondsLeft, out playerName, out moveCount);
             }
 
             if (rejection != null)
@@ -187,19 +194,20 @@ namespace BackendServer.Services
             }
 
             IClientProxy group = _hub.Clients.Group(lobby!.Code);
+            if (secondsLeft.HasValue)
+                await group.SendAsync(HubMethods.TimerUpdated, roundNumber, secondsLeft.Value);
             if (timerStarted)
-            {
-                await group.SendAsync(HubMethods.TimerStarted, roundNumber, _options.TimerSeconds);
                 RunInBackground(() => EndRoundAfterTimerAsync(lobby, roundNumber));
-            }
             await group.SendAsync(HubMethods.NewBestSolution, roundNumber, playerName, moveCount);
         }
 
         /// <returns>Null if the solution was accepted as the new best, else the reason it wasn't.</returns>
+        /// <param name="secondsLeft">Set when the timer started or was extended.</param>
         private string? TryAcceptLocked(string connectionId, int roundNumber, byte[] moveData, out Lobby? lobby,
-            out bool timerStarted, out string playerName, out int moveCount)
+            out bool timerStarted, out double? secondsLeft, out string playerName, out int moveCount)
         {
             timerStarted = false;
+            secondsLeft = null;
             playerName = "";
             moveCount = 0;
 
@@ -227,11 +235,22 @@ namespace BackendServer.Services
             if (lobby.Phase == RoundPhase.TimerRunning && moves.Length >= lobby.BestMoveCount)
                 return $"Not better than the current best ({lobby.BestMoveCount} moves).";
 
+            DateTime now = DateTime.UtcNow;
             if (lobby.Phase == RoundPhase.Solving)
             {
                 lobby.Phase = RoundPhase.TimerRunning;
-                lobby.TimerEndUtc = DateTime.UtcNow.AddSeconds(_options.TimerSeconds);
+                lobby.TimerEndUtc = now.AddSeconds(_options.FirstTimerSeconds);
                 timerStarted = true;
+                secondsLeft = _options.FirstTimerSeconds;
+            }
+            else
+            {
+                DateTime extended = now.AddSeconds(_options.ExtensionSeconds);
+                if (extended > lobby.TimerEndUtc)
+                {
+                    lobby.TimerEndUtc = extended;
+                    secondsLeft = _options.ExtensionSeconds;
+                }
             }
 
             playerName = lobby.Players[connectionId].Name;
@@ -244,11 +263,24 @@ namespace BackendServer.Services
 
         private async Task EndRoundAfterTimerAsync(Lobby lobby, int roundNumber)
         {
-            await Task.Delay(TimeSpan.FromSeconds(_options.TimerSeconds));
-
             string? winnerName;
             int moveCount;
             LobbyState state;
+            while (true)
+            {
+                // Better solutions can push the deadline back while we wait, so re-check it each time.
+                TimeSpan wait;
+                lock (_gate)
+                {
+                    if (lobby.Closed || lobby.RoundNumber != roundNumber || lobby.Phase != RoundPhase.TimerRunning)
+                        return;
+                    wait = lobby.TimerEndUtc - DateTime.UtcNow;
+                }
+                if (wait <= TimeSpan.Zero)
+                    break;
+                await Task.Delay(wait);
+            }
+
             lock (_gate)
             {
                 if (lobby.Closed || lobby.RoundNumber != roundNumber || lobby.Phase != RoundPhase.TimerRunning)
