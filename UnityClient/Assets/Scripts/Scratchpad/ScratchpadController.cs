@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Ricochet.Client.Board;
 using SharedLogic;
 using UnityEngine;
@@ -77,15 +78,16 @@ namespace Ricochet.Client.Scratchpad
         /// <summary>
         /// Puts the robots back at the round's start and plays <paramref name="moves"/> one every
         /// <paramref name="stepSeconds"/>, e.g. the winning solution at the end of an online round.
-        /// The board stays locked on the final position until the next <see cref="LoadRound"/>.
+        /// With <paramref name="lockUntilNextBoard"/> the board stays locked on the final position until
+        /// the next <see cref="LoadRound"/>; otherwise the player can carry on (R to retry) afterwards.
         /// </summary>
-        public void PlayReplay(IReadOnlyList<Move> moves, float stepSeconds)
+        public void PlayReplay(IReadOnlyList<Move> moves, float stepSeconds, bool lockUntilNextBoard = true)
         {
             StopReplay();
-            _replay = StartCoroutine(ReplayRoutine(moves, stepSeconds));
+            _replay = StartCoroutine(ReplayRoutine(moves, stepSeconds, lockUntilNextBoard));
         }
 
-        private IEnumerator ReplayRoutine(IReadOnlyList<Move> moves, float stepSeconds)
+        private IEnumerator ReplayRoutine(IReadOnlyList<Move> moves, float stepSeconds, bool lockUntilNextBoard)
         {
             IsReplaying = true;
             _dragging = false;
@@ -107,6 +109,57 @@ namespace Ricochet.Client.Scratchpad
                 yield return new WaitForSeconds(stepSeconds);
             }
             _replay = null;
+            if (!lockUntilNextBoard)
+                IsReplaying = false;
+        }
+
+        // ---- Offline hint (H): solve in the background, then replay the shortest solution ----
+
+        private const float HintStepSeconds = 0.6f;
+        // Generated boards solve in well under a second; this only guards against a pathological one.
+        private static readonly System.TimeSpan HintTimeLimit = System.TimeSpan.FromSeconds(30);
+        private Task<SolverResult> _hintTask;
+        private RoundSetup _hintRound;
+        private string _hintText;
+
+        private void RequestHint()
+        {
+            if (_hintTask != null)
+                return;
+            _hintRound = _round;
+            _hintText = "Finding the shortest solution...";
+            RoundSetup round = _round;
+            _hintTask = Task.Run(() => Solver.Solve(round, timeLimit: HintTimeLimit));
+        }
+
+        // Called every frame; applies the hint once the background solve finishes.
+        private void CheckHint()
+        {
+            if (_hintTask == null || !_hintTask.IsCompleted)
+                return;
+
+            Task<SolverResult> task = _hintTask;
+            _hintTask = null;
+            if (_hintRound != _round)
+                return; // the board changed while solving
+
+            if (task.IsFaulted)
+            {
+                _hintText = "Couldn't solve this board.";
+                Debug.LogException(task.Exception);
+                return;
+            }
+            SolverResult result = task.Result;
+            if (!result.Solved)
+            {
+                _hintText = result.HitLimit
+                    ? $"Gave up after {result.Elapsed.TotalSeconds:0} s. This board is extremely hard."
+                    : "This board has no solution.";
+                return;
+            }
+            _hintText = $"Shortest solution: {result.Moves.Length} moves (found in {result.Elapsed.TotalSeconds:0.0} s). " +
+                "R to try it yourself.";
+            PlayReplay(result.Moves, HintStepSeconds, lockUntilNextBoard: false);
         }
 
         private void StopReplay()
@@ -129,6 +182,7 @@ namespace Ricochet.Client.Scratchpad
         private void ShowRound(RoundSetup round)
         {
             _round = round;
+            _hintText = null;
             _boardView.Build(_round, _round.Robots);
             FrameCamera();
             ResetBoard();
@@ -183,6 +237,7 @@ namespace Ricochet.Client.Scratchpad
 
         private void Update()
         {
+            CheckHint();
             if (IsReplaying)
                 return;
             HandleKeyboard();
@@ -209,6 +264,8 @@ namespace Ricochet.Client.Scratchpad
             if (keyboard.zKey.wasPressedThisFrame || keyboard.backspaceKey.wasPressedThisFrame) Undo();
             if (keyboard.rKey.wasPressedThisFrame) ResetBoard();
             if (keyboard.nKey.wasPressedThisFrame && AllowNewBoard) NewBoard();
+            // Offline practice only; online it would give the answer away.
+            if (keyboard.hKey.wasPressedThisFrame && AllowNewBoard) RequestHint();
         }
 
         // Typing a name into an input field shouldn't also move robots.
@@ -279,18 +336,19 @@ namespace Ricochet.Client.Scratchpad
 
             Target target = _round.Target;
             string goal = target.Robot.HasValue ? target.Robot.Value + " robot" : "any robot";
-            string status = IsReplaying ? $"Replaying winning solution ({_moves.Count} moves)"
+            string status = IsReplaying ? $"Replaying solution ({_moves.Count} moves)"
                 : _solved ? $"SOLVED in {_moves.Count} moves!" : $"Moves: {_moves.Count}";
             string text =
                 $"Get {goal} to the big diamond\n" +
                 $"{status}\n" +
                 $"Selected: {_selected}\n" +
-                (_currentSeed != 0 ? $"Seed: {_currentSeed}\n\n" : "Online board\n\n") +
+                (_currentSeed != 0 ? $"Seed: {_currentSeed}\n" : "Online board\n") +
+                (AllowNewBoard && _hintText != null ? _hintText + "\n" : "") + "\n" +
                 "Click / 1-4 / Tab: select\nArrows / WASD / drag: move\nZ: undo   R: reset" +
-                (AllowNewBoard ? "   N: new board" : "");
+                (AllowNewBoard ? "\nN: new board   H: show shortest solution" : "");
 
-            var style = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.UpperLeft, fontSize = 16 };
-            GUI.Box(new Rect(10, 10, 300, 200), text, style);
+            var style = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.UpperLeft, fontSize = 16, wordWrap = true };
+            GUI.Box(new Rect(10, 10, 320, 240), text, style);
         }
     }
 }
