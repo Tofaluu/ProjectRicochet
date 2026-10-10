@@ -1,0 +1,7 @@
+{
+  "name": "com.ricochet.sharedlogic",
+  "version": "1.0.0",
+  "displayName": "Ricochet Shared Logic",
+  "description": "Shared grid math and logic for Unity and ASP.NET Server",
+  "unity": "2022.3"
+}

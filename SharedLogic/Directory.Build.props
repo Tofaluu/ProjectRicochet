@@ -1,0 +1,9 @@
+<Project>
+  <!-- This folder is also a Unity package. Unity skips folders ending in "~",
+       so build output goes there instead of bin/ and obj/, which Unity would
+       import (and fail on the generated AssemblyInfo .cs files). -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>obj~\</BaseIntermediateOutputPath>
+    <BaseOutputPath>bin~\</BaseOutputPath>
+  </PropertyGroup>
+</Project>
