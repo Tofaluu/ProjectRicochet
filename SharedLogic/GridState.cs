@@ -76,6 +76,13 @@ namespace SharedLogic
             return !IsInBounds(pos.Step(direction));
         }
 
+        /// <summary>True if the cell is blocked on all four sides, so no robot can ever enter it (e.g. the centre block).</summary>
+        public bool IsEnclosed(GridPos pos)
+        {
+            return IsBlocked(pos, Direction.Up) && IsBlocked(pos, Direction.Right)
+                && IsBlocked(pos, Direction.Down) && IsBlocked(pos, Direction.Left);
+        }
+
         /// <summary>
         /// Places a wall on one side of a cell. The matching side of the neighbouring
         /// cell is set too, so a wall always blocks movement from both directions.
