@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace SharedLogic
 {
@@ -8,19 +9,22 @@ namespace SharedLogic
         /// <summary>A shortest solution, or null if none was found within the limits.</summary>
         public Move[] Moves { get; }
 
-        /// <summary>True if the search stopped because it hit the depth or node limit, not because no solution exists.</summary>
+        /// <summary>True if the search gave up (move, node or time limit), so a solution may still exist.</summary>
         public bool HitLimit { get; }
 
         /// <summary>Positions examined; a rough measure of how hard the board was.</summary>
         public long NodesSearched { get; }
 
+        public TimeSpan Elapsed { get; }
+
         public bool Solved => Moves != null;
 
-        public SolverResult(Move[] moves, bool hitLimit, long nodesSearched)
+        public SolverResult(Move[] moves, bool hitLimit, long nodesSearched, TimeSpan elapsed)
         {
             Moves = moves;
             HitLimit = hitLimit;
             NodesSearched = nodesSearched;
+            Elapsed = elapsed;
         }
     }
 
@@ -28,28 +32,30 @@ namespace SharedLogic
     /// Finds a shortest solution (fewest moves) that <see cref="GameRules.ValidateSolution"/> accepts.
     /// </summary>
     /// <remarks>
-    /// Iterative-deepening depth-first search with two prunings that keep it fast:
+    /// Iterative deepening: look for any 1-move solution, then 2, then 3..., so the first one found is
+    /// the shortest. Each depth is a depth-first search over every robot and direction, cut down by:
     /// <list type="bullet">
     /// <item>A lower bound per cell: how many straight-line moves the target robot needs to reach the
-    /// target if it could stop anywhere (as if other robots were always in the right place). A branch is
-    /// cut when moves used + that bound exceed the current depth limit.</item>
-    /// <item>A table of positions already searched with at least as many moves left. The robots that
-    /// don't need to reach the target are interchangeable, so positions differing only by swapping them
-    /// share an entry.</item>
+    /// target if it could stop anywhere. A branch is dropped when moves used + bound exceed the limit.</item>
+    /// <item>Only robots the target accepts are tried for the final move of a branch.</item>
+    /// <item>A table of positions already searched with at least as many moves left, kept across depths.
+    /// Robots that can't finish are interchangeable, so positions differing only by swapping them share
+    /// an entry. A whole position packs into one 32-bit key (boards are at most 256 cells).</item>
     /// </list>
-    /// Boards are limited to 256 cells so a whole position packs into one 32-bit key.
     /// </remarks>
     public sealed class Solver
     {
-        public const int DefaultMaxMoves = 12;
-        public const long DefaultMaxNodes = 3_000_000;
+        public const int DefaultMaxMoves = 30;
+        public const long DefaultMaxNodes = 500_000_000;
+        /// <summary>Caps the position table: at most ~80 MB (it only grows as needed).</summary>
+        public const int DefaultMaxTableEntries = 1 << 23;
 
         private const int Unreachable = 255;
 
         private readonly int _width;
         private readonly int _cellCount;
-        // Bit d set = a robot on that cell can't step in Direction d (wall or board edge).
-        private readonly byte[] _blocked;
+        // _stop[d * cellCount + cell]: where a robot slides from 'cell' in direction d if no robot is in the way.
+        private readonly byte[] _stop;
         private readonly int[] _step;
 
         private Solver(GridState grid)
@@ -59,90 +65,126 @@ namespace SharedLogic
             if (_cellCount > 256)
                 throw new NotSupportedException("The solver supports boards of up to 256 cells.");
 
-            _blocked = new byte[_cellCount];
-            for (int i = 0; i < _cellCount; i++)
+            _step = new[] { _width, 1, -_width, -1 }; // Up, Right, Down, Left as cell-index offsets
+            _stop = new byte[4 * _cellCount];
+            for (int d = 0; d < 4; d++)
             {
-                var pos = new GridPos(i % _width, i / _width);
-                for (int d = 0; d < 4; d++)
+                for (int i = 0; i < _cellCount; i++)
                 {
-                    if (grid.IsBlocked(pos, (Direction)d))
-                        _blocked[i] |= (byte)(1 << d);
+                    var pos = new GridPos(i % _width, i / _width);
+                    while (!grid.IsBlocked(pos, (Direction)d))
+                        pos = pos.Step((Direction)d);
+                    _stop[d * _cellCount + i] = (byte)Index(pos);
                 }
             }
-            _step = new[] { _width, 1, -_width, -1 }; // Up, Right, Down, Left as cell-index offsets
         }
 
+        /// <param name="maxMoves">Give up on solutions longer than this.</param>
+        /// <param name="maxNodes">Give up after examining this many positions.</param>
+        /// <param name="timeLimit">Give up after this long (null = no time limit).</param>
         public static SolverResult Solve(GridState grid, RobotPositions start, Target target,
-            int maxMoves = DefaultMaxMoves, long maxNodes = DefaultMaxNodes)
+            int maxMoves = DefaultMaxMoves, long maxNodes = DefaultMaxNodes, TimeSpan? timeLimit = null)
         {
             if (grid == null) throw new ArgumentNullException(nameof(grid));
-            return new Solver(grid).Run(start, target, maxMoves, maxNodes);
+            return new Solver(grid).Run(start, target, maxMoves, maxNodes, timeLimit);
         }
 
-        public static SolverResult Solve(RoundSetup round, int maxMoves = DefaultMaxMoves, long maxNodes = DefaultMaxNodes)
+        public static SolverResult Solve(RoundSetup round,
+            int maxMoves = DefaultMaxMoves, long maxNodes = DefaultMaxNodes, TimeSpan? timeLimit = null)
         {
             if (round == null) throw new ArgumentNullException(nameof(round));
-            return Solve(round.Grid, round.Robots, round.Target, maxMoves, maxNodes);
+            return Solve(round.Grid, round.Robots, round.Target, maxMoves, maxNodes, timeLimit);
         }
 
         // ---- Search state (one search per Solver instance) ----
 
         private readonly int[] _pos = new int[Robot.Count];
+        private readonly int[] _robotOrder = new int[Robot.Count];
+        private int _finishers; // how many robots at the start of _robotOrder can finish the puzzle
         private int _targetCell;
         private int _targetRobot; // -1 = any robot
         private byte[] _lowerBound;
-        private Dictionary<uint, byte> _seen;
+        private PositionTable _seen;
         private Move[] _path;
         private int _foundLength;
         private long _nodes;
         private long _maxNodes;
+        private Stopwatch _clock;
+        private long _deadlineTicks;
         private bool _aborted;
 
-        private SolverResult Run(RobotPositions start, Target target, int maxMoves, long maxNodes)
+        private SolverResult Run(RobotPositions start, Target target, int maxMoves, long maxNodes, TimeSpan? timeLimit)
         {
+            _clock = Stopwatch.StartNew();
+            _deadlineTicks = timeLimit.HasValue ? (long)(timeLimit.Value.TotalSeconds * Stopwatch.Frequency) : long.MaxValue;
             for (int r = 0; r < Robot.Count; r++)
                 _pos[r] = Index(start[(RobotColor)r]);
             _targetCell = Index(target.Position);
             _targetRobot = target.Robot.HasValue ? (int)target.Robot.Value : -1;
+
+            // The robot(s) that can finish go first: they're tried first, and they're the only ones
+            // worth trying for the last move of a branch.
+            if (_targetRobot >= 0)
+            {
+                _finishers = 1;
+                _robotOrder[0] = _targetRobot;
+                for (int r = 0, i = 1; r < Robot.Count; r++)
+                {
+                    if (r != _targetRobot)
+                        _robotOrder[i++] = r;
+                }
+            }
+            else
+            {
+                _finishers = Robot.Count;
+                for (int r = 0; r < Robot.Count; r++)
+                    _robotOrder[r] = r;
+            }
+
             _lowerBound = ComputeLowerBounds(_targetCell);
             _maxNodes = maxNodes;
             _path = new Move[Math.Max(maxMoves, 1)];
-            _seen = new Dictionary<uint, byte>();
+            _seen = new PositionTable(DefaultMaxTableEntries);
 
             // Every solution has at least one move, even if a robot already sits on the target.
             int first = Math.Max(1, Heuristic());
-            if (first == Unreachable)
-                return new SolverResult(null, false, 0);
+            if (first >= Unreachable)
+                return Result(null, false);
 
+            // The position table stays valid across depths: an entry means "searched with this many
+            // moves left and found nothing", which is still true when the overall limit grows.
             for (int limit = first; limit <= maxMoves; limit++)
             {
-                _seen.Clear();
                 if (Search(0, limit))
                 {
                     var moves = new Move[_foundLength];
                     Array.Copy(_path, moves, _foundLength);
-                    return new SolverResult(moves, false, _nodes);
+                    return Result(moves, false);
                 }
                 if (_aborted)
-                    return new SolverResult(null, true, _nodes);
+                    break;
             }
-            return new SolverResult(null, true, _nodes);
+            return Result(null, true);
         }
 
-        /// <summary>Tries every move from the current position; true once a solution of length <paramref name="limit"/> is in <see cref="_path"/>.</summary>
+        private SolverResult Result(Move[] moves, bool hitLimit) =>
+            new SolverResult(moves, hitLimit, _nodes, _clock.Elapsed);
+
+        /// <summary>Tries every move from the current position; true once a solution is in <see cref="_path"/>.</summary>
         private bool Search(int depth, int limit)
         {
-            if (++_nodes > _maxNodes)
+            if (++_nodes > _maxNodes || ((_nodes & 0xFFF) == 0 && _clock.ElapsedTicks > _deadlineTicks))
             {
                 _aborted = true;
                 return false;
             }
 
             int remaining = limit - depth - 1; // moves left after the one we're about to make
-            for (int i = 0; i < Robot.Count; i++)
+            // On the last move only a robot that can finish is worth moving.
+            int robotsToTry = remaining == 0 ? _finishers : Robot.Count;
+            for (int i = 0; i < robotsToTry; i++)
             {
-                // Try the target robot first; it's usually the one that finishes.
-                int r = _targetRobot >= 0 ? (i == 0 ? _targetRobot : (i <= _targetRobot ? i - 1 : i)) : i;
+                int r = _robotOrder[i];
                 int from = _pos[r];
                 for (int d = 0; d < 4; d++)
                 {
@@ -150,33 +192,29 @@ namespace SharedLogic
                     if (to == from)
                         continue;
 
-                    _pos[r] = to;
                     _path[depth] = new Move((RobotColor)r, (Direction)d);
 
                     // The last move must bring an accepted robot onto the target.
                     if (to == _targetCell && (_targetRobot < 0 || _targetRobot == r))
                     {
                         _foundLength = depth + 1;
-                        _pos[r] = from;
                         return true;
                     }
+                    if (remaining == 0)
+                        continue;
 
-                    if (remaining > 0 && Math.Max(1, Heuristic()) <= remaining)
+                    _pos[r] = to;
+                    if (Math.Max(1, Heuristic()) <= remaining && _seen.TryClaim(Key(), (byte)remaining))
                     {
-                        uint key = Key();
-                        if (!_seen.TryGetValue(key, out byte seenRemaining) || seenRemaining < remaining)
+                        if (Search(depth + 1, limit))
                         {
-                            _seen[key] = (byte)remaining;
-                            if (Search(depth + 1, limit))
-                            {
-                                _pos[r] = from;
-                                return true;
-                            }
-                            if (_aborted)
-                            {
-                                _pos[r] = from;
-                                return false;
-                            }
+                            _pos[r] = from;
+                            return true;
+                        }
+                        if (_aborted)
+                        {
+                            _pos[r] = from;
+                            return false;
                         }
                     }
                     _pos[r] = from;
@@ -188,17 +226,30 @@ namespace SharedLogic
         /// <summary>Where robot <paramref name="r"/> stops sliding in direction <paramref name="d"/>.</summary>
         private int Slide(int r, int d)
         {
-            int cell = _pos[r];
+            int from = _pos[r];
+            int stop = _stop[d * _cellCount + from];
+            if (stop == from)
+                return from;
+
+            // Stop short of the nearest robot between here and the wall.
             int step = _step[d];
-            int mask = 1 << d;
-            while ((_blocked[cell] & mask) == 0)
+            for (int q = 0; q < Robot.Count; q++)
             {
-                int next = cell + step;
-                if (next == _pos[0] || next == _pos[1] || next == _pos[2] || next == _pos[3])
-                    break;
-                cell = next;
+                if (q == r)
+                    continue;
+                int other = _pos[q];
+                bool between = step > 0
+                    ? other > from && other <= stop
+                    : other < from && other >= stop;
+                // Up/Down move a whole row per step; the robot must also be in the same column.
+                if (between && (step == 1 || step == -1 || (other - from) % step == 0))
+                {
+                    int blocked = other - step;
+                    if (step > 0 ? blocked < stop : blocked > stop)
+                        stop = blocked;
+                }
             }
-            return cell;
+            return stop;
         }
 
         private int Heuristic()
@@ -221,13 +272,10 @@ namespace SharedLogic
             if (_targetRobot < 0)
                 return Pack(_pos[0], _pos[1], _pos[2], _pos[3]);
 
-            int a = -1, b = -1, c = -1;
-            for (int r = 0; r < Robot.Count; r++)
-            {
-                if (r == _targetRobot) continue;
-                if (a < 0) a = _pos[r]; else if (b < 0) b = _pos[r]; else c = _pos[r];
-            }
-            Sort3(ref a, ref b, ref c);
+            int a = _pos[_robotOrder[1]], b = _pos[_robotOrder[2]], c = _pos[_robotOrder[3]];
+            if (a > b) Swap(ref a, ref b);
+            if (b > c) Swap(ref b, ref c);
+            if (a > b) Swap(ref a, ref b);
             return ((uint)_pos[_targetRobot] << 24) | ((uint)a << 16) | ((uint)b << 8) | (uint)c;
         }
 
@@ -240,13 +288,6 @@ namespace SharedLogic
             if (b > d) Swap(ref b, ref d);
             if (b > c) Swap(ref b, ref c);
             return ((uint)a << 24) | ((uint)b << 16) | ((uint)c << 8) | (uint)d;
-        }
-
-        private static void Sort3(ref int a, ref int b, ref int c)
-        {
-            if (a > b) Swap(ref a, ref b);
-            if (b > c) Swap(ref b, ref c);
-            if (a > b) Swap(ref a, ref b);
         }
 
         private static void Swap(ref int x, ref int y)
@@ -275,9 +316,8 @@ namespace SharedLogic
                 byte next = (byte)(bound[cell] + 1);
                 for (int d = 0; d < 4; d++)
                 {
-                    int mask = 1 << d;
-                    int c = cell;
-                    while ((_blocked[c] & mask) == 0)
+                    int stop = _stop[d * _cellCount + cell];
+                    for (int c = cell; c != stop;)
                     {
                         c += _step[d];
                         if (bound[c] == Unreachable)
@@ -292,5 +332,94 @@ namespace SharedLogic
         }
 
         private int Index(GridPos pos) => pos.Y * _width + pos.X;
+
+        /// <summary>
+        /// Open-addressing hash table from packed position to "moves left when last searched". Grows up to
+        /// a cap; once full it stops remembering new positions, which only costs speed, never correctness.
+        /// </summary>
+        private sealed class PositionTable
+        {
+            private const uint Empty = 0xFFFFFFFF; // never a real key: four robots can't share cell 255
+
+            private uint[] _keys;
+            private byte[] _values;
+            private int _count;
+            private readonly int _maxEntries;
+
+            public PositionTable(int maxEntries)
+            {
+                _maxEntries = maxEntries;
+                Allocate(1 << 16);
+            }
+
+            /// <summary>
+            /// Records that <paramref name="key"/> is being searched with <paramref name="remaining"/> moves
+            /// left. False if it was already searched with at least that many, so it can be skipped.
+            /// </summary>
+            public bool TryClaim(uint key, byte remaining)
+            {
+                int mask = _keys.Length - 1;
+                int slot = (int)(Mix(key) & (uint)mask);
+                while (true)
+                {
+                    uint existing = _keys[slot];
+                    if (existing == key)
+                    {
+                        if (_values[slot] >= remaining)
+                            return false;
+                        _values[slot] = remaining;
+                        return true;
+                    }
+                    if (existing == Empty)
+                    {
+                        if (_count >= _maxEntries)
+                            return true; // full: search it without remembering
+                        _keys[slot] = key;
+                        _values[slot] = remaining;
+                        if (++_count * 2 > _keys.Length && _keys.Length < _maxEntries * 2)
+                            Grow();
+                        return true;
+                    }
+                    slot = (slot + 1) & mask;
+                }
+            }
+
+            private void Allocate(int size)
+            {
+                _keys = new uint[size];
+                _values = new byte[size];
+                for (int i = 0; i < size; i++)
+                    _keys[i] = Empty;
+            }
+
+            private void Grow()
+            {
+                uint[] oldKeys = _keys;
+                byte[] oldValues = _values;
+                Allocate(oldKeys.Length * 2);
+                int mask = _keys.Length - 1;
+                for (int i = 0; i < oldKeys.Length; i++)
+                {
+                    if (oldKeys[i] == Empty)
+                        continue;
+                    int slot = (int)(Mix(oldKeys[i]) & (uint)mask);
+                    while (_keys[slot] != Empty)
+                        slot = (slot + 1) & mask;
+                    _keys[slot] = oldKeys[i];
+                    _values[slot] = oldValues[i];
+                }
+            }
+
+            private static uint Mix(uint x)
+            {
+                // Integer hash (finalizer from MurmurHash3) so nearby positions spread across the table.
+                x ^= x >> 16;
+                x *= 0x85EBCA6B;
+                x ^= x >> 13;
+                x *= 0xC2B2AE35;
+                x ^= x >> 16;
+                return x;
+            }
+        }
     }
 }
