@@ -55,6 +55,7 @@ namespace Ricochet.Client.Board
             _content = new GameObject("Board").transform;
             _content.SetParent(transform, false);
             _robots.Clear();
+            _robotDestinations.Clear();
 
             GridState grid = round.Grid;
             Color activeColor = ColorOf(round.Target);
@@ -111,6 +112,11 @@ namespace Ricochet.Client.Board
         {
             foreach (KeyValuePair<RobotColor, Transform> robot in _robots)
             {
+                // A robot still sliding from the previous move finishes it instantly first; otherwise
+                // it would cut diagonally from mid-slide to the new destination.
+                if (_robotDestinations.TryGetValue(robot.Key, out Vector3 previous))
+                    robot.Value.localPosition = previous;
+
                 Vector3 destination = CellCenter(robots[robot.Key]);
                 _robotDestinations[robot.Key] = destination;
                 if (instant)

@@ -15,16 +15,20 @@ namespace SharedLogic
 
         // Client -> server
 
-        /// <summary>(string playerName, string lobbyCode)</summary>
+        /// <summary>
+        /// (string playerName, string lobbyCode) returns string: the name as shown in the lobby,
+        /// made unique (e.g. "Sam 2"). Clients use it to find themselves in <see cref="LobbyState"/>.
+        /// </summary>
         public const string JoinLobby = "JoinLobby";
 
         /// <summary>(int roundNumber, byte[] moves)</summary>
         public const string SubmitSolution = "SubmitSolution";
 
         /// <summary>
-        /// (int roundNumber, bool done). Vote to end the round early; toggleable. When every player
-        /// is done the round ends now: skipped (no winner, no point) if nobody has solved it,
-        /// otherwise as if the timer ran out.
+        /// (int roundNumber, bool done). Vote to end the round early; toggleable. The current leader
+        /// can't vote and isn't waited on. When every other player is done the round ends now:
+        /// skipped (no winner, no point) if nobody has solved it, otherwise as if the timer ran out.
+        /// Re-checked whenever the lead changes, so taking the lead can end the round immediately.
         /// </summary>
         public const string SetDone = "SetDone";
 
@@ -65,6 +69,9 @@ namespace SharedLogic
 
         /// <summary>Has voted to end this round early (see <see cref="HubMethods.SetDone"/>).</summary>
         public bool Done { get; set; }
+
+        /// <summary>Holds the current best solution this round.</summary>
+        public bool Leading { get; set; }
     }
 
     public class LobbyState
