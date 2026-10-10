@@ -19,7 +19,8 @@ namespace Ricochet.Client.Board
         private const int SelectionOrder = 3;
         private const int RobotOrder = 4;
 
-        [SerializeField] private float _slideSpeed = 24f;
+        [Tooltip("Cells per second. 50 crosses the whole board in about 0.3 s.")]
+        [SerializeField] private float _slideSpeed = 50f;
         [SerializeField] private Color _tileColorA = new Color(0.86f, 0.84f, 0.80f);
         [SerializeField] private Color _tileColorB = new Color(0.82f, 0.80f, 0.76f);
         [SerializeField] private Color _wallColor = new Color(0.15f, 0.15f, 0.18f);
