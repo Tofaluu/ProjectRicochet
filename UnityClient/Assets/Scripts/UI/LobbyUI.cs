@@ -48,9 +48,11 @@ namespace Ricochet.Client.UI
         private Move[] _replayMoves;
         private int _bestMoves;
         private int _submittedMoveCount;
+        // From the latest LobbyState: this player's vote/lead, and the vote among non-leaders.
         private bool _iAmDone;
+        private bool _iAmLeading;
         private int _doneCount;
-        private int _playerCount;
+        private int _voterCount;
 
         private void Awake()
         {
@@ -146,6 +148,7 @@ namespace Ricochet.Client.UI
         // Toggles this player's vote to end the round early; the server ends it once everyone has voted.
         private void OnDoneClicked()
         {
+            // Flip locally for instant feedback; the next LobbyState confirms it.
             _iAmDone = !_iAmDone;
             _network.SetDone(_iAmDone);
         }
@@ -170,10 +173,16 @@ namespace Ricochet.Client.UI
 
             var players = new StringBuilder();
             foreach (PlayerInfo player in state.Players.OrderByDescending(p => p.Score))
-                players.AppendLine($"{player.Name}  —  {player.Score}" + (player.Done ? "   (done)" : ""));
+                players.AppendLine($"{player.Name}  —  {player.Score}"
+                    + (player.Leading ? "   (best)" : player.Done ? "   (done)" : ""));
             _playersText.text = players.ToString();
-            _doneCount = state.Players.Count(p => p.Done);
-            _playerCount = state.Players.Length;
+
+            PlayerInfo me = state.Players.FirstOrDefault(p => p.Name == _network.PlayerName);
+            _iAmDone = me != null && me.Done;
+            _iAmLeading = me != null && me.Leading;
+            PlayerInfo[] voters = state.Players.Where(p => !p.Leading).ToArray();
+            _doneCount = voters.Count(p => p.Done);
+            _voterCount = voters.Length;
         }
 
         private void OnRoundStarted(int round, RoundSetup setup)
@@ -184,6 +193,7 @@ namespace Ricochet.Client.UI
             _bestPlayer = null;
             _submittedMoveCount = 0;
             _iAmDone = false;
+            _iAmLeading = false;
             _feedbackText.text = "Find the shortest solution, then Lock In!";
             _scratchpad.AllowNewBoard = false;
             _scratchpad.LoadRound(setup);
@@ -265,9 +275,11 @@ namespace Ricochet.Client.UI
             _lockInButton.interactable = !_roundOver && _scratchpad.IsSolved && beatsBest;
             _lockInLabel.text = _scratchpad.IsSolved ? $"Lock In ({moveCount} moves)" : "Lock In";
 
+            // The leader has nothing to give up on, so they don't get the button at all.
+            _doneButton.gameObject.SetActive(!_iAmLeading);
             _doneButton.interactable = !_roundOver;
             if (_iAmDone)
-                _doneLabel.text = $"Waiting for others ({_doneCount}/{_playerCount}) — undo";
+                _doneLabel.text = $"Waiting for others ({_doneCount}/{_voterCount}) — undo";
             else
                 _doneLabel.text = _timerEnd < 0f ? "Skip board" : "I'm done";
         }

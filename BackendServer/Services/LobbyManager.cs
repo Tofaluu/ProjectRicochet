@@ -92,7 +92,8 @@ namespace BackendServer.Services
             _log = log;
         }
 
-        public async Task JoinAsync(string connectionId, string playerName, string lobbyCode)
+        /// <returns>The player's name as shown in the lobby (made unique, e.g. "Sam 2").</returns>
+        public async Task<string> JoinAsync(string connectionId, string playerName, string lobbyCode)
         {
             string code = (lobbyCode ?? "").Trim().ToUpperInvariant();
             if (!LobbyCodePattern.IsMatch(code))
@@ -130,6 +131,8 @@ namespace BackendServer.Services
 
                 // Re-joining the same lobby (e.g. to change name) keeps the score.
                 int score = lobby.Players.TryGetValue(connectionId, out Player? existing) ? existing.Score : 0;
+                // Names identify players to each other (and each client finds itself by name), so keep them unique.
+                name = UniqueNameLocked(lobby, connectionId, name);
                 lobby.Players[connectionId] = new Player { Name = name, Score = score };
                 _lobbyByConnection[connectionId] = lobby;
 
@@ -153,6 +156,18 @@ namespace BackendServer.Services
                 await caller.SendAsync(HubMethods.TimerUpdated, round, secondsLeft);
                 await caller.SendAsync(HubMethods.NewBestSolution, round, bestName, bestMoves);
             }
+            return name;
+        }
+
+        private static string UniqueNameLocked(Lobby lobby, string connectionId, string name)
+        {
+            bool Taken(string candidate) => lobby.Players.Any(p =>
+                p.Key != connectionId && string.Equals(p.Value.Name, candidate, StringComparison.OrdinalIgnoreCase));
+
+            string unique = name;
+            for (int n = 2; Taken(unique); n++)
+                unique = $"{name} {n}";
+            return unique;
         }
 
         public async Task LeaveAsync(string connectionId)
@@ -204,6 +219,9 @@ namespace BackendServer.Services
                 if (!_lobbyByConnection.TryGetValue(connectionId, out lobby)
                     || lobby.RoundNumber != roundNumber || lobby.Phase == RoundPhase.Intermission)
                     return;
+                // The leader has nothing to give up on; the round waits on everyone else.
+                if (connectionId == lobby.BestConnectionId)
+                    return;
 
                 lobby.Players[connectionId].Done = done;
                 state = SnapshotLocked(lobby);
@@ -216,8 +234,13 @@ namespace BackendServer.Services
                 RunInBackground(() => EndRoundAsync(lobby, roundNumber));
         }
 
+        /// <summary>
+        /// True when everyone who could still change the outcome has given up: every player except
+        /// the current leader (if any) is done. Before anyone solves it, that means every player.
+        /// </summary>
         private static bool EveryoneDoneLocked(Lobby lobby) =>
-            lobby.Phase != RoundPhase.Intermission && lobby.Players.Count > 0 && lobby.Players.Values.All(p => p.Done);
+            lobby.Phase != RoundPhase.Intermission && lobby.Players.Count > 0
+            && lobby.Players.Where(p => p.Key != lobby.BestConnectionId).All(p => p.Value.Done);
 
         public async Task SubmitAsync(string connectionId, int roundNumber, byte[] moveData)
         {
@@ -227,11 +250,19 @@ namespace BackendServer.Services
             double? secondsLeft = null;
             string playerName = "";
             int moveCount = 0;
+            LobbyState? state = null;
+            bool endRound = false;
 
             lock (_gate)
             {
                 rejection = TryAcceptLocked(connectionId, roundNumber, moveData, out lobby, out timerStarted,
                     out secondsLeft, out playerName, out moveCount);
+                if (rejection == null)
+                {
+                    state = SnapshotLocked(lobby!);
+                    // Everyone else may already have given up (or there is nobody else): no need to wait.
+                    endRound = EveryoneDoneLocked(lobby!);
+                }
             }
 
             if (rejection != null)
@@ -246,6 +277,9 @@ namespace BackendServer.Services
             if (timerStarted)
                 RunInBackground(() => EndRoundAfterTimerAsync(lobby, roundNumber));
             await group.SendAsync(HubMethods.NewBestSolution, roundNumber, playerName, moveCount);
+            await group.SendAsync(HubMethods.LobbyState, state);
+            if (endRound)
+                RunInBackground(() => EndRoundAsync(lobby, roundNumber));
         }
 
         /// <returns>Null if the solution was accepted as the new best, else the reason it wasn't.</returns>
@@ -300,8 +334,11 @@ namespace BackendServer.Services
                 }
             }
 
-            playerName = lobby.Players[connectionId].Name;
+            Player player = lobby.Players[connectionId];
+            playerName = player.Name;
             moveCount = moves.Length;
+            // The leader isn't part of the vote; drop any "skip" they pressed before solving it.
+            player.Done = false;
             lobby.BestConnectionId = connectionId;
             lobby.BestPlayerName = playerName;
             lobby.BestMoveCount = moveCount;
@@ -396,8 +433,14 @@ namespace BackendServer.Services
             return new LobbyState
             {
                 Code = lobby.Code,
-                Players = lobby.Players.Values
-                    .Select(p => new PlayerInfo { Name = p.Name, Score = p.Score, Done = p.Done })
+                Players = lobby.Players
+                    .Select(p => new PlayerInfo
+                    {
+                        Name = p.Value.Name,
+                        Score = p.Value.Score,
+                        Done = p.Value.Done,
+                        Leading = p.Key == lobby.BestConnectionId,
+                    })
                     .ToArray(),
             };
         }

@@ -38,6 +38,9 @@ namespace Ricochet.Client.Network
         public event Action<string> StatusChanged;
 
         public bool IsInLobby { get; private set; }
+
+        /// <summary>This player's name as the server shows it (unique in the lobby, e.g. "Sam 2").</summary>
+        public string PlayerName { get; private set; }
         public int CurrentRound { get; private set; }
 
         /// <summary>
@@ -76,7 +79,7 @@ namespace Ricochet.Client.Network
                     await ConnectAsync();
 
                 SetStatus("Joining " + lobbyCode + "...");
-                await _connection.InvokeAsync(HubMethods.JoinLobby, playerName, lobbyCode);
+                PlayerName = await _connection.InvokeAsync<string>(HubMethods.JoinLobby, playerName, lobbyCode);
                 IsInLobby = true;
                 SetStatus("In lobby " + lobbyCode.Trim().ToUpperInvariant());
             }
