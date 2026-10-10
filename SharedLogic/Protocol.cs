@@ -13,11 +13,18 @@ namespace SharedLogic
     {
         public const string HubPath = "/gamehub";
 
+        /// <summary>
+        /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
+        /// refuses joins from any other version with a clear "update your game" message.
+        /// </summary>
+        public const int ProtocolVersion = 1;
+
         // Client -> server
 
         /// <summary>
-        /// (string playerName, string lobbyCode) returns string: the name as shown in the lobby,
-        /// made unique (e.g. "Sam 2"). Clients use it to find themselves in <see cref="LobbyState"/>.
+        /// (string playerName, string lobbyCode, int protocolVersion) returns string: the name as shown
+        /// in the lobby, made unique (e.g. "Sam 2"). Clients use it to find themselves in
+        /// <see cref="LobbyState"/>. Fails if protocolVersion != <see cref="ProtocolVersion"/>.
         /// </summary>
         public const string JoinLobby = "JoinLobby";
 

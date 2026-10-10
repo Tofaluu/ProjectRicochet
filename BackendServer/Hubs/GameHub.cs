@@ -18,8 +18,14 @@ namespace BackendServer.Hubs
         }
 
         [HubMethodName(HubMethods.JoinLobby)]
-        public Task<string> JoinLobby(string playerName, string lobbyCode) =>
-            _lobbies.JoinAsync(Context.ConnectionId, playerName, lobbyCode);
+        public Task<string> JoinLobby(string playerName, string lobbyCode, int protocolVersion)
+        {
+            if (protocolVersion < HubMethods.ProtocolVersion)
+                throw new HubException("Your game is out of date. Please download the latest version.");
+            if (protocolVersion > HubMethods.ProtocolVersion)
+                throw new HubException("The server is running an older version than your game. Ask the host to update it.");
+            return _lobbies.JoinAsync(Context.ConnectionId, playerName, lobbyCode);
+        }
 
         [HubMethodName(HubMethods.LeaveLobby)]
         public Task LeaveLobby() => _lobbies.LeaveAsync(Context.ConnectionId);

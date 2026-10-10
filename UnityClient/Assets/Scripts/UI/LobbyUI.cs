@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Ricochet.Client.Network;
@@ -55,6 +56,7 @@ namespace Ricochet.Client.UI
         private bool _iAmLeading;
         private int _doneCount;
         private int _voterCount;
+        private HashSet<string> _playerNames = new HashSet<string>();
 
         private void Awake()
         {
@@ -210,6 +212,7 @@ namespace Ricochet.Client.UI
             PlayerInfo[] voters = state.Players.Where(p => !p.Leading).ToArray();
             _doneCount = voters.Count(p => p.Done);
             _voterCount = voters.Length;
+            _playerNames = new HashSet<string>(state.Players.Select(p => p.Name));
         }
 
         private void OnRoundStarted(int round, RoundSetup setup)
@@ -275,7 +278,10 @@ namespace Ricochet.Client.UI
                 _feedbackText.text = "Board skipped. Next board soon...";
                 return;
             }
-            _feedbackText.text = $"{winner} wins the round with {moveCount} moves!";
+            // The best solver only scores if they're still here.
+            _feedbackText.text = _playerNames.Contains(winner)
+                ? $"{winner} wins the round with {moveCount} moves!"
+                : $"{winner} had the best solution ({moveCount} moves) but left, so no point this round.";
             _scratchpad.PlayReplay(moves, stepSeconds);
         }
 
