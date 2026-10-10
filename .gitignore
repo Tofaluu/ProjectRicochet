@@ -18,10 +18,10 @@
 .gradle/
 ExportedObj/
 .consulo/
-*.csproj
+/UnityClient/*.csproj
 *.unityproj
-*.sln
-*.slnx
+/UnityClient/*.sln
+/UnityClient/*.slnx
 *.suo
 *.tmp
 *.user
@@ -64,3 +64,7 @@ appsettings.Secret.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# SharedLogic build output (tilde suffix keeps Unity from importing it)
+SharedLogic/bin~/
+SharedLogic/obj~/
