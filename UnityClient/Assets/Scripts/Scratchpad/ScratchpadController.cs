@@ -66,6 +66,14 @@ namespace Ricochet.Client.Scratchpad
             ShowRound(round);
         }
 
+        /// <summary>Back to offline practice (e.g. after leaving a lobby): a fresh random board, N enabled.</summary>
+        public void PlayOffline()
+        {
+            StopReplay();
+            AllowNewBoard = true;
+            NewBoard();
+        }
+
         /// <summary>
         /// Puts the robots back at the round's start and plays <paramref name="moves"/> one every
         /// <paramref name="stepSeconds"/>, e.g. the winning solution at the end of an online round.
