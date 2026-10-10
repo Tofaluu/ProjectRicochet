@@ -68,3 +68,7 @@ Thumbs.db
 # SharedLogic build output (tilde suffix keeps Unity from importing it)
 SharedLogic/bin~/
 SharedLogic/obj~/
+
+# Unity scene-recovery backups (created after an editor restart)
+/UnityClient/Assets/_Recovery/
+/UnityClient/Assets/_Recovery.meta
