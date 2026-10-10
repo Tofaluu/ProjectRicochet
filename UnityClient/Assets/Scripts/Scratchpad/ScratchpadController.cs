@@ -126,6 +126,9 @@ namespace Ricochet.Client.Scratchpad
             ResetBoard();
         }
 
+        /// <summary>Puts the robots back at the round's start and clears the move list (same as pressing R).</summary>
+        public void ResetToStart() => ResetBoard();
+
         private void ResetBoard()
         {
             _robots = _round.Robots;

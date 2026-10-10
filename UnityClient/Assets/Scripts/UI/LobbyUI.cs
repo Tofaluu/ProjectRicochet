@@ -47,7 +47,6 @@ namespace Ricochet.Client.UI
         private string _winner;
         private Move[] _replayMoves;
         private int _bestMoves;
-        private int _submittedMoveCount;
         // From the latest LobbyState: this player's vote/lead, and the vote among non-leaders.
         private bool _iAmDone;
         private bool _iAmLeading;
@@ -140,9 +139,8 @@ namespace Ricochet.Client.UI
 
         private void OnLockInClicked()
         {
-            _submittedMoveCount = _scratchpad.Moves.Count;
             _network.SubmitSolution(_scratchpad.Moves.ToArray());
-            _feedbackText.text = $"Submitted {_submittedMoveCount} moves...";
+            _feedbackText.text = $"Submitted {_scratchpad.Moves.Count} moves...";
         }
 
         // Toggles this player's vote to end the round early; the server ends it once everyone has voted.
@@ -191,7 +189,6 @@ namespace Ricochet.Client.UI
             _roundOver = false;
             _timerEnd = -1f;
             _bestPlayer = null;
-            _submittedMoveCount = 0;
             _iAmDone = false;
             _iAmLeading = false;
             _feedbackText.text = "Find the shortest solution, then Lock In!";
@@ -215,8 +212,20 @@ namespace Ricochet.Client.UI
                 return;
             _bestPlayer = player;
             _bestMoves = moves;
-            if (_submittedMoveCount == moves)
+            if (player == _network.PlayerName)
+            {
                 _feedbackText.text = $"Accepted! You lead with {moves} moves.";
+                return;
+            }
+
+            // Someone beat (or matched) the solution still sitting on this board: put the robots back so
+            // the player can go for a shorter one. Boards mid-attempt, or holding an even shorter
+            // solution, are left alone.
+            if (_scratchpad.IsSolved && !_scratchpad.IsReplaying && _scratchpad.Moves.Count >= moves)
+            {
+                _scratchpad.ResetToStart();
+                _feedbackText.text = $"{player} found {moves} moves — your board was reset, try to beat it!";
+            }
         }
 
         private void OnRejected(string reason)
