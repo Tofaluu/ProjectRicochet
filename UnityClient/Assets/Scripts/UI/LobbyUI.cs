@@ -21,6 +21,7 @@ namespace Ricochet.Client.UI
         [SerializeField] private GameObject _joinPanel;
         [SerializeField] private InputField _nameInput;
         [SerializeField] private InputField _codeInput;
+        [SerializeField] private InputField _serverInput;
         [SerializeField] private Button _joinButton;
         [SerializeField] private Text _statusText;
 
@@ -34,6 +35,7 @@ namespace Ricochet.Client.UI
         [SerializeField] private Text _lockInLabel;
 
         private const string NamePrefKey = "Ricochet.PlayerName";
+        private const string ServerPrefKey = "Ricochet.Server";
 
         private int _round;
         private bool _roundOver;
@@ -48,9 +50,39 @@ namespace Ricochet.Client.UI
             _gamePanel.SetActive(false);
             _statusText.text = "";
             _nameInput.text = PlayerPrefs.GetString(NamePrefKey, "");
+            _serverInput.text = PlayerPrefs.GetString(ServerPrefKey, NetworkManager.DefaultServer);
 
             _joinButton.onClick.AddListener(OnJoinClicked);
             _lockInButton.onClick.AddListener(OnLockInClicked);
+        }
+
+        // Optional command-line overrides for quick testing, e.g.
+        //   Ricochet.exe -name Alice -lobby TEST -server http://localhost:5022
+        // Passing -lobby joins straight away.
+        private void Start()
+        {
+            string[] args = System.Environment.GetCommandLineArgs();
+            string name = ArgValue(args, "-name");
+            string server = ArgValue(args, "-server");
+            string lobby = ArgValue(args, "-lobby");
+
+            if (name != null) _nameInput.text = name;
+            if (server != null) _serverInput.text = server;
+            if (lobby != null)
+            {
+                _codeInput.text = lobby;
+                Join(save: false);
+            }
+        }
+
+        private static string ArgValue(string[] args, string flag)
+        {
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (string.Equals(args[i], flag, System.StringComparison.OrdinalIgnoreCase))
+                    return args[i + 1];
+            }
+            return null;
         }
 
         private void OnEnable()
@@ -75,7 +107,9 @@ namespace Ricochet.Client.UI
             _network.RoundEnded -= OnRoundEnded;
         }
 
-        private void OnJoinClicked()
+        private void OnJoinClicked() => Join(save: true);
+
+        private void Join(bool save)
         {
             string code = _codeInput.text.Trim();
             if (code.Length == 0)
@@ -83,7 +117,13 @@ namespace Ricochet.Client.UI
                 _statusText.text = "Enter a lobby code.";
                 return;
             }
-            PlayerPrefs.SetString(NamePrefKey, _nameInput.text.Trim());
+            // Command-line test joins don't overwrite what the player typed last time.
+            if (save)
+            {
+                PlayerPrefs.SetString(NamePrefKey, _nameInput.text.Trim());
+                PlayerPrefs.SetString(ServerPrefKey, _serverInput.text.Trim());
+            }
+            _network.ServerUrl = _serverInput.text;
             _network.JoinLobby(_nameInput.text, code);
         }
 
