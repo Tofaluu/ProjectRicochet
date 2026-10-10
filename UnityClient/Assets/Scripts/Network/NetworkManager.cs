@@ -82,7 +82,8 @@ namespace Ricochet.Client.Network
                 SetStatus("Joining " + lobbyCode + "...");
                 // Lobby messages start arriving before the join call returns.
                 _listening = true;
-                PlayerName = await _connection.InvokeAsync<string>(HubMethods.JoinLobby, playerName, lobbyCode);
+                PlayerName = await _connection.InvokeAsync<string>(
+                    HubMethods.JoinLobby, playerName, lobbyCode, HubMethods.ProtocolVersion);
                 IsInLobby = true;
                 SetStatus("In lobby " + lobbyCode.Trim().ToUpperInvariant());
             }
