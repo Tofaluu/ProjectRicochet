@@ -37,6 +37,7 @@ namespace Ricochet.Client.UI
         [SerializeField] private Text _lockInLabel;
         [SerializeField] private Button _doneButton;
         [SerializeField] private Text _doneLabel;
+        [SerializeField] private Button _leaveButton;
 
         private const string NamePrefKey = "Ricochet.PlayerName";
         private const string ServerPrefKey = "Ricochet.Server";
@@ -66,6 +67,7 @@ namespace Ricochet.Client.UI
             _joinButton.onClick.AddListener(OnJoinClicked);
             _lockInButton.onClick.AddListener(OnLockInClicked);
             _doneButton.onClick.AddListener(OnDoneClicked);
+            _leaveButton.onClick.AddListener(OnLeaveClicked);
         }
 
         // Optional command-line overrides for quick testing, e.g.
@@ -142,8 +144,23 @@ namespace Ricochet.Client.UI
         private void OnLockInClicked()
         {
             ClearButtonFocus();
+            int moveCount = _scratchpad.Moves.Count;
+            // Only strictly shorter solutions can take the lead; say so instead of sending a sure rejection.
+            if (_bestPlayer != null && moveCount >= _bestMoves)
+            {
+                _feedbackText.text = _bestPlayer == _network.PlayerName
+                    ? $"You already lead with {_bestMoves} moves."
+                    : $"Your {moveCount} moves don't beat {_bestPlayer}'s {_bestMoves}. Find a shorter one!";
+                return;
+            }
             _network.SubmitSolution(_scratchpad.Moves.ToArray());
-            _feedbackText.text = $"Submitted {_scratchpad.Moves.Count} moves...";
+            _feedbackText.text = $"Submitted {moveCount} moves...";
+        }
+
+        private void OnLeaveClicked()
+        {
+            ClearButtonFocus();
+            _network.LeaveLobby();
         }
 
         // Toggles this player's vote to end the round early; the server ends it once everyone has voted.
@@ -166,12 +183,12 @@ namespace Ricochet.Client.UI
         private void OnStatusChanged(string status)
         {
             _statusText.text = status;
-            if (!_network.IsInLobby)
+            // Left the lobby or lost the connection: back to the join screen with an offline practice board.
+            if (!_network.IsInLobby && _gamePanel.activeSelf)
             {
-                // Lost the connection: back to the join screen.
                 _joinPanel.SetActive(true);
                 _gamePanel.SetActive(false);
-                _scratchpad.AllowNewBoard = true;
+                _scratchpad.PlayOffline();
             }
         }
 
@@ -292,8 +309,8 @@ namespace Ricochet.Client.UI
             _roundText.text = text.ToString();
 
             int moveCount = _scratchpad.Moves.Count;
-            bool beatsBest = _bestPlayer == null || moveCount < _bestMoves;
-            _lockInButton.interactable = !_roundOver && _scratchpad.IsSolved && beatsBest;
+            // Enabled for any solution; OnLockInClicked explains when it doesn't beat the best.
+            _lockInButton.interactable = !_roundOver && _scratchpad.IsSolved;
             _lockInLabel.text = _scratchpad.IsSolved ? $"Lock In ({moveCount} moves) [Enter]" : "Lock In";
 
             Keyboard keyboard = Keyboard.current;

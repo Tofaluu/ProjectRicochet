@@ -21,6 +21,9 @@ namespace BackendServer.Hubs
         public Task<string> JoinLobby(string playerName, string lobbyCode) =>
             _lobbies.JoinAsync(Context.ConnectionId, playerName, lobbyCode);
 
+        [HubMethodName(HubMethods.LeaveLobby)]
+        public Task LeaveLobby() => _lobbies.LeaveAsync(Context.ConnectionId);
+
         [HubMethodName(HubMethods.SubmitSolution)]
         public Task SubmitSolution(int roundNumber, byte[] moves) =>
             _lobbies.SubmitAsync(Context.ConnectionId, roundNumber, moves);

@@ -21,6 +21,9 @@ namespace SharedLogic
         /// </summary>
         public const string JoinLobby = "JoinLobby";
 
+        /// <summary>() Leave the current lobby; same as disconnecting, but the connection stays open.</summary>
+        public const string LeaveLobby = "LeaveLobby";
+
         /// <summary>(int roundNumber, byte[] moves)</summary>
         public const string SubmitSolution = "SubmitSolution";
 

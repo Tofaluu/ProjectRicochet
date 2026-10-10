@@ -22,6 +22,7 @@ namespace Ricochet.Client.Network
         private readonly ConcurrentQueue<Action> _mainThreadQueue = new ConcurrentQueue<Action>();
         private HubConnection _connection;
         private string _connectedUrl;
+        private bool _listening;
 
         public event Action<LobbyState> LobbyStateChanged;
         /// <summary>(round number, board)</summary>
@@ -79,13 +80,36 @@ namespace Ricochet.Client.Network
                     await ConnectAsync();
 
                 SetStatus("Joining " + lobbyCode + "...");
+                // Lobby messages start arriving before the join call returns.
+                _listening = true;
                 PlayerName = await _connection.InvokeAsync<string>(HubMethods.JoinLobby, playerName, lobbyCode);
                 IsInLobby = true;
                 SetStatus("In lobby " + lobbyCode.Trim().ToUpperInvariant());
             }
             catch (Exception e)
             {
+                // A rejected join leaves us wherever we were before.
+                _listening = IsInLobby;
                 SetStatus("Join failed: " + Describe(e));
+            }
+        }
+
+        public async void LeaveLobby()
+        {
+            if (_connection == null || !IsInLobby)
+                return;
+
+            // Stop reacting to the old lobby right away, including messages already on their way.
+            _listening = false;
+            IsInLobby = false;
+            SetStatus("Left the lobby");
+            try
+            {
+                await _connection.InvokeAsync(HubMethods.LeaveLobby);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Network] Leave failed: " + Describe(e));
             }
         }
 
@@ -133,26 +157,26 @@ namespace Ricochet.Client.Network
             _connectedUrl = _serverUrl;
 
             _connection.On<LobbyState>(HubMethods.LobbyState,
-                state => Post(() => LobbyStateChanged?.Invoke(state)));
+                state => PostLobbyEvent(() => LobbyStateChanged?.Invoke(state)));
             _connection.On<int, byte[]>(HubMethods.RoundStarted, (round, board) =>
             {
                 RoundSetup setup = BoardCodec.Decode(board);
-                Post(() =>
+                PostLobbyEvent(() =>
                 {
                     CurrentRound = round;
                     RoundStarted?.Invoke(round, setup);
                 });
             });
             _connection.On<int, double>(HubMethods.TimerUpdated,
-                (round, seconds) => Post(() => TimerUpdated?.Invoke(round, (float)seconds)));
+                (round, seconds) => PostLobbyEvent(() => TimerUpdated?.Invoke(round, (float)seconds)));
             _connection.On<int, string, int>(HubMethods.NewBestSolution,
-                (round, player, moves) => Post(() => NewBestSolution?.Invoke(round, player, moves)));
+                (round, player, moves) => PostLobbyEvent(() => NewBestSolution?.Invoke(round, player, moves)));
             _connection.On<string>(HubMethods.SolutionRejected,
-                reason => Post(() => SolutionRejected?.Invoke(reason)));
+                reason => PostLobbyEvent(() => SolutionRejected?.Invoke(reason)));
             _connection.On<int, string, int, byte[], double>(HubMethods.RoundEnded, (round, winner, count, moveData, step) =>
             {
                 Move[] moves = MoveCodec.Decode(moveData);
-                Post(() => RoundEnded?.Invoke(round, winner, count, moves, (float)step));
+                PostLobbyEvent(() => RoundEnded?.Invoke(round, winner, count, moves, (float)step));
             });
 
             _connection.Closed += error =>
@@ -163,6 +187,7 @@ namespace Ricochet.Client.Network
                     if (_connection != connection)
                         return;
                     IsInLobby = false;
+                    _listening = false;
                     SetStatus(error == null ? "Disconnected" : "Disconnected: " + error.Message);
                 });
                 return Task.CompletedTask;
@@ -195,6 +220,14 @@ namespace Ricochet.Client.Network
         }
 
         private void Post(Action action) => _mainThreadQueue.Enqueue(action);
+
+        // Lobby messages are dropped (when dispatched) once we've left, so a late one can't pull the
+        // UI back into a lobby we no longer belong to.
+        private void PostLobbyEvent(Action action) => Post(() =>
+        {
+            if (_listening)
+                action();
+        });
 
         private void SetStatus(string status)
         {
