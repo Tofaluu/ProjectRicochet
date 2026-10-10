@@ -42,6 +42,8 @@ namespace Ricochet.Client.UI
         private float _timerEnd = -1f;
         private float _timerExtendedUntil = -1f;
         private string _bestPlayer;
+        private string _winner;
+        private Move[] _replayMoves;
         private int _bestMoves;
         private int _submittedMoveCount;
 
@@ -196,15 +198,16 @@ namespace Ricochet.Client.UI
             _feedbackText.text = "Rejected: " + reason;
         }
 
-        private void OnRoundEnded(int round, string winner, int moves)
+        private void OnRoundEnded(int round, string winner, int moveCount, Move[] moves, float stepSeconds)
         {
             if (round != _round)
                 return;
             _roundOver = true;
             _timerEnd = -1f;
-            _feedbackText.text = winner != null
-                ? $"{winner} wins the round with {moves} moves! Next board soon..."
-                : "Round over. Next board soon...";
+            _winner = winner;
+            _replayMoves = moves;
+            _feedbackText.text = $"{winner} wins the round with {moveCount} moves!";
+            _scratchpad.PlayReplay(moves, stepSeconds);
         }
 
         private void Update()
@@ -213,7 +216,16 @@ namespace Ricochet.Client.UI
                 return;
 
             var text = new StringBuilder($"Round {_round}\n");
-            if (_roundOver)
+            if (_roundOver && _scratchpad.IsReplaying && _replayMoves != null)
+            {
+                int step = _scratchpad.ReplayStep;
+                text.Append(step == 0 ? $"{_winner}'s solution:"
+                    : $"{_winner}'s solution — step {step}/{_replayMoves.Length}: " +
+                      $"{_replayMoves[step - 1].Robot} {_replayMoves[step - 1].Direction}");
+                if (step == _replayMoves.Length)
+                    text.Append("\nNext board soon...");
+            }
+            else if (_roundOver)
                 text.Append("Round over");
             else if (_timerEnd < 0f)
                 text.Append("No solution yet — timer starts on the first one");
@@ -223,7 +235,7 @@ namespace Ricochet.Client.UI
                 if (Time.time < _timerExtendedUntil)
                     text.Append("  (+time!)");
             }
-            if (_bestPlayer != null)
+            if (_bestPlayer != null && !_roundOver)
                 text.Append($"\nBest: {_bestPlayer} ({_bestMoves} moves)");
             _roundText.text = text.ToString();
 
