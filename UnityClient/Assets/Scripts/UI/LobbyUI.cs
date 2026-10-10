@@ -33,6 +33,8 @@ namespace Ricochet.Client.UI
         [SerializeField] private Text _feedbackText;
         [SerializeField] private Button _lockInButton;
         [SerializeField] private Text _lockInLabel;
+        [SerializeField] private Button _doneButton;
+        [SerializeField] private Text _doneLabel;
 
         private const string NamePrefKey = "Ricochet.PlayerName";
         private const string ServerPrefKey = "Ricochet.Server";
@@ -46,6 +48,9 @@ namespace Ricochet.Client.UI
         private Move[] _replayMoves;
         private int _bestMoves;
         private int _submittedMoveCount;
+        private bool _iAmDone;
+        private int _doneCount;
+        private int _playerCount;
 
         private void Awake()
         {
@@ -57,6 +62,7 @@ namespace Ricochet.Client.UI
 
             _joinButton.onClick.AddListener(OnJoinClicked);
             _lockInButton.onClick.AddListener(OnLockInClicked);
+            _doneButton.onClick.AddListener(OnDoneClicked);
         }
 
         // Optional command-line overrides for quick testing, e.g.
@@ -137,6 +143,13 @@ namespace Ricochet.Client.UI
             _feedbackText.text = $"Submitted {_submittedMoveCount} moves...";
         }
 
+        // Toggles this player's vote to end the round early; the server ends it once everyone has voted.
+        private void OnDoneClicked()
+        {
+            _iAmDone = !_iAmDone;
+            _network.SetDone(_iAmDone);
+        }
+
         private void OnStatusChanged(string status)
         {
             _statusText.text = status;
@@ -157,8 +170,10 @@ namespace Ricochet.Client.UI
 
             var players = new StringBuilder();
             foreach (PlayerInfo player in state.Players.OrderByDescending(p => p.Score))
-                players.AppendLine($"{player.Name}  —  {player.Score}");
+                players.AppendLine($"{player.Name}  —  {player.Score}" + (player.Done ? "   (done)" : ""));
             _playersText.text = players.ToString();
+            _doneCount = state.Players.Count(p => p.Done);
+            _playerCount = state.Players.Length;
         }
 
         private void OnRoundStarted(int round, RoundSetup setup)
@@ -168,6 +183,7 @@ namespace Ricochet.Client.UI
             _timerEnd = -1f;
             _bestPlayer = null;
             _submittedMoveCount = 0;
+            _iAmDone = false;
             _feedbackText.text = "Find the shortest solution, then Lock In!";
             _scratchpad.AllowNewBoard = false;
             _scratchpad.LoadRound(setup);
@@ -206,6 +222,11 @@ namespace Ricochet.Client.UI
             _timerEnd = -1f;
             _winner = winner;
             _replayMoves = moves;
+            if (moves.Length == 0)
+            {
+                _feedbackText.text = "Board skipped. Next board soon...";
+                return;
+            }
             _feedbackText.text = $"{winner} wins the round with {moveCount} moves!";
             _scratchpad.PlayReplay(moves, stepSeconds);
         }
@@ -243,6 +264,12 @@ namespace Ricochet.Client.UI
             bool beatsBest = _bestPlayer == null || moveCount < _bestMoves;
             _lockInButton.interactable = !_roundOver && _scratchpad.IsSolved && beatsBest;
             _lockInLabel.text = _scratchpad.IsSolved ? $"Lock In ({moveCount} moves)" : "Lock In";
+
+            _doneButton.interactable = !_roundOver;
+            if (_iAmDone)
+                _doneLabel.text = $"Waiting for others ({_doneCount}/{_playerCount}) — undo";
+            else
+                _doneLabel.text = _timerEnd < 0f ? "Skip board" : "I'm done";
         }
     }
 }

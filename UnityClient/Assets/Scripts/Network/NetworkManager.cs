@@ -101,6 +101,22 @@ namespace Ricochet.Client.Network
             }
         }
 
+        /// <summary>Vote (or take back the vote) to end the current round early.</summary>
+        public async void SetDone(bool done)
+        {
+            if (_connection == null || !IsInLobby)
+                return;
+
+            try
+            {
+                await _connection.InvokeAsync(HubMethods.SetDone, CurrentRound, done);
+            }
+            catch (Exception e)
+            {
+                SetStatus("Vote failed: " + Describe(e));
+            }
+        }
+
         private async Task ConnectAsync()
         {
             SetStatus("Connecting to " + _serverUrl + "...");

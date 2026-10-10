@@ -43,6 +43,9 @@ namespace BackendServer.Services
     {
         public string Name { get; init; } = "";
         public int Score { get; set; }
+
+        /// <summary>Voted to end this round early ("Skip board" / "I'm done"). Cleared every round.</summary>
+        public bool Done { get; set; }
     }
 
     public class Lobby
@@ -156,6 +159,8 @@ namespace BackendServer.Services
         {
             Lobby? lobby;
             LobbyState? state = null;
+            bool endRound = false;
+            int round = 0;
             lock (_gate)
             {
                 if (!_lobbyByConnection.Remove(connectionId, out lobby))
@@ -171,13 +176,48 @@ namespace BackendServer.Services
                 else
                 {
                     state = SnapshotLocked(lobby);
+                    // The one player everyone was waiting on may have just left.
+                    endRound = EveryoneDoneLocked(lobby);
+                    round = lobby.RoundNumber;
                 }
             }
 
             await _hub.Groups.RemoveFromGroupAsync(connectionId, lobby.Code);
             if (state != null)
                 await _hub.Clients.Group(lobby.Code).SendAsync(HubMethods.LobbyState, state);
+            if (endRound)
+                RunInBackground(() => EndRoundAsync(lobby, round));
         }
+
+        /// <summary>
+        /// A player votes (or un-votes) to end the round early. When every player in the lobby has
+        /// voted, the round ends now: skipped with no point if nobody solved it, otherwise exactly
+        /// as if the timer had run out.
+        /// </summary>
+        public async Task SetDoneAsync(string connectionId, int roundNumber, bool done)
+        {
+            Lobby? lobby;
+            LobbyState state;
+            bool endRound;
+            lock (_gate)
+            {
+                if (!_lobbyByConnection.TryGetValue(connectionId, out lobby)
+                    || lobby.RoundNumber != roundNumber || lobby.Phase == RoundPhase.Intermission)
+                    return;
+
+                lobby.Players[connectionId].Done = done;
+                state = SnapshotLocked(lobby);
+                endRound = EveryoneDoneLocked(lobby);
+            }
+
+            await _hub.Clients.Group(lobby.Code).SendAsync(HubMethods.LobbyState, state);
+            // Not awaited: ending a round includes the replay and intermission delays.
+            if (endRound)
+                RunInBackground(() => EndRoundAsync(lobby, roundNumber));
+        }
+
+        private static bool EveryoneDoneLocked(Lobby lobby) =>
+            lobby.Phase != RoundPhase.Intermission && lobby.Players.Count > 0 && lobby.Players.Values.All(p => p.Done);
 
         public async Task SubmitAsync(string connectionId, int roundNumber, byte[] moveData)
         {
@@ -271,10 +311,6 @@ namespace BackendServer.Services
 
         private async Task EndRoundAfterTimerAsync(Lobby lobby, int roundNumber)
         {
-            string? winnerName;
-            int moveCount;
-            byte[] bestMoves;
-            LobbyState state;
             while (true)
             {
                 // Better solutions can push the deadline back while we wait, so re-check it each time.
@@ -290,15 +326,29 @@ namespace BackendServer.Services
                 await Task.Delay(wait);
             }
 
+            await EndRoundAsync(lobby, roundNumber);
+        }
+
+        /// <summary>
+        /// Ends the round (timer ran out or everyone is done), sends the result and replay, then
+        /// deals the next board. Safe to call more than once; only the first call does anything.
+        /// </summary>
+        private async Task EndRoundAsync(Lobby lobby, int roundNumber)
+        {
+            string? winnerName;
+            int moveCount;
+            byte[] bestMoves;
+            LobbyState state;
             lock (_gate)
             {
-                if (lobby.Closed || lobby.RoundNumber != roundNumber || lobby.Phase != RoundPhase.TimerRunning)
+                if (lobby.Closed || lobby.RoundNumber != roundNumber || lobby.Phase == RoundPhase.Intermission)
                     return;
 
                 lobby.Phase = RoundPhase.Intermission;
                 // The point only goes to the best solver if they're still here.
                 if (lobby.BestConnectionId != null && lobby.Players.TryGetValue(lobby.BestConnectionId, out Player? winner))
                     winner.Score++;
+                // All null/empty when the board was skipped without a solution.
                 winnerName = lobby.BestPlayerName;
                 moveCount = lobby.BestMoveCount;
                 bestMoves = lobby.BestMoves;
@@ -321,8 +371,10 @@ namespace BackendServer.Services
                 StartNewRoundLocked(lobby);
                 nextRound = lobby.RoundNumber;
                 board = lobby.Board;
+                state = SnapshotLocked(lobby);
             }
             await group.SendAsync(HubMethods.RoundStarted, nextRound, board);
+            await group.SendAsync(HubMethods.LobbyState, state);
         }
 
         private void StartNewRoundLocked(Lobby lobby)
@@ -335,6 +387,8 @@ namespace BackendServer.Services
             lobby.BestPlayerName = null;
             lobby.BestMoveCount = 0;
             lobby.BestMoves = Array.Empty<byte>();
+            foreach (Player player in lobby.Players.Values)
+                player.Done = false;
         }
 
         private static LobbyState SnapshotLocked(Lobby lobby)
@@ -343,7 +397,7 @@ namespace BackendServer.Services
             {
                 Code = lobby.Code,
                 Players = lobby.Players.Values
-                    .Select(p => new PlayerInfo { Name = p.Name, Score = p.Score })
+                    .Select(p => new PlayerInfo { Name = p.Name, Score = p.Score, Done = p.Done })
                     .ToArray(),
             };
         }

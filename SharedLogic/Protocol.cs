@@ -21,6 +21,13 @@ namespace SharedLogic
         /// <summary>(int roundNumber, byte[] moves)</summary>
         public const string SubmitSolution = "SubmitSolution";
 
+        /// <summary>
+        /// (int roundNumber, bool done). Vote to end the round early; toggleable. When every player
+        /// is done the round ends now: skipped (no winner, no point) if nobody has solved it,
+        /// otherwise as if the timer ran out.
+        /// </summary>
+        public const string SetDone = "SetDone";
+
         // Server -> client
 
         /// <summary>(LobbyState state). Sent to the whole lobby whenever players or scores change.</summary>
@@ -43,7 +50,8 @@ namespace SharedLogic
 
         /// <summary>
         /// (int roundNumber, string winnerName, int moveCount, byte[] winningMoves, double replayStepSeconds).
-        /// winnerName is the best solver (they only score if still in the lobby). Clients replay
+        /// winnerName is the best solver (they only score if still in the lobby); null with
+        /// moveCount 0 and no moves if the board was skipped without a solution. Clients replay
         /// winningMoves (<see cref="MoveCodec"/>) from the round's start, one move per step; the
         /// next round starts after the replay.
         /// </summary>
@@ -54,6 +62,9 @@ namespace SharedLogic
     {
         public string Name { get; set; }
         public int Score { get; set; }
+
+        /// <summary>Has voted to end this round early (see <see cref="HubMethods.SetDone"/>).</summary>
+        public bool Done { get; set; }
     }
 
     public class LobbyState
