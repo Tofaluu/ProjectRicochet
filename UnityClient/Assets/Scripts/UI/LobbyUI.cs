@@ -12,7 +12,8 @@ using UnityEngine.UI;
 namespace Ricochet.Client.UI
 {
     /// <summary>
-    /// Join panel (name, lobby code) and in-game panel (players, timer, best solution, Lock In).
+    /// Join panel (name, lobby code) and in-game panel: players, then either the match setup / results
+    /// (host settings + Start) between matches, or the round (timer, best solution, Lock In) during one.
     /// Glue between <see cref="NetworkManager"/> and the <see cref="ScratchpadController"/> board.
     /// </summary>
     public class LobbyUI : MonoBehaviour
@@ -40,6 +41,16 @@ namespace Ricochet.Client.UI
         [SerializeField] private Text _doneLabel;
         [SerializeField] private Button _leaveButton;
 
+        [Header("Match setup / results")]
+        [SerializeField] private Text _playersHeader;
+        [SerializeField] private Text _matchText;
+        [SerializeField] private GameObject _settingsGroup;
+        [SerializeField] private InputField _pointsInput;
+        [SerializeField] private InputField _firstTimerInput;
+        [SerializeField] private InputField _extensionInput;
+        [SerializeField] private Button _startButton;
+        [SerializeField] private Text _startLabel;
+
         private const string NamePrefKey = "Ricochet.PlayerName";
         private const string ServerPrefKey = "Ricochet.Server";
 
@@ -55,6 +66,14 @@ namespace Ricochet.Client.UI
         private int _doneCount;
         private int _voterCount;
         private HashSet<string> _playerNames = new HashSet<string>();
+        // From the latest LobbyState: the match.
+        private bool _hasState;
+        private MatchPhase _phase;
+        private string _host;
+        private bool _iAmHost;
+        private MatchSettings _settings;
+        private int _matchRound;
+        private string _matchWinner;
 
         private void Awake()
         {
@@ -68,6 +87,10 @@ namespace Ricochet.Client.UI
             _lockInButton.onClick.AddListener(OnLockInClicked);
             _doneButton.onClick.AddListener(OnDoneClicked);
             _leaveButton.onClick.AddListener(OnLeaveClicked);
+            _startButton.onClick.AddListener(OnStartClicked);
+            _pointsInput.onEndEdit.AddListener(_ => OnSettingsEdited());
+            _firstTimerInput.onEndEdit.AddListener(_ => OnSettingsEdited());
+            _extensionInput.onEndEdit.AddListener(_ => OnSettingsEdited());
         }
 
         // Optional command-line overrides for quick testing, e.g.
@@ -108,6 +131,7 @@ namespace Ricochet.Client.UI
             _network.NewBestSolution += OnNewBest;
             _network.SolutionRejected += OnRejected;
             _network.RoundEnded += OnRoundEnded;
+            _network.RequestFailed += OnRequestFailed;
         }
 
         private void OnDisable()
@@ -119,6 +143,7 @@ namespace Ricochet.Client.UI
             _network.NewBestSolution -= OnNewBest;
             _network.SolutionRejected -= OnRejected;
             _network.RoundEnded -= OnRoundEnded;
+            _network.RequestFailed -= OnRequestFailed;
         }
 
         private void OnJoinClicked() => Join(save: true);
@@ -163,6 +188,51 @@ namespace Ricochet.Client.UI
             _network.LeaveLobby();
         }
 
+        private void OnStartClicked()
+        {
+            ClearButtonFocus();
+            _network.StartMatch();
+            _feedbackText.text = "Starting...";
+        }
+
+        // Sends all three settings when the host finishes editing any of them. The server clamps them
+        // and echoes them back in the next LobbyState, which rewrites the fields (see ShowSettings).
+        private void OnSettingsEdited()
+        {
+            if (!_iAmHost || _settings == null)
+                return;
+
+            var edited = new MatchSettings
+            {
+                Mode = _settings.Mode,
+                PointsToWin = ParseOr(_pointsInput.text, _settings.PointsToWin),
+                FirstTimerSeconds = ParseOr(_firstTimerInput.text, _settings.FirstTimerSeconds),
+                ExtensionSeconds = ParseOr(_extensionInput.text, _settings.ExtensionSeconds),
+            };
+            if (edited.PointsToWin == _settings.PointsToWin && edited.FirstTimerSeconds == _settings.FirstTimerSeconds
+                && edited.ExtensionSeconds == _settings.ExtensionSeconds)
+            {
+                ShowSettings(_settings); // undo anything unparseable
+                return;
+            }
+            _network.UpdateSettings(edited);
+        }
+
+        private static int ParseOr(string text, int fallback) => int.TryParse(text, out int value) ? value : fallback;
+
+        private void ShowSettings(MatchSettings settings)
+        {
+            // Don't overwrite a field the host is typing in.
+            if (!_pointsInput.isFocused) _pointsInput.text = settings.PointsToWin.ToString();
+            if (!_firstTimerInput.isFocused) _firstTimerInput.text = settings.FirstTimerSeconds.ToString();
+            if (!_extensionInput.isFocused) _extensionInput.text = settings.ExtensionSeconds.ToString();
+        }
+
+        private void OnRequestFailed(string message)
+        {
+            _feedbackText.text = message;
+        }
+
         // Toggles this player's vote to end the round early; the server ends it once everyone has voted.
         private void OnDoneClicked()
         {
@@ -186,6 +256,8 @@ namespace Ricochet.Client.UI
             // Left the lobby or lost the connection: back to the join screen with an offline practice board.
             if (!_network.IsInLobby && _gamePanel.activeSelf)
             {
+                _hasState = false;
+                _round = 0;
                 _joinPanel.SetActive(true);
                 _gamePanel.SetActive(false);
                 _scratchpad.PlayOffline();
@@ -198,11 +270,36 @@ namespace Ricochet.Client.UI
             _gamePanel.SetActive(true);
             _lobbyText.text = "Lobby " + state.Code;
 
+            MatchPhase previous = _phase;
+            bool firstState = !_hasState;
+            _hasState = true;
+            _phase = state.Phase;
+            _host = state.Host;
+            _iAmHost = state.Host == _network.PlayerName;
+            _settings = state.Settings;
+            _matchRound = state.MatchRound;
+            _matchWinner = state.MatchWinner;
+            ShowSettings(state.Settings);
+
+            _playersHeader.text = _phase == MatchPhase.Finished
+                ? "Final standings"
+                : $"Players — first to {state.Settings.PointsToWin} wins";
             var players = new StringBuilder();
+            // Stable sort: ties stay in join order.
             foreach (PlayerInfo player in state.Players.OrderByDescending(p => p.Score))
                 players.AppendLine($"{player.Name}  —  {player.Score}"
+                    + (player.Name == state.Host ? "  (host)" : "")
                     + (player.Leading ? "   (best)" : player.Done ? "   (done)" : ""));
             _playersText.text = players.ToString();
+
+            if (_phase != MatchPhase.Playing && (firstState || previous == MatchPhase.Playing))
+                EnterBetweenMatches();
+            else if (_phase == MatchPhase.Playing && !firstState && previous != MatchPhase.Playing)
+            {
+                // The host pressed Start; the first board follows shortly.
+                _round = 0;
+                _feedbackText.text = "Match started! Get ready...";
+            }
 
             PlayerInfo me = state.Players.FirstOrDefault(p => p.Name == _network.PlayerName);
             _iAmDone = me != null && me.Done;
@@ -211,6 +308,24 @@ namespace Ricochet.Client.UI
             _doneCount = voters.Count(p => p.Done);
             _voterCount = voters.Length;
             _playerNames = new HashSet<string>(state.Players.Select(p => p.Name));
+        }
+
+        // Lobby just joined, or the match just ended: free practice on a local board until the next Start.
+        private void EnterBetweenMatches()
+        {
+            _round = 0;
+            _roundOver = false;
+            _timerEnd = -1f;
+            _bestPlayer = null;
+            _iAmDone = false;
+            _iAmLeading = false;
+            if (!_scratchpad.AllowNewBoard)
+                _scratchpad.PlayOffline();
+
+            // The match text above says who won.
+            _feedbackText.text = _phase == MatchPhase.Finished
+                ? "Practise on your own board until the next match."
+                : "Practise on your own board while you wait.";
         }
 
         private void OnRoundStarted(int round, RoundSetup setup)
@@ -301,6 +416,12 @@ namespace Ricochet.Client.UI
                 _feedbackText.text = "Board skipped. Next board soon...";
             }
 
+            string matchWinner = result.MatchWinnerName;
+            if (matchWinner != null)
+                _feedbackText.text += matchWinner == _network.PlayerName
+                    ? "\nThat's the match — you win!"
+                    : $"\nThat's the match — {matchWinner} wins!";
+
             if (replays.Count > 0)
                 _scratchpad.PlayReplays(replays, (float)result.ReplayPauseSeconds);
         }
@@ -310,7 +431,32 @@ namespace Ricochet.Client.UI
             if (!_gamePanel.activeSelf)
                 return;
 
-            var text = new StringBuilder($"Round {_round}\n");
+            // Between matches: setup / results (settings + Start for the host). During one: the round.
+            bool playing = _phase == MatchPhase.Playing;
+            bool hasBoard = playing && _round > 0;
+            _matchText.gameObject.SetActive(!playing);
+            _settingsGroup.SetActive(!playing && _iAmHost);
+            _startButton.gameObject.SetActive(!playing && _iAmHost);
+            _roundText.gameObject.SetActive(playing);
+            _lockInButton.gameObject.SetActive(playing);
+            // The leader (or, after the round, the winner) isn't part of the vote, so they don't get the
+            // button. During a round it ends the round early; after it, it skips the replay.
+            _doneButton.gameObject.SetActive(hasBoard && !_iAmLeading);
+
+            if (!playing)
+            {
+                UpdateMatchText();
+                return;
+            }
+            if (!hasBoard)
+            {
+                _roundText.text = "Dealing the first board...";
+                _lockInButton.interactable = false;
+                _lockInLabel.text = "Lock In";
+                return;
+            }
+
+            var text = new StringBuilder($"Round {_matchRound}\n");
             ReplaySegment replay = _scratchpad.CurrentReplay;
             if (_roundOver && _scratchpad.IsReplaying && replay != null)
             {
@@ -343,15 +489,37 @@ namespace Ricochet.Client.UI
                 && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame))
                 OnLockInClicked();
 
-            // The leader (or, after the round, the winner) isn't part of the vote, so they don't get the
-            // button. During a round it ends the round early; after it, it skips the replay.
-            _doneButton.gameObject.SetActive(!_iAmLeading);
             if (_iAmDone)
                 _doneLabel.text = $"Waiting for others ({_doneCount}/{_voterCount}) — undo";
             else if (_roundOver)
                 _doneLabel.text = "Skip replay";
             else
                 _doneLabel.text = _timerEnd < 0f ? "Skip board" : "I'm done";
+        }
+
+        private void UpdateMatchText()
+        {
+            if (_settings == null)
+                return;
+            var text = new StringBuilder();
+            if (_phase == MatchPhase.Finished)
+                text.AppendLine(_matchWinner == _network.PlayerName ? "You win the match!" : $"{_matchWinner} wins the match!");
+            if (_iAmHost)
+            {
+                text.Append(_phase == MatchPhase.Finished
+                    ? "Change the settings or play again."
+                    : "You're the host: pick the settings, then Start when everyone's in.");
+                _startLabel.text = _phase == MatchPhase.Finished ? "Play again" : "Start match";
+            }
+            else
+            {
+                text.AppendLine(_phase == MatchPhase.Finished
+                    ? $"Waiting for {_host} to start a new match."
+                    : $"Waiting for {_host} to start the match.");
+                text.Append($"Classic: first to {_settings.PointsToWin} points, "
+                    + $"{_settings.FirstTimerSeconds}s timer, +{_settings.ExtensionSeconds}s for better solutions");
+            }
+            _matchText.text = text.ToString();
         }
     }
 }

@@ -31,6 +31,11 @@ Mac (one-time setup):
 
 Then press Join.
 
+Whoever creates the lobby (the first to join a code) is the host. The host picks the settings
+(points to win, timer lengths) and presses Start match once everyone is in. Until then you can
+practise on your own board. If the host leaves, the next player becomes host. You can also join
+a match that's already running.
+
 
 3. HOW TO PLAY
 --------------
@@ -43,10 +48,11 @@ Robots slide until they hit a wall, the board edge or another robot.
   Lock In           Enter, or the Lock In button, once your robot is on the target
 
   - The first solution starts a 60 second timer.
-  - A shorter solution tops the timer back up to 45 seconds.
+  - A shorter solution tops the timer back up to 45 seconds. (Default times; the host can change them.)
   - Shortest solution when time runs out wins the point, and everyone watches it replayed.
     If it wasn't the shortest possible, the shortest possible one is shown after it.
   - Find the shortest possible solution and the round ends on the spot - nobody can beat it.
+  - First to the target number of points wins the match. The host can then press Play again.
   - Stuck? "Skip board" (nobody has solved it yet) or "I'm done" (someone has) ends the
     round early once everyone else agrees. "Skip replay" skips the replays the same way.
 

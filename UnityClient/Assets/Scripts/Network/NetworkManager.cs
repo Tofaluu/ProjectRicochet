@@ -37,6 +37,8 @@ namespace Ricochet.Client.Network
         public event Action<RoundResult, Move[], Move[]> RoundEnded;
         /// <summary>Human-readable connection status for the UI.</summary>
         public event Action<string> StatusChanged;
+        /// <summary>A lobby request (start, settings) was refused; the message is for the player.</summary>
+        public event Action<string> RequestFailed;
 
         public bool IsInLobby { get; private set; }
 
@@ -126,6 +128,38 @@ namespace Ricochet.Client.Network
             catch (Exception e)
             {
                 SetStatus("Submit failed: " + Describe(e));
+            }
+        }
+
+        /// <summary>Host only: start a match (or play again after one).</summary>
+        public async void StartMatch()
+        {
+            if (_connection == null || !IsInLobby)
+                return;
+
+            try
+            {
+                await _connection.InvokeAsync(HubMethods.StartMatch);
+            }
+            catch (Exception e)
+            {
+                ReportError("Couldn't start: " + Describe(e));
+            }
+        }
+
+        /// <summary>Host only, between matches.</summary>
+        public async void UpdateSettings(MatchSettings settings)
+        {
+            if (_connection == null || !IsInLobby)
+                return;
+
+            try
+            {
+                await _connection.InvokeAsync(HubMethods.UpdateSettings, settings);
+            }
+            catch (Exception e)
+            {
+                ReportError("Couldn't change settings: " + Describe(e));
             }
         }
 
@@ -232,6 +266,13 @@ namespace Ricochet.Client.Network
             if (_listening)
                 action();
         });
+
+        // Called after an await, which may resume off the main thread.
+        private void ReportError(string message)
+        {
+            Debug.LogWarning("[Network] " + message);
+            Post(() => RequestFailed?.Invoke(message));
+        }
 
         private void SetStatus(string status)
         {

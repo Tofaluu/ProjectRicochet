@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 2;
+        public const int ProtocolVersion = 3;
 
         // Client -> server
 
@@ -30,6 +30,15 @@ namespace SharedLogic
 
         /// <summary>() Leave the current lobby; same as disconnecting, but the connection stays open.</summary>
         public const string LeaveLobby = "LeaveLobby";
+
+        /// <summary>
+        /// () Host only, when no match is running: resets scores and starts a match with the lobby's
+        /// <see cref="MatchSettings"/>. Also "Play again" after a match.
+        /// </summary>
+        public const string StartMatch = "StartMatch";
+
+        /// <summary>(MatchSettings settings) Host only, between matches. Out-of-range values are clamped.</summary>
+        public const string UpdateSettings = "UpdateSettings";
 
         /// <summary>(int roundNumber, byte[] moves)</summary>
         public const string SubmitSolution = "SubmitSolution";
@@ -46,7 +55,10 @@ namespace SharedLogic
 
         // Server -> client
 
-        /// <summary>(LobbyState state). Sent to the whole lobby whenever players or scores change.</summary>
+        /// <summary>
+        /// (LobbyState state). Sent to the whole lobby whenever players, scores, the host, the settings
+        /// or the match phase change.
+        /// </summary>
         public const string LobbyState = "LobbyState";
 
         /// <summary>(int roundNumber, byte[] board)</summary>
@@ -94,6 +106,57 @@ namespace SharedLogic
 
         /// <summary>Pause on the starting position before each replay.</summary>
         public double ReplayPauseSeconds { get; set; }
+
+        /// <summary>
+        /// Set when this round's point won the match. The lobby switches to
+        /// <see cref="MatchPhase.Finished"/> once the replays are over.
+        /// </summary>
+        public string MatchWinnerName { get; set; }
+    }
+
+    public enum GameMode
+    {
+        /// <summary>Shortest solution when the timer runs out wins the round.</summary>
+        Classic = 0,
+    }
+
+    public enum MatchPhase
+    {
+        /// <summary>Lobby just created: waiting for the host to start the first match.</summary>
+        Waiting = 0,
+        /// <summary>Rounds are being played.</summary>
+        Playing = 1,
+        /// <summary>Someone reached the points target; results until the host starts again.</summary>
+        Finished = 2,
+    }
+
+    /// <summary>Chosen by the host between matches.</summary>
+    public class MatchSettings
+    {
+        public const int MinPointsToWin = 1, MaxPointsToWin = 50;
+        public const int MinTimerSeconds = 10, MaxTimerSeconds = 600;
+
+        public GameMode Mode { get; set; }
+        public int PointsToWin { get; set; }
+
+        /// <summary>Timer started by the first valid solution of a round.</summary>
+        public int FirstTimerSeconds { get; set; }
+
+        /// <summary>Each better solution tops the timer up to at least this much.</summary>
+        public int ExtensionSeconds { get; set; }
+
+        public MatchSettings Clamped()
+        {
+            return new MatchSettings
+            {
+                Mode = GameMode.Classic, // the only mode so far
+                PointsToWin = Clamp(PointsToWin, MinPointsToWin, MaxPointsToWin),
+                FirstTimerSeconds = Clamp(FirstTimerSeconds, MinTimerSeconds, MaxTimerSeconds),
+                ExtensionSeconds = Clamp(ExtensionSeconds, MinTimerSeconds, MaxTimerSeconds),
+            };
+        }
+
+        private static int Clamp(int value, int min, int max) => value < min ? min : value > max ? max : value;
     }
 
     public class PlayerInfo
@@ -111,6 +174,20 @@ namespace SharedLogic
     public class LobbyState
     {
         public string Code { get; set; }
+
+        /// <summary>In join order.</summary>
         public PlayerInfo[] Players { get; set; }
+
+        /// <summary>Name of the host, who starts matches and picks the settings. Passes to the next player if they leave.</summary>
+        public string Host { get; set; }
+
+        public MatchPhase Phase { get; set; }
+        public MatchSettings Settings { get; set; }
+
+        /// <summary>Round number within the current match (1-based; 0 before the first board).</summary>
+        public int MatchRound { get; set; }
+
+        /// <summary>Set while <see cref="Phase"/> is <see cref="MatchPhase.Finished"/>.</summary>
+        public string MatchWinner { get; set; }
     }
 }
