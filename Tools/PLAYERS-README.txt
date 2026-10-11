@@ -45,8 +45,13 @@ Robots slide until they hit a wall, the board edge or another robot.
   - The first solution starts a 60 second timer.
   - A shorter solution tops the timer back up to 45 seconds.
   - Shortest solution when time runs out wins the point, and everyone watches it replayed.
+    If it wasn't the shortest possible, the shortest possible one is shown after it.
+  - Find the shortest possible solution and the round ends on the spot - nobody can beat it.
   - Stuck? "Skip board" (nobody has solved it yet) or "I'm done" (someone has) ends the
-    round early once everyone else agrees.
+    round early once everyone else agrees. "Skip replay" skips the replays the same way.
+
+  Practising alone (before joining a lobby): N gives a new board, and H shows the shortest
+  solution for the current board.
 
 
 4. SOMETHING WENT WRONG?
