@@ -33,8 +33,8 @@ namespace Ricochet.Client.Network
         public event Action<int, string, int> NewBestSolution;
         /// <summary>(reason)</summary>
         public event Action<string> SolutionRejected;
-        /// <summary>(round number, winner name, move count, winning moves, replay seconds per move)</summary>
-        public event Action<int, string, int, Move[], float> RoundEnded;
+        /// <summary>(result, winner's moves (empty if none), shortest moves (null if the solver gave up))</summary>
+        public event Action<RoundResult, Move[], Move[]> RoundEnded;
         /// <summary>Human-readable connection status for the UI.</summary>
         public event Action<string> StatusChanged;
 
@@ -174,10 +174,13 @@ namespace Ricochet.Client.Network
                 (round, player, moves) => PostLobbyEvent(() => NewBestSolution?.Invoke(round, player, moves)));
             _connection.On<string>(HubMethods.SolutionRejected,
                 reason => PostLobbyEvent(() => SolutionRejected?.Invoke(reason)));
-            _connection.On<int, string, int, byte[], double>(HubMethods.RoundEnded, (round, winner, count, moveData, step) =>
+            _connection.On<RoundResult>(HubMethods.RoundEnded, result =>
             {
-                Move[] moves = MoveCodec.Decode(moveData);
-                PostLobbyEvent(() => RoundEnded?.Invoke(round, winner, count, moves, (float)step));
+                Move[] winnerMoves = MoveCodec.Decode(result.WinnerMoves ?? Array.Empty<byte>());
+                Move[] shortest = result.ShortestMoves != null && result.ShortestMoves.Length > 0
+                    ? MoveCodec.Decode(result.ShortestMoves)
+                    : null;
+                PostLobbyEvent(() => RoundEnded?.Invoke(result, winnerMoves, shortest));
             });
 
             _connection.Closed += error =>

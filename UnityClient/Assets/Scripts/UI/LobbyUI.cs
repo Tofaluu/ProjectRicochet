@@ -48,8 +48,6 @@ namespace Ricochet.Client.UI
         private float _timerEnd = -1f;
         private float _timerExtendedUntil = -1f;
         private string _bestPlayer;
-        private string _winner;
-        private Move[] _replayMoves;
         private int _bestMoves;
         // From the latest LobbyState: this player's vote/lead, and the vote among non-leaders.
         private bool _iAmDone;
@@ -265,24 +263,46 @@ namespace Ricochet.Client.UI
             _feedbackText.text = "Rejected: " + reason;
         }
 
-        private void OnRoundEnded(int round, string winner, int moveCount, Move[] moves, float stepSeconds)
+        // Replays the winner's solution, then the shortest one if it's shorter (or only the shortest when
+        // nobody solved it). The server waits for these before dealing the next board.
+        private void OnRoundEnded(RoundResult result, Move[] winnerMoves, Move[] shortest)
         {
-            if (round != _round)
+            if (result.RoundNumber != _round)
                 return;
             _roundOver = true;
             _timerEnd = -1f;
-            _winner = winner;
-            _replayMoves = moves;
-            if (moves.Length == 0)
+
+            string winner = result.WinnerName;
+            var replays = new List<ReplaySegment>();
+            if (winnerMoves.Length > 0)
+            {
+                bool wasShortest = shortest != null && winnerMoves.Length <= shortest.Length;
+                // The best solver only scores if they're still here.
+                if (!_playerNames.Contains(winner))
+                    _feedbackText.text = $"{winner} had the best solution ({winnerMoves.Length} moves) but left, so no point this round.";
+                else if (wasShortest)
+                    _feedbackText.text = $"{winner} found the shortest possible solution! ({winnerMoves.Length} moves)";
+                else if (shortest != null)
+                    _feedbackText.text = $"{winner} wins with {winnerMoves.Length} moves. Shortest possible: {shortest.Length}.";
+                else
+                    _feedbackText.text = $"{winner} wins the round with {winnerMoves.Length} moves!";
+
+                replays.Add(new ReplaySegment($"{winner}'s solution", winnerMoves, (float)result.ReplayStepSeconds));
+                if (shortest != null && !wasShortest)
+                    replays.Add(new ReplaySegment("Shortest possible", shortest, (float)result.ShortestReplayStepSeconds));
+            }
+            else if (shortest != null)
+            {
+                _feedbackText.text = $"Board skipped. Here's how it could be done in {shortest.Length} moves:";
+                replays.Add(new ReplaySegment("Shortest possible", shortest, (float)result.ShortestReplayStepSeconds));
+            }
+            else
             {
                 _feedbackText.text = "Board skipped. Next board soon...";
-                return;
             }
-            // The best solver only scores if they're still here.
-            _feedbackText.text = _playerNames.Contains(winner)
-                ? $"{winner} wins the round with {moveCount} moves!"
-                : $"{winner} had the best solution ({moveCount} moves) but left, so no point this round.";
-            _scratchpad.PlayReplay(moves, stepSeconds);
+
+            if (replays.Count > 0)
+                _scratchpad.PlayReplays(replays, (float)result.ReplayPauseSeconds);
         }
 
         private void Update()
@@ -291,14 +311,13 @@ namespace Ricochet.Client.UI
                 return;
 
             var text = new StringBuilder($"Round {_round}\n");
-            if (_roundOver && _scratchpad.IsReplaying && _replayMoves != null)
+            ReplaySegment replay = _scratchpad.CurrentReplay;
+            if (_roundOver && _scratchpad.IsReplaying && replay != null)
             {
                 int step = _scratchpad.ReplayStep;
-                text.Append(step == 0 ? $"{_winner}'s solution:"
-                    : $"{_winner}'s solution — step {step}/{_replayMoves.Length}: " +
-                      $"{_replayMoves[step - 1].Robot} {_replayMoves[step - 1].Direction}");
-                if (step == _replayMoves.Length)
-                    text.Append("\nNext board soon...");
+                IReadOnlyList<Move> moves = replay.Moves;
+                text.Append(step == 0 ? $"{replay.Label}:"
+                    : $"{replay.Label} — step {step}/{moves.Count}: {moves[step - 1].Robot} {moves[step - 1].Direction}");
             }
             else if (_roundOver)
                 text.Append("Round over");
@@ -324,11 +343,13 @@ namespace Ricochet.Client.UI
                 && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame))
                 OnLockInClicked();
 
-            // The leader has nothing to give up on, so they don't get the button at all.
+            // The leader (or, after the round, the winner) isn't part of the vote, so they don't get the
+            // button. During a round it ends the round early; after it, it skips the replay.
             _doneButton.gameObject.SetActive(!_iAmLeading);
-            _doneButton.interactable = !_roundOver;
             if (_iAmDone)
                 _doneLabel.text = $"Waiting for others ({_doneCount}/{_voterCount}) — undo";
+            else if (_roundOver)
+                _doneLabel.text = "Skip replay";
             else
                 _doneLabel.text = _timerEnd < 0f ? "Skip board" : "I'm done";
         }
