@@ -30,6 +30,13 @@ namespace BackendServer.Hubs
         [HubMethodName(HubMethods.LeaveLobby)]
         public Task LeaveLobby() => _lobbies.LeaveAsync(Context.ConnectionId);
 
+        [HubMethodName(HubMethods.StartMatch)]
+        public Task StartMatch() => _lobbies.StartMatchAsync(Context.ConnectionId);
+
+        [HubMethodName(HubMethods.UpdateSettings)]
+        public Task UpdateSettings(MatchSettings settings) =>
+            _lobbies.UpdateSettingsAsync(Context.ConnectionId, settings);
+
         [HubMethodName(HubMethods.SubmitSolution)]
         public Task SubmitSolution(int roundNumber, byte[] moves) =>
             _lobbies.SubmitAsync(Context.ConnectionId, roundNumber, moves);

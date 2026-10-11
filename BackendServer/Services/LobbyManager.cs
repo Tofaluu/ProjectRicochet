@@ -9,14 +9,19 @@ namespace BackendServer.Services
 {
     public class GameOptions
     {
+        // Defaults for a new lobby's MatchSettings; the host can change them between matches.
+
         /// <summary>Timer started by the first valid solution of a round.</summary>
-        public double FirstTimerSeconds { get; set; } = 60;
+        public int FirstTimerSeconds { get; set; } = 60;
 
         /// <summary>
         /// Each strictly better solution after that tops the timer up to at least this much,
         /// so nobody can be sniped in the last seconds. It never shortens the timer.
         /// </summary>
-        public double ExtensionSeconds { get; set; } = 45;
+        public int ExtensionSeconds { get; set; } = 45;
+
+        /// <summary>First player to this many points wins the match.</summary>
+        public int PointsToWin { get; set; } = 5;
 
         /// <summary>Pause after the replays before the next board.</summary>
         public double IntermissionSeconds { get; set; } = 3;
@@ -45,7 +50,7 @@ namespace BackendServer.Services
         Solving,
         /// <summary>Someone solved it; better solutions are accepted until the timer runs out.</summary>
         TimerRunning,
-        /// <summary>Round over; replays, then the next board.</summary>
+        /// <summary>Round over (or no board yet); replays, then the next board.</summary>
         Intermission,
     }
 
@@ -53,6 +58,9 @@ namespace BackendServer.Services
     {
         public string Name { get; init; } = "";
         public int Score { get; set; }
+
+        /// <summary>Increases with each join; the host passes to the lowest one left.</summary>
+        public long JoinOrder { get; init; }
 
         /// <summary>
         /// During a round: voted to end it early ("Skip board" / "I'm done"). After it: voted to skip
@@ -70,12 +78,22 @@ namespace BackendServer.Services
         public Dictionary<string, Player> Players { get; } = new();
         public bool Closed { get; set; }
 
+        public string? HostConnectionId { get; set; }
+        public MatchSettings Settings { get; set; } = new();
+        public MatchPhase Match { get; set; } = MatchPhase.Waiting;
+        /// <summary>Bumped on every Start, so a board prepared for an older match is dropped.</summary>
+        public int MatchId { get; set; }
+        public int MatchRound { get; set; }
+        public string? MatchWinner { get; set; }
+
+        /// <summary>Unique across matches (submissions carry it); see <see cref="MatchRound"/> for display.</summary>
         public int RoundNumber { get; set; }
-        public RoundSetup Round { get; set; } = null!;
+        /// <summary>The current board; null while none has been dealt in this match yet.</summary>
+        public RoundSetup? Round { get; set; }
         public byte[] Board { get; set; } = Array.Empty<byte>();
         /// <summary>A shortest solution, or null if the solver gave up on this board.</summary>
         public Move[]? Shortest { get; set; }
-        public RoundPhase Phase { get; set; }
+        public RoundPhase Phase { get; set; } = RoundPhase.Intermission;
         public DateTime TimerEndUtc { get; set; }
 
         public string? BestConnectionId { get; set; }
@@ -85,13 +103,18 @@ namespace BackendServer.Services
 
         /// <summary>Cancelled when everyone but the winner votes to skip the replay.</summary>
         public CancellationTokenSource? ReplaySkip { get; set; }
+
+        /// <summary>A round is being played or replayed (so solutions and votes count).</summary>
+        public bool InRound => Match == MatchPhase.Playing && Round != null;
     }
 
     /// <summary>
-    /// Owns all lobbies and runs the round loop. All state is guarded by one lock; messages
-    /// are sent through <see cref="IHubContext{THub}"/> after releasing it, because hub
-    /// instances are disposed as soon as each hub call returns. Boards are generated and solved
-    /// outside the lock so a slow solve never stalls other lobbies.
+    /// Owns all lobbies and runs matches: the host (the creator, passed on in join order) picks the
+    /// settings and presses Start; rounds repeat until someone reaches the points target, then the
+    /// lobby shows the results until the host starts again. Players can join at any time.
+    /// All state is guarded by one lock; messages are sent through <see cref="IHubContext{THub}"/>
+    /// after releasing it, because hub instances are disposed as soon as each hub call returns.
+    /// Boards are generated and solved outside the lock so a slow solve never stalls other lobbies.
     /// </summary>
     public class LobbyManager
     {
@@ -103,6 +126,7 @@ namespace BackendServer.Services
         private readonly Dictionary<string, Lobby> _lobbies = new();
         private readonly Dictionary<string, Lobby> _lobbyByConnection = new();
         private readonly Random _random = new();
+        private long _nextJoinOrder;
 
         private readonly IHubContext<GameHub> _hub;
         private readonly GameOptions _options;
@@ -127,20 +151,14 @@ namespace BackendServer.Services
             if (name.Length > MaxNameLength) name = name.Substring(0, MaxNameLength);
 
             bool switchingLobby;
-            bool lobbyExists;
             lock (_gate)
-            {
                 switchingLobby = _lobbyByConnection.TryGetValue(connectionId, out Lobby? current) && current.Code != code;
-                lobbyExists = _lobbies.ContainsKey(code);
-            }
             if (switchingLobby)
                 await LeaveAsync(connectionId);
 
-            // A new lobby needs its first board; prepare it before taking the lock.
-            PreparedRound? firstRound = lobbyExists ? null : await Task.Run(PrepareRound);
-
             Lobby lobby;
             LobbyState state;
+            bool inRound;
             int round;
             byte[] board;
             RoundPhase phase;
@@ -151,21 +169,38 @@ namespace BackendServer.Services
             {
                 if (!_lobbies.TryGetValue(code, out lobby!))
                 {
-                    lobby = new Lobby { Code = code };
+                    // The creator becomes the host (below) and starts the first match when everyone's in.
+                    lobby = new Lobby
+                    {
+                        Code = code,
+                        Settings = new MatchSettings
+                        {
+                            Mode = GameMode.Classic,
+                            PointsToWin = _options.PointsToWin,
+                            FirstTimerSeconds = _options.FirstTimerSeconds,
+                            ExtensionSeconds = _options.ExtensionSeconds,
+                        }.Clamped(),
+                    };
                     _lobbies[code] = lobby;
-                    // Someone may have closed the lobby between the two lock sections; prepare inline then.
-                    StartNewRoundLocked(lobby, firstRound ?? PrepareRound());
                     _log.LogInformation("Lobby {Code} created", code);
                 }
 
-                // Re-joining the same lobby (e.g. to change name) keeps the score.
-                int score = lobby.Players.TryGetValue(connectionId, out Player? existing) ? existing.Score : 0;
+                // Re-joining the same lobby (e.g. to change name) keeps the score and place in line.
+                lobby.Players.TryGetValue(connectionId, out Player? existing);
                 // Names identify players to each other (and each client finds itself by name), so keep them unique.
                 name = UniqueNameLocked(lobby, connectionId, name);
-                lobby.Players[connectionId] = new Player { Name = name, Score = score };
+                lobby.Players[connectionId] = new Player
+                {
+                    Name = name,
+                    Score = existing?.Score ?? 0,
+                    JoinOrder = existing?.JoinOrder ?? ++_nextJoinOrder,
+                };
                 _lobbyByConnection[connectionId] = lobby;
+                lobby.HostConnectionId ??= connectionId;
 
                 state = SnapshotLocked(lobby);
+                // Joining mid-match is allowed: the newcomer gets the current board (unless it's still being prepared).
+                inRound = lobby.InRound;
                 round = lobby.RoundNumber;
                 board = lobby.Board;
                 phase = lobby.Phase;
@@ -176,6 +211,8 @@ namespace BackendServer.Services
 
             await _hub.Groups.AddToGroupAsync(connectionId, code);
             await _hub.Clients.Group(code).SendAsync(HubMethods.LobbyState, state);
+            if (!inRound)
+                return name;
 
             // Catch the newcomer up on the round in progress.
             IClientProxy caller = _hub.Clients.Client(connectionId);
@@ -220,10 +257,13 @@ namespace BackendServer.Services
                 }
                 else
                 {
+                    // The host passes to whoever has been here longest.
+                    if (lobby.HostConnectionId == connectionId)
+                        lobby.HostConnectionId = lobby.Players.MinBy(p => p.Value.JoinOrder).Key;
                     state = SnapshotLocked(lobby);
                     round = lobby.RoundNumber;
                     // The one player everyone was waiting on may have just left.
-                    if (AllOthersDoneLocked(lobby))
+                    if (lobby.InRound && AllOthersDoneLocked(lobby))
                     {
                         if (lobby.Phase == RoundPhase.Intermission)
                             lobby.ReplaySkip?.Cancel();
@@ -241,10 +281,86 @@ namespace BackendServer.Services
         }
 
         /// <summary>
+        /// Host only, when no match is running: resets scores and deals the first board. The board is
+        /// prepared outside the lock, so meanwhile the lobby is already Playing but with no board.
+        /// </summary>
+        public async Task StartMatchAsync(string connectionId)
+        {
+            Lobby lobby;
+            LobbyState state;
+            int matchId;
+            lock (_gate)
+            {
+                lobby = HostLobbyLocked(connectionId, "start the match");
+                if (lobby.Match == MatchPhase.Playing)
+                    throw new HubException("A match is already running.");
+
+                lobby.Match = MatchPhase.Playing;
+                matchId = ++lobby.MatchId;
+                lobby.MatchRound = 0;
+                lobby.MatchWinner = null;
+                // No board yet: solutions and votes are refused until it's dealt.
+                lobby.Round = null;
+                lobby.Phase = RoundPhase.Intermission;
+                ClearBestLocked(lobby);
+                foreach (Player player in lobby.Players.Values)
+                {
+                    player.Score = 0;
+                    player.Done = false;
+                }
+                state = SnapshotLocked(lobby);
+                _log.LogInformation("Lobby {Code}: match started, first to {Points}", lobby.Code, lobby.Settings.PointsToWin);
+            }
+
+            IClientProxy group = _hub.Clients.Group(lobby.Code);
+            await group.SendAsync(HubMethods.LobbyState, state);
+
+            PreparedRound prepared = await Task.Run(PrepareRound);
+            int round;
+            byte[] board;
+            lock (_gate)
+            {
+                if (lobby.Closed || lobby.MatchId != matchId)
+                    return;
+                StartNewRoundLocked(lobby, prepared);
+                round = lobby.RoundNumber;
+                board = lobby.Board;
+                state = SnapshotLocked(lobby);
+            }
+            await group.SendAsync(HubMethods.RoundStarted, round, board);
+            await group.SendAsync(HubMethods.LobbyState, state);
+        }
+
+        /// <summary>Host only, between matches. Out-of-range values are clamped.</summary>
+        public async Task UpdateSettingsAsync(string connectionId, MatchSettings settings)
+        {
+            Lobby lobby;
+            LobbyState state;
+            lock (_gate)
+            {
+                lobby = HostLobbyLocked(connectionId, "change the settings");
+                if (lobby.Match == MatchPhase.Playing)
+                    throw new HubException("Settings can't change during a match.");
+                lobby.Settings = (settings ?? lobby.Settings).Clamped();
+                state = SnapshotLocked(lobby);
+            }
+            await _hub.Clients.Group(lobby.Code).SendAsync(HubMethods.LobbyState, state);
+        }
+
+        private Lobby HostLobbyLocked(string connectionId, string action)
+        {
+            if (!_lobbyByConnection.TryGetValue(connectionId, out Lobby? lobby))
+                throw new HubException("You are not in a lobby.");
+            if (lobby.HostConnectionId != connectionId)
+                throw new HubException($"Only the host can {action}.");
+            return lobby;
+        }
+
+        /// <summary>
         /// A player votes (or un-votes). During a round: to end it early - when every player except the
         /// leader has voted, it ends now (skipped with no point if nobody solved it, otherwise as if the
         /// timer ran out). After a round: to skip the replay - when every player except the winner has
-        /// voted, the next board comes straight away.
+        /// voted, the next board (or the match results) comes straight away.
         /// </summary>
         public async Task SetDoneAsync(string connectionId, int roundNumber, bool done)
         {
@@ -253,7 +369,8 @@ namespace BackendServer.Services
             bool endRound = false;
             lock (_gate)
             {
-                if (!_lobbyByConnection.TryGetValue(connectionId, out lobby) || lobby.RoundNumber != roundNumber)
+                if (!_lobbyByConnection.TryGetValue(connectionId, out lobby) || !lobby.InRound
+                    || lobby.RoundNumber != roundNumber)
                     return;
                 // The leader / winner isn't part of either vote.
                 if (connectionId == lobby.BestConnectionId)
@@ -338,7 +455,7 @@ namespace BackendServer.Services
 
             if (!_lobbyByConnection.TryGetValue(connectionId, out lobby))
                 return "You are not in a lobby.";
-            if (roundNumber != lobby.RoundNumber || lobby.Phase == RoundPhase.Intermission)
+            if (!lobby.InRound || roundNumber != lobby.RoundNumber || lobby.Phase == RoundPhase.Intermission)
                 return "That round is over.";
 
             Move[] moves;
@@ -353,7 +470,8 @@ namespace BackendServer.Services
             if (moves.Length > _options.MaxSolutionMoves)
                 return $"Solutions are limited to {_options.MaxSolutionMoves} moves.";
 
-            SolutionResult result = GameRules.ValidateSolution(lobby.Round.Grid, lobby.Round.Robots, lobby.Round.Target, moves);
+            RoundSetup round = lobby.Round!;
+            SolutionResult result = GameRules.ValidateSolution(round.Grid, round.Robots, round.Target, moves);
             if (result != SolutionResult.Valid)
                 return $"Invalid solution ({result}).";
 
@@ -364,17 +482,17 @@ namespace BackendServer.Services
             if (lobby.Phase == RoundPhase.Solving)
             {
                 lobby.Phase = RoundPhase.TimerRunning;
-                lobby.TimerEndUtc = now.AddSeconds(_options.FirstTimerSeconds);
+                lobby.TimerEndUtc = now.AddSeconds(lobby.Settings.FirstTimerSeconds);
                 timerStarted = true;
-                secondsLeft = _options.FirstTimerSeconds;
+                secondsLeft = lobby.Settings.FirstTimerSeconds;
             }
             else
             {
-                DateTime extended = now.AddSeconds(_options.ExtensionSeconds);
+                DateTime extended = now.AddSeconds(lobby.Settings.ExtensionSeconds);
                 if (extended > lobby.TimerEndUtc)
                 {
                     lobby.TimerEndUtc = extended;
-                    secondsLeft = _options.ExtensionSeconds;
+                    secondsLeft = lobby.Settings.ExtensionSeconds;
                 }
             }
 
@@ -412,14 +530,16 @@ namespace BackendServer.Services
 
         /// <summary>
         /// Ends the round (timer ran out, everyone else done, or the shortest solution was found), sends
-        /// the result and replays, then deals the next board - prepared while the replays play. Safe to
-        /// call more than once; only the first call does anything.
+        /// the result and replays, then either deals the next board - prepared while the replays play -
+        /// or, if that point won the match, shows the results. Safe to call more than once; only the
+        /// first call does anything.
         /// </summary>
         private async Task EndRoundAsync(Lobby lobby, int roundNumber)
         {
             RoundResult result;
             LobbyState state;
             CancellationTokenSource skip;
+            string? matchWinner = null;
             lock (_gate)
             {
                 if (lobby.Closed || lobby.RoundNumber != roundNumber || lobby.Phase == RoundPhase.Intermission)
@@ -428,7 +548,11 @@ namespace BackendServer.Services
                 lobby.Phase = RoundPhase.Intermission;
                 // The point only goes to the best solver if they're still here.
                 if (lobby.BestConnectionId != null && lobby.Players.TryGetValue(lobby.BestConnectionId, out Player? winner))
+                {
                     winner.Score++;
+                    if (winner.Score >= lobby.Settings.PointsToWin)
+                        matchWinner = winner.Name;
+                }
                 // Votes from here on mean "skip the replay", so start counting afresh.
                 foreach (Player player in lobby.Players.Values)
                     player.Done = false;
@@ -442,14 +566,15 @@ namespace BackendServer.Services
                     ReplayStepSeconds = _options.ReplayStepSeconds,
                     ShortestReplayStepSeconds = _options.ShortestReplayStepSeconds,
                     ReplayPauseSeconds = _options.ReplayPauseSeconds,
+                    MatchWinnerName = matchWinner,
                 };
                 skip = new CancellationTokenSource();
                 lobby.ReplaySkip = skip;
                 state = SnapshotLocked(lobby);
             }
 
-            // Prepare the next board while everyone watches the replays.
-            Task<PreparedRound> next = Task.Run(PrepareRound);
+            // Prepare the next board while everyone watches the replays (unless the match is over).
+            Task<PreparedRound>? next = matchWinner == null ? Task.Run(PrepareRound) : null;
 
             IClientProxy group = _hub.Clients.Group(lobby.Code);
             await group.SendAsync(HubMethods.RoundEnded, result);
@@ -464,21 +589,36 @@ namespace BackendServer.Services
                 // Everyone but the winner voted to skip (or the lobby closed).
             }
 
-            PreparedRound prepared = await next;
-            int nextRound;
-            byte[] board;
+            PreparedRound? prepared = next != null ? await next : null;
+            int nextRound = 0;
+            byte[] board = Array.Empty<byte>();
             lock (_gate)
             {
                 if (lobby.ReplaySkip == skip)
                     lobby.ReplaySkip = null;
                 if (lobby.Closed || lobby.RoundNumber != roundNumber)
                     return;
-                StartNewRoundLocked(lobby, prepared);
-                nextRound = lobby.RoundNumber;
-                board = lobby.Board;
+
+                if (prepared != null)
+                {
+                    StartNewRoundLocked(lobby, prepared);
+                    nextRound = lobby.RoundNumber;
+                    board = lobby.Board;
+                }
+                else
+                {
+                    // Results until the host starts again; the last board stays as it was.
+                    lobby.Match = MatchPhase.Finished;
+                    lobby.MatchWinner = matchWinner;
+                    ClearBestLocked(lobby);
+                    foreach (Player player in lobby.Players.Values)
+                        player.Done = false;
+                    _log.LogInformation("Lobby {Code}: {Winner} won the match", lobby.Code, matchWinner);
+                }
                 state = SnapshotLocked(lobby);
             }
-            await group.SendAsync(HubMethods.RoundStarted, nextRound, board);
+            if (prepared != null)
+                await group.SendAsync(HubMethods.RoundStarted, nextRound, board);
             await group.SendAsync(HubMethods.LobbyState, state);
         }
 
@@ -529,16 +669,22 @@ namespace BackendServer.Services
         private static void StartNewRoundLocked(Lobby lobby, PreparedRound prepared)
         {
             lobby.RoundNumber++;
+            lobby.MatchRound++;
             lobby.Round = prepared.Round;
             lobby.Shortest = prepared.Shortest;
-            lobby.Board = BoardCodec.Encode(lobby.Round);
+            lobby.Board = BoardCodec.Encode(prepared.Round);
             lobby.Phase = RoundPhase.Solving;
+            ClearBestLocked(lobby);
+            foreach (Player player in lobby.Players.Values)
+                player.Done = false;
+        }
+
+        private static void ClearBestLocked(Lobby lobby)
+        {
             lobby.BestConnectionId = null;
             lobby.BestPlayerName = null;
             lobby.BestMoveCount = 0;
             lobby.BestMoves = Array.Empty<byte>();
-            foreach (Player player in lobby.Players.Values)
-                player.Done = false;
         }
 
         private static LobbyState SnapshotLocked(Lobby lobby)
@@ -546,7 +692,15 @@ namespace BackendServer.Services
             return new LobbyState
             {
                 Code = lobby.Code,
+                Host = lobby.HostConnectionId != null && lobby.Players.TryGetValue(lobby.HostConnectionId, out Player? host)
+                    ? host.Name
+                    : null,
+                Phase = lobby.Match,
+                Settings = lobby.Settings,
+                MatchRound = lobby.MatchRound,
+                MatchWinner = lobby.MatchWinner,
                 Players = lobby.Players
+                    .OrderBy(p => p.Value.JoinOrder)
                     .Select(p => new PlayerInfo
                     {
                         Name = p.Value.Name,
