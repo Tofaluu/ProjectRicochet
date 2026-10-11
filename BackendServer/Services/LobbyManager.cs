@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using BackendServer.Hubs;
 using Microsoft.AspNetCore.SignalR;
@@ -17,14 +18,23 @@ namespace BackendServer.Services
         /// </summary>
         public double ExtensionSeconds { get; set; } = 45;
 
-        /// <summary>Pause between a round ending and the next board.</summary>
+        /// <summary>Pause after the replays before the next board.</summary>
         public double IntermissionSeconds { get; set; } = 3;
 
-        /// <summary>
-        /// Clients replay the winning solution at this many seconds per move; the next board
-        /// waits for the replay plus <see cref="IntermissionSeconds"/>.
-        /// </summary>
+        /// <summary>Seconds per move when replaying the winner's solution.</summary>
         public double ReplayStepSeconds { get; set; } = 1;
+
+        /// <summary>Seconds per move when replaying the shortest solution (shown after a longer winning one).</summary>
+        public double ShortestReplayStepSeconds { get; set; } = 0.6;
+
+        /// <summary>Pause on the starting position before each replay.</summary>
+        public double ReplayPauseSeconds { get; set; } = 1;
+
+        /// <summary>Boards whose shortest solution is shorter than this are thrown away. Hard boards are always kept.</summary>
+        public int MinBoardMoves { get; set; } = 3;
+
+        /// <summary>Time the solver gets per board. If it gives up, the board is kept with no known shortest solution.</summary>
+        public double SolverTimeLimitSeconds { get; set; } = 5;
 
         public int MaxSolutionMoves { get; set; } = 64;
     }
@@ -35,7 +45,7 @@ namespace BackendServer.Services
         Solving,
         /// <summary>Someone solved it; better solutions are accepted until the timer runs out.</summary>
         TimerRunning,
-        /// <summary>Round over; waiting for the next board.</summary>
+        /// <summary>Round over; replays, then the next board.</summary>
         Intermission,
     }
 
@@ -44,9 +54,15 @@ namespace BackendServer.Services
         public string Name { get; init; } = "";
         public int Score { get; set; }
 
-        /// <summary>Voted to end this round early ("Skip board" / "I'm done"). Cleared every round.</summary>
+        /// <summary>
+        /// During a round: voted to end it early ("Skip board" / "I'm done"). After it: voted to skip
+        /// the replay. Cleared when the round ends and when the next one starts.
+        /// </summary>
         public bool Done { get; set; }
     }
+
+    /// <summary>A generated board plus its shortest solution, if the solver found one in time.</summary>
+    public sealed record PreparedRound(RoundSetup Round, Move[]? Shortest);
 
     public class Lobby
     {
@@ -57,6 +73,8 @@ namespace BackendServer.Services
         public int RoundNumber { get; set; }
         public RoundSetup Round { get; set; } = null!;
         public byte[] Board { get; set; } = Array.Empty<byte>();
+        /// <summary>A shortest solution, or null if the solver gave up on this board.</summary>
+        public Move[]? Shortest { get; set; }
         public RoundPhase Phase { get; set; }
         public DateTime TimerEndUtc { get; set; }
 
@@ -64,17 +82,22 @@ namespace BackendServer.Services
         public string? BestPlayerName { get; set; }
         public int BestMoveCount { get; set; }
         public byte[] BestMoves { get; set; } = Array.Empty<byte>();
+
+        /// <summary>Cancelled when everyone but the winner votes to skip the replay.</summary>
+        public CancellationTokenSource? ReplaySkip { get; set; }
     }
 
     /// <summary>
     /// Owns all lobbies and runs the round loop. All state is guarded by one lock; messages
     /// are sent through <see cref="IHubContext{THub}"/> after releasing it, because hub
-    /// instances are disposed as soon as each hub call returns.
+    /// instances are disposed as soon as each hub call returns. Boards are generated and solved
+    /// outside the lock so a slow solve never stalls other lobbies.
     /// </summary>
     public class LobbyManager
     {
         private static readonly Regex LobbyCodePattern = new("^[A-Z0-9]{1,8}$");
         private const int MaxNameLength = 20;
+        private const int MaxBoardAttempts = 50;
 
         private readonly object _gate = new();
         private readonly Dictionary<string, Lobby> _lobbies = new();
@@ -104,12 +127,17 @@ namespace BackendServer.Services
             if (name.Length > MaxNameLength) name = name.Substring(0, MaxNameLength);
 
             bool switchingLobby;
+            bool lobbyExists;
             lock (_gate)
             {
                 switchingLobby = _lobbyByConnection.TryGetValue(connectionId, out Lobby? current) && current.Code != code;
+                lobbyExists = _lobbies.ContainsKey(code);
             }
             if (switchingLobby)
                 await LeaveAsync(connectionId);
+
+            // A new lobby needs its first board; prepare it before taking the lock.
+            PreparedRound? firstRound = lobbyExists ? null : await Task.Run(PrepareRound);
 
             Lobby lobby;
             LobbyState state;
@@ -125,7 +153,8 @@ namespace BackendServer.Services
                 {
                     lobby = new Lobby { Code = code };
                     _lobbies[code] = lobby;
-                    StartNewRoundLocked(lobby);
+                    // Someone may have closed the lobby between the two lock sections; prepare inline then.
+                    StartNewRoundLocked(lobby, firstRound ?? PrepareRound());
                     _log.LogInformation("Lobby {Code} created", code);
                 }
 
@@ -185,15 +214,22 @@ namespace BackendServer.Services
                 if (lobby.Players.Count == 0)
                 {
                     lobby.Closed = true;
+                    lobby.ReplaySkip?.Cancel();
                     _lobbies.Remove(lobby.Code);
                     _log.LogInformation("Lobby {Code} closed", lobby.Code);
                 }
                 else
                 {
                     state = SnapshotLocked(lobby);
-                    // The one player everyone was waiting on may have just left.
-                    endRound = EveryoneDoneLocked(lobby);
                     round = lobby.RoundNumber;
+                    // The one player everyone was waiting on may have just left.
+                    if (AllOthersDoneLocked(lobby))
+                    {
+                        if (lobby.Phase == RoundPhase.Intermission)
+                            lobby.ReplaySkip?.Cancel();
+                        else
+                            endRound = true;
+                    }
                 }
             }
 
@@ -205,27 +241,33 @@ namespace BackendServer.Services
         }
 
         /// <summary>
-        /// A player votes (or un-votes) to end the round early. When every player in the lobby has
-        /// voted, the round ends now: skipped with no point if nobody solved it, otherwise exactly
-        /// as if the timer had run out.
+        /// A player votes (or un-votes). During a round: to end it early - when every player except the
+        /// leader has voted, it ends now (skipped with no point if nobody solved it, otherwise as if the
+        /// timer ran out). After a round: to skip the replay - when every player except the winner has
+        /// voted, the next board comes straight away.
         /// </summary>
         public async Task SetDoneAsync(string connectionId, int roundNumber, bool done)
         {
             Lobby? lobby;
             LobbyState state;
-            bool endRound;
+            bool endRound = false;
             lock (_gate)
             {
-                if (!_lobbyByConnection.TryGetValue(connectionId, out lobby)
-                    || lobby.RoundNumber != roundNumber || lobby.Phase == RoundPhase.Intermission)
+                if (!_lobbyByConnection.TryGetValue(connectionId, out lobby) || lobby.RoundNumber != roundNumber)
                     return;
-                // The leader has nothing to give up on; the round waits on everyone else.
+                // The leader / winner isn't part of either vote.
                 if (connectionId == lobby.BestConnectionId)
                     return;
 
                 lobby.Players[connectionId].Done = done;
                 state = SnapshotLocked(lobby);
-                endRound = EveryoneDoneLocked(lobby);
+                if (AllOthersDoneLocked(lobby))
+                {
+                    if (lobby.Phase == RoundPhase.Intermission)
+                        lobby.ReplaySkip?.Cancel();
+                    else
+                        endRound = true;
+                }
             }
 
             await _hub.Clients.Group(lobby.Code).SendAsync(HubMethods.LobbyState, state);
@@ -234,12 +276,9 @@ namespace BackendServer.Services
                 RunInBackground(() => EndRoundAsync(lobby, roundNumber));
         }
 
-        /// <summary>
-        /// True when everyone who could still change the outcome has given up: every player except
-        /// the current leader (if any) is done. Before anyone solves it, that means every player.
-        /// </summary>
-        private static bool EveryoneDoneLocked(Lobby lobby) =>
-            lobby.Phase != RoundPhase.Intermission && lobby.Players.Count > 0
+        /// <summary>True when every player except the current leader / winner (if any) has voted.</summary>
+        private static bool AllOthersDoneLocked(Lobby lobby) =>
+            lobby.Players.Count > 0
             && lobby.Players.Where(p => p.Key != lobby.BestConnectionId).All(p => p.Value.Done);
 
         public async Task SubmitAsync(string connectionId, int roundNumber, byte[] moveData)
@@ -260,8 +299,10 @@ namespace BackendServer.Services
                 if (rejection == null)
                 {
                     state = SnapshotLocked(lobby!);
-                    // Everyone else may already have given up (or there is nobody else): no need to wait.
-                    endRound = EveryoneDoneLocked(lobby!);
+                    // Nobody can beat the shortest possible solution, and everyone else may already have
+                    // given up (or there's nobody else): either way, no need to wait for the timer.
+                    bool unbeatable = lobby!.Shortest != null && moveCount <= lobby.Shortest.Length;
+                    endRound = unbeatable || AllOthersDoneLocked(lobby);
                 }
             }
 
@@ -272,10 +313,13 @@ namespace BackendServer.Services
             }
 
             IClientProxy group = _hub.Clients.Group(lobby!.Code);
-            if (secondsLeft.HasValue)
-                await group.SendAsync(HubMethods.TimerUpdated, roundNumber, secondsLeft.Value);
-            if (timerStarted)
-                RunInBackground(() => EndRoundAfterTimerAsync(lobby, roundNumber));
+            if (!endRound)
+            {
+                if (secondsLeft.HasValue)
+                    await group.SendAsync(HubMethods.TimerUpdated, roundNumber, secondsLeft.Value);
+                if (timerStarted)
+                    RunInBackground(() => EndRoundAfterTimerAsync(lobby, roundNumber));
+            }
             await group.SendAsync(HubMethods.NewBestSolution, roundNumber, playerName, moveCount);
             await group.SendAsync(HubMethods.LobbyState, state);
             if (endRound)
@@ -367,15 +411,15 @@ namespace BackendServer.Services
         }
 
         /// <summary>
-        /// Ends the round (timer ran out or everyone is done), sends the result and replay, then
-        /// deals the next board. Safe to call more than once; only the first call does anything.
+        /// Ends the round (timer ran out, everyone else done, or the shortest solution was found), sends
+        /// the result and replays, then deals the next board - prepared while the replays play. Safe to
+        /// call more than once; only the first call does anything.
         /// </summary>
         private async Task EndRoundAsync(Lobby lobby, int roundNumber)
         {
-            string? winnerName;
-            int moveCount;
-            byte[] bestMoves;
+            RoundResult result;
             LobbyState state;
+            CancellationTokenSource skip;
             lock (_gate)
             {
                 if (lobby.Closed || lobby.RoundNumber != roundNumber || lobby.Phase == RoundPhase.Intermission)
@@ -385,27 +429,51 @@ namespace BackendServer.Services
                 // The point only goes to the best solver if they're still here.
                 if (lobby.BestConnectionId != null && lobby.Players.TryGetValue(lobby.BestConnectionId, out Player? winner))
                     winner.Score++;
-                // All null/empty when the board was skipped without a solution.
-                winnerName = lobby.BestPlayerName;
-                moveCount = lobby.BestMoveCount;
-                bestMoves = lobby.BestMoves;
+                // Votes from here on mean "skip the replay", so start counting afresh.
+                foreach (Player player in lobby.Players.Values)
+                    player.Done = false;
+
+                result = new RoundResult
+                {
+                    RoundNumber = roundNumber,
+                    WinnerName = lobby.BestPlayerName, // null when the board was skipped without a solution
+                    WinnerMoves = lobby.BestMoves,
+                    ShortestMoves = lobby.Shortest != null ? MoveCodec.Encode(lobby.Shortest) : Array.Empty<byte>(),
+                    ReplayStepSeconds = _options.ReplayStepSeconds,
+                    ShortestReplayStepSeconds = _options.ShortestReplayStepSeconds,
+                    ReplayPauseSeconds = _options.ReplayPauseSeconds,
+                };
+                skip = new CancellationTokenSource();
+                lobby.ReplaySkip = skip;
                 state = SnapshotLocked(lobby);
             }
 
+            // Prepare the next board while everyone watches the replays.
+            Task<PreparedRound> next = Task.Run(PrepareRound);
+
             IClientProxy group = _hub.Clients.Group(lobby.Code);
-            await group.SendAsync(HubMethods.RoundEnded, roundNumber, winnerName, moveCount, bestMoves, _options.ReplayStepSeconds);
+            await group.SendAsync(HubMethods.RoundEnded, result);
             await group.SendAsync(HubMethods.LobbyState, state);
 
-            // Give everyone time to watch the winning solution before the next board.
-            await Task.Delay(TimeSpan.FromSeconds(moveCount * _options.ReplayStepSeconds + _options.IntermissionSeconds));
+            try
+            {
+                await Task.Delay(ReplayDuration(result) + TimeSpan.FromSeconds(_options.IntermissionSeconds), skip.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Everyone but the winner voted to skip (or the lobby closed).
+            }
 
+            PreparedRound prepared = await next;
             int nextRound;
             byte[] board;
             lock (_gate)
             {
+                if (lobby.ReplaySkip == skip)
+                    lobby.ReplaySkip = null;
                 if (lobby.Closed || lobby.RoundNumber != roundNumber)
                     return;
-                StartNewRoundLocked(lobby);
+                StartNewRoundLocked(lobby, prepared);
                 nextRound = lobby.RoundNumber;
                 board = lobby.Board;
                 state = SnapshotLocked(lobby);
@@ -414,10 +482,55 @@ namespace BackendServer.Services
             await group.SendAsync(HubMethods.LobbyState, state);
         }
 
-        private void StartNewRoundLocked(Lobby lobby)
+        /// <summary>
+        /// How long the clients' replays take: the winner's solution, then the shortest one if it's
+        /// shorter (or only the shortest when nobody solved it), each after a pause.
+        /// </summary>
+        private static TimeSpan ReplayDuration(RoundResult result)
+        {
+            int winner = result.WinnerMoves.Length;
+            int shortest = result.ShortestMoves.Length;
+            double seconds = 0;
+            if (winner > 0)
+                seconds += result.ReplayPauseSeconds + winner * result.ReplayStepSeconds;
+            if (shortest > 0 && (winner == 0 || winner > shortest))
+                seconds += result.ReplayPauseSeconds + shortest * result.ShortestReplayStepSeconds;
+            return TimeSpan.FromSeconds(seconds);
+        }
+
+        /// <summary>
+        /// Generates a board and solves it, discarding trivial ones (shortest solution below
+        /// <see cref="GameOptions.MinBoardMoves"/>). Hard boards are kept even if the solver gives up.
+        /// Runs outside the lock.
+        /// </summary>
+        private PreparedRound PrepareRound()
+        {
+            int seed;
+            lock (_gate)
+                seed = _random.Next();
+            var random = new Random(seed);
+            var timeLimit = TimeSpan.FromSeconds(_options.SolverTimeLimitSeconds);
+
+            var clock = Stopwatch.StartNew();
+            for (int attempt = 1; ; attempt++)
+            {
+                RoundSetup round = BoardGenerator.GenerateRound(random);
+                SolverResult solved = Solver.Solve(round, timeLimit: timeLimit);
+                bool trivial = solved.Solved && solved.Moves.Length < _options.MinBoardMoves;
+                if (!trivial || attempt >= MaxBoardAttempts)
+                {
+                    _log.LogInformation("Board ready: shortest {Moves} moves (attempt {Attempt}, {Ms} ms)",
+                        solved.Solved ? solved.Moves.Length.ToString() : "unknown", attempt, clock.ElapsedMilliseconds);
+                    return new PreparedRound(round, solved.Moves);
+                }
+            }
+        }
+
+        private static void StartNewRoundLocked(Lobby lobby, PreparedRound prepared)
         {
             lobby.RoundNumber++;
-            lobby.Round = BoardGenerator.GenerateRound(_random);
+            lobby.Round = prepared.Round;
+            lobby.Shortest = prepared.Shortest;
             lobby.Board = BoardCodec.Encode(lobby.Round);
             lobby.Phase = RoundPhase.Solving;
             lobby.BestConnectionId = null;

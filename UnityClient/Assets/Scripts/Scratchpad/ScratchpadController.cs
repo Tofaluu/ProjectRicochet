@@ -83,34 +83,52 @@ namespace Ricochet.Client.Scratchpad
         /// </summary>
         public void PlayReplay(IReadOnlyList<Move> moves, float stepSeconds, bool lockUntilNextBoard = true)
         {
-            StopReplay();
-            _replay = StartCoroutine(ReplayRoutine(moves, stepSeconds, lockUntilNextBoard));
+            // A short beat on the starting position so the first move is easy to follow.
+            PlayReplays(new[] { new ReplaySegment(null, moves, stepSeconds) }, Mathf.Min(0.5f, stepSeconds), lockUntilNextBoard);
         }
 
-        private IEnumerator ReplayRoutine(IReadOnlyList<Move> moves, float stepSeconds, bool lockUntilNextBoard)
+        /// <summary>
+        /// Plays several solutions one after another (e.g. the winner's, then the shortest), each from the
+        /// round's start after <paramref name="pauseSeconds"/> on the starting position.
+        /// </summary>
+        public void PlayReplays(IReadOnlyList<ReplaySegment> segments, float pauseSeconds, bool lockUntilNextBoard = true)
+        {
+            StopReplay();
+            _replay = StartCoroutine(ReplayRoutine(segments, pauseSeconds, lockUntilNextBoard));
+        }
+
+        /// <summary>The replay currently playing (null when none).</summary>
+        public ReplaySegment CurrentReplay { get; private set; }
+
+        private IEnumerator ReplayRoutine(IReadOnlyList<ReplaySegment> segments, float pauseSeconds, bool lockUntilNextBoard)
         {
             IsReplaying = true;
             _dragging = false;
-            ResetBoard();
-            ReplayStep = 0;
-
-            // A short beat on the starting position so the first move is easy to follow.
-            yield return new WaitForSeconds(Mathf.Min(0.5f, stepSeconds));
-            foreach (Move move in moves)
+            foreach (ReplaySegment segment in segments)
             {
-                Select(move.Robot);
-                if (GameRules.TryMove(_round.Grid, _robots, move, out RobotPositions next))
+                CurrentReplay = segment;
+                ResetBoard();
+                ReplayStep = 0;
+                yield return new WaitForSeconds(pauseSeconds);
+                foreach (Move move in segment.Moves)
                 {
-                    _moves.Add(move);
-                    _robots = next;
-                    _boardView.ShowRobots(_robots, instant: false);
+                    Select(move.Robot);
+                    if (GameRules.TryMove(_round.Grid, _robots, move, out RobotPositions next))
+                    {
+                        _moves.Add(move);
+                        _robots = next;
+                        _boardView.ShowRobots(_robots, instant: false);
+                    }
+                    ReplayStep++;
+                    yield return new WaitForSeconds(segment.StepSeconds);
                 }
-                ReplayStep++;
-                yield return new WaitForSeconds(stepSeconds);
             }
             _replay = null;
             if (!lockUntilNextBoard)
+            {
                 IsReplaying = false;
+                CurrentReplay = null;
+            }
         }
 
         // ---- Offline hint (H): solve in the background, then replay the shortest solution ----
@@ -168,6 +186,7 @@ namespace Ricochet.Client.Scratchpad
                 StopCoroutine(_replay);
             _replay = null;
             IsReplaying = false;
+            CurrentReplay = null;
             ReplayStep = 0;
         }
 

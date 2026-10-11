@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 1;
+        public const int ProtocolVersion = 2;
 
         // Client -> server
 
@@ -39,6 +39,8 @@ namespace SharedLogic
         /// can't vote and isn't waited on. When every other player is done the round ends now:
         /// skipped (no winner, no point) if nobody has solved it, otherwise as if the timer ran out.
         /// Re-checked whenever the lead changes, so taking the lead can end the round immediately.
+        /// After the round ends the same vote means "skip the replay": once everyone except the winner
+        /// has voted, the next board comes straight away.
         /// </summary>
         public const string SetDone = "SetDone";
 
@@ -63,13 +65,35 @@ namespace SharedLogic
         public const string SolutionRejected = "SolutionRejected";
 
         /// <summary>
-        /// (int roundNumber, string winnerName, int moveCount, byte[] winningMoves, double replayStepSeconds).
-        /// winnerName is the best solver (they only score if still in the lobby); null with
-        /// moveCount 0 and no moves if the board was skipped without a solution. Clients replay
-        /// winningMoves (<see cref="MoveCodec"/>) from the round's start, one move per step; the
-        /// next round starts after the replay.
+        /// (RoundResult result). The round ended: timer ran out, everyone else was done, or someone
+        /// matched the shortest possible solution. The next round starts after the replays (or sooner
+        /// if everyone but the winner votes to skip).
         /// </summary>
         public const string RoundEnded = "RoundEnded";
+    }
+
+    /// <summary>
+    /// How a round ended, and what to replay. Clients replay the winner's solution, then the shortest
+    /// one if it's shorter (or only the shortest if nobody solved it), each from the round's start.
+    /// </summary>
+    public class RoundResult
+    {
+        public int RoundNumber { get; set; }
+
+        /// <summary>The best solver (they only score if still in the lobby); null if nobody solved it.</summary>
+        public string WinnerName { get; set; }
+
+        /// <summary><see cref="MoveCodec"/> bytes; empty if nobody solved it.</summary>
+        public byte[] WinnerMoves { get; set; }
+
+        /// <summary><see cref="MoveCodec"/> bytes of a shortest solution; empty if the solver gave up on this board.</summary>
+        public byte[] ShortestMoves { get; set; }
+
+        public double ReplayStepSeconds { get; set; }
+        public double ShortestReplayStepSeconds { get; set; }
+
+        /// <summary>Pause on the starting position before each replay.</summary>
+        public double ReplayPauseSeconds { get; set; }
     }
 
     public class PlayerInfo
