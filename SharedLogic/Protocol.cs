@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 3;
+        public const int ProtocolVersion = 4;
 
         // Client -> server
 
@@ -61,6 +61,12 @@ namespace SharedLogic
         /// </summary>
         public const string LobbyState = "LobbyState";
 
+        /// <summary>
+        /// (double seconds). The next board (the match's first, or the one after a round's replays) is
+        /// dealt in this many seconds. Also sent to players who join during the countdown.
+        /// </summary>
+        public const string RoundCountdown = "RoundCountdown";
+
         /// <summary>(int roundNumber, byte[] board)</summary>
         public const string RoundStarted = "RoundStarted";
 
@@ -78,8 +84,8 @@ namespace SharedLogic
 
         /// <summary>
         /// (RoundResult result). The round ended: timer ran out, everyone else was done, or someone
-        /// matched the shortest possible solution. The next round starts after the replays (or sooner
-        /// if everyone but the winner votes to skip).
+        /// matched the shortest possible solution. The next round's countdown starts after the replays
+        /// (or sooner if everyone but the winner votes to skip).
         /// </summary>
         public const string RoundEnded = "RoundEnded";
     }

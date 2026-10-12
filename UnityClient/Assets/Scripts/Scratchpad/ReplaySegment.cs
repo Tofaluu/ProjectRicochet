@@ -9,12 +9,15 @@ namespace Ricochet.Client.Scratchpad
         public string Label { get; }
         public IReadOnlyList<Move> Moves { get; }
         public float StepSeconds { get; }
+        /// <summary>The solver's shortest solution (drawn in the "algorithm" colour) rather than a player's.</summary>
+        public bool IsShortest { get; }
 
-        public ReplaySegment(string label, IReadOnlyList<Move> moves, float stepSeconds)
+        public ReplaySegment(string label, IReadOnlyList<Move> moves, float stepSeconds, bool isShortest = false)
         {
             Label = label;
             Moves = moves;
             StepSeconds = stepSeconds;
+            IsShortest = isShortest;
         }
     }
 }

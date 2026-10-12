@@ -23,8 +23,8 @@ namespace BackendServer.Services
         /// <summary>First player to this many points wins the match.</summary>
         public int PointsToWin { get; set; } = 5;
 
-        /// <summary>Pause after the replays before the next board.</summary>
-        public double IntermissionSeconds { get; set; } = 3;
+        /// <summary>Countdown before each board: after Start, and after the previous round's replays.</summary>
+        public double CountdownSeconds { get; set; } = 3;
 
         /// <summary>Seconds per move when replaying the winner's solution.</summary>
         public double ReplayStepSeconds { get; set; } = 1;
@@ -104,6 +104,9 @@ namespace BackendServer.Services
         /// <summary>Cancelled when everyone but the winner votes to skip the replay.</summary>
         public CancellationTokenSource? ReplaySkip { get; set; }
 
+        /// <summary>When the next board is dealt; null when no countdown is running.</summary>
+        public DateTime? CountdownEndUtc { get; set; }
+
         /// <summary>A round is being played or replayed (so solutions and votes count).</summary>
         public bool InRound => Match == MatchPhase.Playing && Round != null;
     }
@@ -165,6 +168,7 @@ namespace BackendServer.Services
             double secondsLeft;
             string? bestName;
             int bestMoves;
+            double? countdown;
             lock (_gate)
             {
                 if (!_lobbies.TryGetValue(code, out lobby!))
@@ -207,21 +211,27 @@ namespace BackendServer.Services
                 secondsLeft = Math.Max(0, (lobby.TimerEndUtc - DateTime.UtcNow).TotalSeconds);
                 bestName = lobby.BestPlayerName;
                 bestMoves = lobby.BestMoveCount;
+                countdown = lobby.CountdownEndUtc.HasValue
+                    ? Math.Max(0, (lobby.CountdownEndUtc.Value - DateTime.UtcNow).TotalSeconds)
+                    : null;
             }
 
             await _hub.Groups.AddToGroupAsync(connectionId, code);
             await _hub.Clients.Group(code).SendAsync(HubMethods.LobbyState, state);
-            if (!inRound)
-                return name;
 
-            // Catch the newcomer up on the round in progress.
+            // Catch the newcomer up on the round in progress and/or the countdown to the next one.
             IClientProxy caller = _hub.Clients.Client(connectionId);
-            await caller.SendAsync(HubMethods.RoundStarted, round, board);
-            if (phase == RoundPhase.TimerRunning)
+            if (inRound)
             {
-                await caller.SendAsync(HubMethods.TimerUpdated, round, secondsLeft);
-                await caller.SendAsync(HubMethods.NewBestSolution, round, bestName, bestMoves);
+                await caller.SendAsync(HubMethods.RoundStarted, round, board);
+                if (phase == RoundPhase.TimerRunning)
+                {
+                    await caller.SendAsync(HubMethods.TimerUpdated, round, secondsLeft);
+                    await caller.SendAsync(HubMethods.NewBestSolution, round, bestName, bestMoves);
+                }
             }
+            if (countdown.HasValue)
+                await caller.SendAsync(HubMethods.RoundCountdown, countdown.Value);
             return name;
         }
 
@@ -281,8 +291,9 @@ namespace BackendServer.Services
         }
 
         /// <summary>
-        /// Host only, when no match is running: resets scores and deals the first board. The board is
-        /// prepared outside the lock, so meanwhile the lobby is already Playing but with no board.
+        /// Host only, when no match is running: resets scores and deals the first board after the
+        /// countdown. The board is prepared outside the lock (during the countdown), so meanwhile the
+        /// lobby is already Playing but with no board.
         /// </summary>
         public async Task StartMatchAsync(string connectionId)
         {
@@ -308,25 +319,38 @@ namespace BackendServer.Services
                     player.Score = 0;
                     player.Done = false;
                 }
+                lobby.CountdownEndUtc = DateTime.UtcNow.AddSeconds(_options.CountdownSeconds);
                 state = SnapshotLocked(lobby);
                 _log.LogInformation("Lobby {Code}: match started, first to {Points}", lobby.Code, lobby.Settings.PointsToWin);
             }
 
             IClientProxy group = _hub.Clients.Group(lobby.Code);
             await group.SendAsync(HubMethods.LobbyState, state);
+            await group.SendAsync(HubMethods.RoundCountdown, _options.CountdownSeconds);
 
-            PreparedRound prepared = await Task.Run(PrepareRound);
+            // The board is generated during the countdown; a slow solve just stretches the wait.
+            Task<PreparedRound> prepare = Task.Run(PrepareRound);
+            await Task.Delay(TimeSpan.FromSeconds(_options.CountdownSeconds));
+            PreparedRound prepared = await prepare;
+            await DealRoundAsync(lobby, prepared, () => lobby.MatchId == matchId);
+        }
+
+        /// <summary>Deals <paramref name="prepared"/> unless the lobby closed or <paramref name="stillWanted"/> (checked under the lock) is false.</summary>
+        private async Task DealRoundAsync(Lobby lobby, PreparedRound prepared, Func<bool> stillWanted)
+        {
             int round;
             byte[] board;
+            LobbyState state;
             lock (_gate)
             {
-                if (lobby.Closed || lobby.MatchId != matchId)
+                if (lobby.Closed || !stillWanted())
                     return;
                 StartNewRoundLocked(lobby, prepared);
                 round = lobby.RoundNumber;
                 board = lobby.Board;
                 state = SnapshotLocked(lobby);
             }
+            IClientProxy group = _hub.Clients.Group(lobby.Code);
             await group.SendAsync(HubMethods.RoundStarted, round, board);
             await group.SendAsync(HubMethods.LobbyState, state);
         }
@@ -530,9 +554,9 @@ namespace BackendServer.Services
 
         /// <summary>
         /// Ends the round (timer ran out, everyone else done, or the shortest solution was found), sends
-        /// the result and replays, then either deals the next board - prepared while the replays play -
-        /// or, if that point won the match, shows the results. Safe to call more than once; only the
-        /// first call does anything.
+        /// the result and replays, then either counts down and deals the next board - prepared while the
+        /// replays play - or, if that point won the match, shows the results. Safe to call more than
+        /// once; only the first call does anything.
         /// </summary>
         private async Task EndRoundAsync(Lobby lobby, int roundNumber)
         {
@@ -582,16 +606,13 @@ namespace BackendServer.Services
 
             try
             {
-                await Task.Delay(ReplayDuration(result) + TimeSpan.FromSeconds(_options.IntermissionSeconds), skip.Token);
+                await Task.Delay(ReplayDuration(result), skip.Token);
             }
             catch (OperationCanceledException)
             {
                 // Everyone but the winner voted to skip (or the lobby closed).
             }
 
-            PreparedRound? prepared = next != null ? await next : null;
-            int nextRound = 0;
-            byte[] board = Array.Empty<byte>();
             lock (_gate)
             {
                 if (lobby.ReplaySkip == skip)
@@ -599,12 +620,8 @@ namespace BackendServer.Services
                 if (lobby.Closed || lobby.RoundNumber != roundNumber)
                     return;
 
-                if (prepared != null)
-                {
-                    StartNewRoundLocked(lobby, prepared);
-                    nextRound = lobby.RoundNumber;
-                    board = lobby.Board;
-                }
+                if (next != null)
+                    lobby.CountdownEndUtc = DateTime.UtcNow.AddSeconds(_options.CountdownSeconds);
                 else
                 {
                     // Results until the host starts again; the last board stays as it was.
@@ -613,13 +630,20 @@ namespace BackendServer.Services
                     ClearBestLocked(lobby);
                     foreach (Player player in lobby.Players.Values)
                         player.Done = false;
+                    state = SnapshotLocked(lobby);
                     _log.LogInformation("Lobby {Code}: {Winner} won the match", lobby.Code, matchWinner);
                 }
-                state = SnapshotLocked(lobby);
             }
-            if (prepared != null)
-                await group.SendAsync(HubMethods.RoundStarted, nextRound, board);
-            await group.SendAsync(HubMethods.LobbyState, state);
+            if (next == null)
+            {
+                await group.SendAsync(HubMethods.LobbyState, state);
+                return;
+            }
+
+            await group.SendAsync(HubMethods.RoundCountdown, _options.CountdownSeconds);
+            await Task.Delay(TimeSpan.FromSeconds(_options.CountdownSeconds));
+            PreparedRound prepared = await next;
+            await DealRoundAsync(lobby, prepared, () => lobby.RoundNumber == roundNumber);
         }
 
         /// <summary>
@@ -674,6 +698,7 @@ namespace BackendServer.Services
             lobby.Shortest = prepared.Shortest;
             lobby.Board = BoardCodec.Encode(prepared.Round);
             lobby.Phase = RoundPhase.Solving;
+            lobby.CountdownEndUtc = null;
             ClearBestLocked(lobby);
             foreach (Player player in lobby.Players.Values)
                 player.Done = false;

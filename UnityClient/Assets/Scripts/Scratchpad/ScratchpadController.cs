@@ -63,6 +63,7 @@ namespace Ricochet.Client.Scratchpad
         public void LoadRound(RoundSetup round)
         {
             StopReplay();
+            HideCountdown();
             _currentSeed = 0;
             ShowRound(round);
         }
@@ -71,6 +72,7 @@ namespace Ricochet.Client.Scratchpad
         public void PlayOffline()
         {
             StopReplay();
+            HideCountdown();
             AllowNewBoard = true;
             NewBoard();
         }
@@ -84,7 +86,7 @@ namespace Ricochet.Client.Scratchpad
         public void PlayReplay(IReadOnlyList<Move> moves, float stepSeconds, bool lockUntilNextBoard = true)
         {
             // A short beat on the starting position so the first move is easy to follow.
-            PlayReplays(new[] { new ReplaySegment(null, moves, stepSeconds) }, Mathf.Min(0.5f, stepSeconds), lockUntilNextBoard);
+            PlayReplays(new[] { new ReplaySegment("Shortest solution", moves, stepSeconds, isShortest: true) }, Mathf.Min(0.5f, stepSeconds), lockUntilNextBoard);
         }
 
         /// <summary>
@@ -257,7 +259,8 @@ namespace Ricochet.Client.Scratchpad
         private void Update()
         {
             CheckHint();
-            if (IsReplaying)
+            UpdateFrame();
+            if (IsReplaying || IsCountingDown)
                 return;
             HandleKeyboard();
             HandlePointer();
@@ -341,10 +344,114 @@ namespace Ricochet.Client.Scratchpad
 
             float width = _round.Grid.Width;
             float height = _round.Grid.Height;
+            // Extra room above the board for the banner (see OnGUI).
             const float margin = 1f;
+            const float bottom = 0.8f;
+            const float top = 2f;
             _camera.orthographic = true;
-            _camera.transform.position = new Vector3(width / 2f, height / 2f, -10f);
-            _camera.orthographicSize = Mathf.Max(height / 2f, width / 2f / _camera.aspect) + margin;
+            _camera.transform.position = new Vector3(width / 2f, height / 2f + (top - bottom) / 2f, -10f);
+            _camera.orthographicSize = Mathf.Max((height + top + bottom) / 2f, width / 2f / _camera.aspect + margin);
+        }
+
+        // ---- What the board is showing: the player's own attempt, a player's replay, or the shortest ----
+
+        private static readonly Color OwnColor = new Color(0.10f, 0.65f, 0.75f);
+        private static readonly Color PlayerReplayColor = new Color(1.00f, 0.72f, 0.15f);
+        private static readonly Color ShortestColor = new Color(0.55f, 0.57f, 0.62f);
+
+        private float _countdownEnd = -1f;
+        private string _countdownCaption;
+
+        private bool IsCountingDown => _countdownEnd >= 0f;
+
+        /// <summary>Dims the board under a big countdown until the next board arrives (<see cref="LoadRound"/>).</summary>
+        public void ShowCountdown(float seconds, string caption)
+        {
+            _countdownEnd = Time.time + seconds;
+            _countdownCaption = caption;
+            _dragging = false;
+        }
+
+        public void HideCountdown() => _countdownEnd = -1f;
+
+        private Color FrameColor()
+        {
+            if (IsReplaying && CurrentReplay != null)
+                return CurrentReplay.IsShortest ? ShortestColor : PlayerReplayColor;
+            return OwnColor;
+        }
+
+        private void UpdateFrame()
+        {
+            if (_round != null)
+                _boardView.SetFrameColor(FrameColor());
+        }
+
+        private string BannerText()
+        {
+            ReplaySegment replay = CurrentReplay;
+            if (IsReplaying && replay != null)
+            {
+                string who = replay.IsShortest ? "SHORTEST POSSIBLE" : "REPLAY: " + replay.Label;
+                if (_replay == null)
+                    return $"{who}  ·  {replay.Moves.Count} moves  ·  finished";
+                return ReplayStep == 0
+                    ? $"{who}  ·  {replay.Moves.Count} moves"
+                    : $"{who}  ·  move {ReplayStep} of {replay.Moves.Count}";
+            }
+            string board = AllowNewBoard ? "PRACTICE BOARD" : "YOUR BOARD";
+            return _solved ? $"{board}  ·  solved in {_moves.Count} moves!" : $"{board}  ·  {_moves.Count} moves";
+        }
+
+        // The board's corners in IMGUI coordinates (pixels, y down), including the frame.
+        private Rect BoardScreenRect()
+        {
+            float pad = BoardView.FrameThickness + 0.06f;
+            Vector3 min = _camera.WorldToScreenPoint(new Vector3(-pad, -pad));
+            Vector3 max = _camera.WorldToScreenPoint(new Vector3(_round.Grid.Width + pad, _round.Grid.Height + pad));
+            return Rect.MinMaxRect(min.x, Screen.height - max.y, max.x, Screen.height - min.y);
+        }
+
+        private void DrawBannerAndCountdown()
+        {
+            if (_camera == null)
+                return;
+            Rect board = BoardScreenRect();
+            Color previous = GUI.color;
+
+            // Banner in the frame's colour, just above the board.
+            const float bannerHeight = 34f;
+            var banner = new Rect(board.x, board.y - bannerHeight - 4f, board.width, bannerHeight);
+            GUI.color = FrameColor();
+            GUI.DrawTexture(banner, Texture2D.whiteTexture);
+            GUI.color = previous;
+            var bannerStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 20,
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = Color.black },
+            };
+            GUI.Label(banner, BannerText(), bannerStyle);
+
+            if (!IsCountingDown)
+                return;
+            GUI.color = new Color(0f, 0f, 0f, 0.6f);
+            GUI.DrawTexture(board, Texture2D.whiteTexture);
+            GUI.color = previous;
+            float remaining = _countdownEnd - Time.time;
+            var numberStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = Mathf.RoundToInt(board.height * 0.3f),
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = Color.white },
+            };
+            var captionStyle = new GUIStyle(numberStyle) { fontSize = Mathf.RoundToInt(board.height * 0.06f) };
+            float captionHeight = board.height * 0.12f;
+            GUI.Label(new Rect(board.x, board.center.y - board.height * 0.28f, board.width, captionHeight),
+                _countdownCaption, captionStyle);
+            GUI.Label(board, remaining > 0f ? Mathf.CeilToInt(remaining).ToString() : "Go!", numberStyle);
         }
 
         // Placeholder HUD until there's a real UI.
@@ -352,6 +459,7 @@ namespace Ricochet.Client.Scratchpad
         {
             if (_round == null)
                 return;
+            DrawBannerAndCountdown();
 
             Target target = _round.Target;
             string goal = target.Robot.HasValue ? target.Robot.Value + " robot" : "any robot";

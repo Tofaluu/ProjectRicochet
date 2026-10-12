@@ -56,6 +56,8 @@ namespace Ricochet.Client.UI
 
         private int _round;
         private bool _roundOver;
+        // Time.time when the next board is due (RoundCountdown), or -1.
+        private float _countdownEnd = -1f;
         private float _timerEnd = -1f;
         private float _timerExtendedUntil = -1f;
         private string _bestPlayer;
@@ -127,6 +129,7 @@ namespace Ricochet.Client.UI
             _network.StatusChanged += OnStatusChanged;
             _network.LobbyStateChanged += OnLobbyState;
             _network.RoundStarted += OnRoundStarted;
+            _network.RoundCountdown += OnRoundCountdown;
             _network.TimerUpdated += OnTimerUpdated;
             _network.NewBestSolution += OnNewBest;
             _network.SolutionRejected += OnRejected;
@@ -139,6 +142,7 @@ namespace Ricochet.Client.UI
             _network.StatusChanged -= OnStatusChanged;
             _network.LobbyStateChanged -= OnLobbyState;
             _network.RoundStarted -= OnRoundStarted;
+            _network.RoundCountdown -= OnRoundCountdown;
             _network.TimerUpdated -= OnTimerUpdated;
             _network.NewBestSolution -= OnNewBest;
             _network.SolutionRejected -= OnRejected;
@@ -316,16 +320,25 @@ namespace Ricochet.Client.UI
             _round = 0;
             _roundOver = false;
             _timerEnd = -1f;
+            _countdownEnd = -1f;
             _bestPlayer = null;
             _iAmDone = false;
             _iAmLeading = false;
+            _scratchpad.HideCountdown();
             if (!_scratchpad.AllowNewBoard)
                 _scratchpad.PlayOffline();
 
             // The match text above says who won.
             _feedbackText.text = _phase == MatchPhase.Finished
-                ? "Practise on your own board until the next match."
-                : "Practise on your own board while you wait.";
+                ? "Practice on your own board until the next match."
+                : "Practice on your own board while you wait.";
+        }
+
+        // The next board is dealt in a few seconds: after Start, or after the previous round's replays.
+        private void OnRoundCountdown(float seconds)
+        {
+            _countdownEnd = Time.time + seconds;
+            _scratchpad.ShowCountdown(seconds, $"Round {_matchRound + 1} starts in");
         }
 
         private void OnRoundStarted(int round, RoundSetup setup)
@@ -333,6 +346,7 @@ namespace Ricochet.Client.UI
             _round = round;
             _roundOver = false;
             _timerEnd = -1f;
+            _countdownEnd = -1f;
             _bestPlayer = null;
             _iAmDone = false;
             _iAmLeading = false;
@@ -402,14 +416,15 @@ namespace Ricochet.Client.UI
                 else
                     _feedbackText.text = $"{winner} wins the round with {winnerMoves.Length} moves!";
 
-                replays.Add(new ReplaySegment($"{winner}'s solution", winnerMoves, (float)result.ReplayStepSeconds));
+                string whose = winner == _network.PlayerName ? "Your solution" : $"{winner}'s solution";
+                replays.Add(new ReplaySegment(whose, winnerMoves, (float)result.ReplayStepSeconds));
                 if (shortest != null && !wasShortest)
-                    replays.Add(new ReplaySegment("Shortest possible", shortest, (float)result.ShortestReplayStepSeconds));
+                    replays.Add(new ReplaySegment("Shortest possible", shortest, (float)result.ShortestReplayStepSeconds, isShortest: true));
             }
             else if (shortest != null)
             {
                 _feedbackText.text = $"Board skipped. Here's how it could be done in {shortest.Length} moves:";
-                replays.Add(new ReplaySegment("Shortest possible", shortest, (float)result.ShortestReplayStepSeconds));
+                replays.Add(new ReplaySegment("Shortest possible", shortest, (float)result.ShortestReplayStepSeconds, isShortest: true));
             }
             else
             {
@@ -434,6 +449,7 @@ namespace Ricochet.Client.UI
             // Between matches: setup / results (settings + Start for the host). During one: the round.
             bool playing = _phase == MatchPhase.Playing;
             bool hasBoard = playing && _round > 0;
+            bool countingDown = playing && _countdownEnd >= 0f;
             _matchText.gameObject.SetActive(!playing);
             _settingsGroup.SetActive(!playing && _iAmHost);
             _startButton.gameObject.SetActive(!playing && _iAmHost);
@@ -441,16 +457,20 @@ namespace Ricochet.Client.UI
             _lockInButton.gameObject.SetActive(playing);
             // The leader (or, after the round, the winner) isn't part of the vote, so they don't get the
             // button. During a round it ends the round early; after it, it skips the replay.
-            _doneButton.gameObject.SetActive(hasBoard && !_iAmLeading);
+            // Nothing left to skip during the countdown.
+            _doneButton.gameObject.SetActive(hasBoard && !_iAmLeading && !countingDown);
 
             if (!playing)
             {
                 UpdateMatchText();
                 return;
             }
-            if (!hasBoard)
+            if (countingDown || !hasBoard)
             {
-                _roundText.text = "Dealing the first board...";
+                float left = _countdownEnd - Time.time;
+                _roundText.text = !countingDown ? "Dealing the first board..."
+                    : left > 0f ? $"Round {_matchRound + 1} starts in {Mathf.CeilToInt(left)}..."
+                    : $"Round {_matchRound + 1} — dealing...";
                 _lockInButton.interactable = false;
                 _lockInLabel.text = "Lock In";
                 return;

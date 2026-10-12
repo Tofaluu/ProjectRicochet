@@ -12,6 +12,8 @@ namespace Ricochet.Client.Board
     public class BoardView : MonoBehaviour
     {
         private const float WallThickness = 0.12f;
+        /// <summary>Width of the coloured frame around the board, in cells.</summary>
+        public const float FrameThickness = 0.3f;
 
         private const int TileOrder = 0;
         private const int TargetOrder = 1;
@@ -27,6 +29,8 @@ namespace Ricochet.Client.Board
 
         private readonly Dictionary<RobotColor, Transform> _robots = new Dictionary<RobotColor, Transform>();
         private readonly Dictionary<RobotColor, Vector3> _robotDestinations = new Dictionary<RobotColor, Vector3>();
+        private readonly List<SpriteRenderer> _frame = new List<SpriteRenderer>();
+        private Color _frameColor = Color.clear;
         private Transform _content;
         private Transform _selectionRing;
         private RobotColor _selected;
@@ -82,6 +86,7 @@ namespace Ricochet.Client.Board
             }
 
             CreateBorder(grid.Width, grid.Height);
+            CreateFrame(grid.Width, grid.Height);
 
             for (int i = 0; i < grid.Targets.Count; i++)
             {
@@ -161,6 +166,27 @@ namespace Ricochet.Client.Board
             CreateSprite("Border", PlaceholderSprites.Square, _wallColor, new Vector3(width / 2f, height), new Vector2(width + t, t), WallOrder);
             CreateSprite("Border", PlaceholderSprites.Square, _wallColor, new Vector3(0f, height / 2f), new Vector2(t, height + t), WallOrder);
             CreateSprite("Border", PlaceholderSprites.Square, _wallColor, new Vector3(width, height / 2f), new Vector2(t, height + t), WallOrder);
+        }
+
+        // A thick band just outside the border whose colour says what the board is showing
+        // (the player's own attempt, a player's replay, the shortest solution); see SetFrameColor.
+        private void CreateFrame(int width, int height)
+        {
+            _frame.Clear();
+            float t = WallThickness;
+            float f = FrameThickness;
+            float outer = t / 2f + f / 2f;
+            _frame.Add(CreateSprite("Frame", PlaceholderSprites.Square, _frameColor, new Vector3(width / 2f, -outer), new Vector2(width + t + 2 * f, f), WallOrder));
+            _frame.Add(CreateSprite("Frame", PlaceholderSprites.Square, _frameColor, new Vector3(width / 2f, height + outer), new Vector2(width + t + 2 * f, f), WallOrder));
+            _frame.Add(CreateSprite("Frame", PlaceholderSprites.Square, _frameColor, new Vector3(-outer, height / 2f), new Vector2(f, height + t), WallOrder));
+            _frame.Add(CreateSprite("Frame", PlaceholderSprites.Square, _frameColor, new Vector3(width + outer, height / 2f), new Vector2(f, height + t), WallOrder));
+        }
+
+        public void SetFrameColor(Color color)
+        {
+            _frameColor = color;
+            foreach (SpriteRenderer part in _frame)
+                part.color = color;
         }
 
         private SpriteRenderer CreateSprite(string name, Sprite sprite, Color color, Vector3 position, Vector2 size, int order)
