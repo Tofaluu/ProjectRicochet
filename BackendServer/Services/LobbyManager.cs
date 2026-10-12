@@ -29,7 +29,7 @@ namespace BackendServer.Services
         /// <summary>Seconds per move when replaying the winner's solution.</summary>
         public double ReplayStepSeconds { get; set; } = 1;
 
-        /// <summary>Seconds per move when replaying the shortest solution (shown after a longer winning one).</summary>
+        /// <summary>Seconds per move when replaying the shortest solution after a longer winning one. Alone (nobody solved it) it uses ReplayStepSeconds.</summary>
         public double ShortestReplayStepSeconds { get; set; } = 0.6;
 
         /// <summary>Pause on the starting position before each replay.</summary>
@@ -588,7 +588,11 @@ namespace BackendServer.Services
                     WinnerMoves = lobby.BestMoves,
                     ShortestMoves = lobby.Shortest != null ? MoveCodec.Encode(lobby.Shortest) : Array.Empty<byte>(),
                     ReplayStepSeconds = _options.ReplayStepSeconds,
-                    ShortestReplayStepSeconds = _options.ShortestReplayStepSeconds,
+                    // Sped up only when it follows the winner's replay; on its own it's the first
+                    // solution anyone sees, so it plays at the normal pace.
+                    ShortestReplayStepSeconds = lobby.BestMoves.Length > 0
+                        ? _options.ShortestReplayStepSeconds
+                        : _options.ReplayStepSeconds,
                     ReplayPauseSeconds = _options.ReplayPauseSeconds,
                     MatchWinnerName = matchWinner,
                 };
