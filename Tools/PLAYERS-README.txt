@@ -33,7 +33,7 @@ Then press Join.
 
 Whoever creates the lobby (the first to join a code) is the host. The host picks the settings
 (points to win, timer lengths) and presses Start match once everyone is in. Until then you can
-practise on your own board. If the host leaves, the next player becomes host. You can also join
+practice on your own board. If the host leaves, the next player becomes host. You can also join
 a match that's already running.
 
 

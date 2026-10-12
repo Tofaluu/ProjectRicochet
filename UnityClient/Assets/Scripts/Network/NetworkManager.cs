@@ -25,6 +25,8 @@ namespace Ricochet.Client.Network
         private bool _listening;
 
         public event Action<LobbyState> LobbyStateChanged;
+        /// <summary>(seconds until the next board is dealt)</summary>
+        public event Action<float> RoundCountdown;
         /// <summary>(round number, board)</summary>
         public event Action<int, RoundSetup> RoundStarted;
         /// <summary>(round number, seconds remaining)</summary>
@@ -193,6 +195,8 @@ namespace Ricochet.Client.Network
 
             _connection.On<LobbyState>(HubMethods.LobbyState,
                 state => PostLobbyEvent(() => LobbyStateChanged?.Invoke(state)));
+            _connection.On<double>(HubMethods.RoundCountdown,
+                seconds => PostLobbyEvent(() => RoundCountdown?.Invoke((float)seconds)));
             _connection.On<int, byte[]>(HubMethods.RoundStarted, (round, board) =>
             {
                 RoundSetup setup = BoardCodec.Decode(board);
