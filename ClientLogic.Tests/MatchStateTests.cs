@@ -252,6 +252,34 @@ namespace ClientLogic.Tests
         }
 
         [Fact]
+        public void TimeLimit_ShowsUntilTheFirstSolution()
+        {
+            MatchState match = InRound(7);
+            Assert.False(match.OnRoundTimeLimit(6, 300f, now: 0f)); // an old round
+            Assert.True(match.OnRoundTimeLimit(7, 300f, now: 0f));
+            Assert.True(match.HasTimeLimit);
+            Assert.Equal(DoneAction.SkipBoard, match.DoneAction);
+            Assert.Equal(200f, match.TimeLimitLeft(100f));
+
+            match.OnTimerUpdated(7, 60f, now: 290f);
+            Assert.False(match.HasTimeLimit);
+            Assert.Equal(60f, match.TimeLeft(290f)); // the full timer, past the limit
+            Assert.False(match.TimeJustAdded(290f));
+            Assert.False(match.OnRoundTimeLimit(7, 10f, now: 290f));
+        }
+
+        [Fact]
+        public void TimeLimitRunningOut_SaysSo()
+        {
+            MatchState match = InRound(7);
+            match.OnRoundTimeLimit(7, 300f, now: 0f);
+            var result = new RoundResult { RoundNumber = 7, OutOfTime = true, ReplayStepSeconds = 1, ShortestReplayStepSeconds = 1 };
+            Assert.Single(match.OnRoundEnded(result, new Move[0], Moves(9)));
+            Assert.StartsWith("Time's up", match.Feedback);
+            Assert.False(match.HasTimeLimit);
+        }
+
+        [Fact]
         public void Standings_HighestScoreFirst_TiesInJoinOrder()
         {
             var match = new MatchState();

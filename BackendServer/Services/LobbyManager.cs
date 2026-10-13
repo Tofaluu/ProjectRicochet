@@ -20,6 +20,12 @@ namespace BackendServer.Services
         /// </summary>
         public int ExtensionSeconds { get; set; } = 45;
 
+        /// <summary>
+        /// Time to find a first solution before the board ends unsolved (no point); 0 = no limit. The
+        /// first solution starts the normal timer instead, so it never cuts a race short.
+        /// </summary>
+        public int RoundLimitSeconds { get; set; } = 300;
+
         /// <summary>First player to this many points wins the match.</summary>
         public int PointsToWin { get; set; } = 5;
 
@@ -116,6 +122,8 @@ namespace BackendServer.Services
         public Move[]? Shortest { get; set; }
         public RoundPhase Phase { get; set; } = RoundPhase.Intermission;
         public DateTime TimerEndUtc { get; set; }
+        /// <summary>When an unsolved board ends (<see cref="MatchSettings.RoundLimitSeconds"/>); null if no limit or solved.</summary>
+        public DateTime? LimitEndUtc { get; set; }
 
         public string? BestPlayerId { get; set; }
         public string? BestPlayerName { get; set; }
@@ -207,6 +215,7 @@ namespace BackendServer.Services
             byte[] board;
             RoundPhase phase;
             double secondsLeft;
+            double? limitLeft;
             string? bestName;
             int bestMoves;
             double? countdown;
@@ -224,6 +233,7 @@ namespace BackendServer.Services
                             PointsToWin = _options.PointsToWin,
                             FirstTimerSeconds = _options.FirstTimerSeconds,
                             ExtensionSeconds = _options.ExtensionSeconds,
+                            RoundLimitSeconds = _options.RoundLimitSeconds,
                         }.Clamped(),
                     };
                     _lobbies[code] = lobby;
@@ -261,6 +271,7 @@ namespace BackendServer.Services
                 board = lobby.Board;
                 phase = lobby.Phase;
                 secondsLeft = Math.Max(0, (lobby.TimerEndUtc - UtcNow).TotalSeconds);
+                limitLeft = lobby.Phase == RoundPhase.Solving ? SecondsUntil(lobby.LimitEndUtc) : null;
                 bestName = lobby.BestPlayerName;
                 bestMoves = lobby.BestMoveCount;
                 countdown = lobby.CountdownEndUtc.HasValue
@@ -278,6 +289,8 @@ namespace BackendServer.Services
             if (inRound)
             {
                 await caller.SendAsync(HubMethods.RoundStarted, round, board);
+                if (limitLeft.HasValue)
+                    await caller.SendAsync(HubMethods.RoundTimeLimit, round, limitLeft.Value);
                 if (phase == RoundPhase.TimerRunning)
                 {
                     await caller.SendAsync(HubMethods.TimerUpdated, round, secondsLeft);
@@ -476,19 +489,29 @@ namespace BackendServer.Services
             int round;
             byte[] board;
             LobbyState state;
+            double? limit;
             lock (_gate)
             {
                 if (lobby.Closed || !stillWanted())
                     return;
-                StartNewRoundLocked(lobby, prepared);
+                StartNewRoundLocked(lobby, prepared, UtcNow);
                 round = lobby.RoundNumber;
                 board = lobby.Board;
                 state = SnapshotLocked(lobby);
+                limit = SecondsUntil(lobby.LimitEndUtc);
             }
             IClientProxy group = _hub.Clients.Group(lobby.Code);
             await group.SendAsync(HubMethods.RoundStarted, round, board);
+            if (limit.HasValue)
+            {
+                await group.SendAsync(HubMethods.RoundTimeLimit, round, limit.Value);
+                RunInBackground(() => EndRoundAfterLimitAsync(lobby, round));
+            }
             await group.SendAsync(HubMethods.LobbyState, state);
         }
+
+        private double? SecondsUntil(DateTime? utc) =>
+            utc.HasValue ? Math.Max(0, (utc.Value - UtcNow).TotalSeconds) : null;
 
         /// <summary>Host only, between matches. Out-of-range values are clamped.</summary>
         public async Task UpdateSettingsAsync(string connectionId, MatchSettings settings)
@@ -655,6 +678,7 @@ namespace BackendServer.Services
             if (lobby.Phase == RoundPhase.Solving)
             {
                 lobby.Phase = RoundPhase.TimerRunning;
+                lobby.LimitEndUtc = null; // the normal timer takes over, even past the limit
                 lobby.TimerEndUtc = now.AddSeconds(lobby.Settings.FirstTimerSeconds);
                 timerStarted = true;
                 secondsLeft = lobby.Settings.FirstTimerSeconds;
@@ -701,13 +725,29 @@ namespace BackendServer.Services
             await EndRoundAsync(lobby, roundNumber);
         }
 
+        /// <summary>Ends the board unsolved if nobody has solved it when its time limit runs out.</summary>
+        private async Task EndRoundAfterLimitAsync(Lobby lobby, int roundNumber)
+        {
+            TimeSpan wait;
+            lock (_gate)
+            {
+                if (lobby.LimitEndUtc == null)
+                    return;
+                wait = lobby.LimitEndUtc.Value - UtcNow;
+            }
+            if (wait > TimeSpan.Zero)
+                await Task.Delay(wait, _time);
+            await EndRoundAsync(lobby, roundNumber, outOfTime: true);
+        }
+
         /// <summary>
         /// Ends the round (timer ran out, everyone else done, or the shortest solution was found), sends
         /// the result and replays, then either counts down and deals the next board - prepared while the
         /// replays play - or, if that point won the match, shows the results. Safe to call more than
         /// once; only the first call does anything.
         /// </summary>
-        private async Task EndRoundAsync(Lobby lobby, int roundNumber)
+        /// <param name="outOfTime">The time limit ran out: only ends the round if it's still unsolved.</param>
+        private async Task EndRoundAsync(Lobby lobby, int roundNumber, bool outOfTime = false)
         {
             RoundResult result;
             LobbyState state;
@@ -717,8 +757,11 @@ namespace BackendServer.Services
             {
                 if (lobby.Closed || lobby.RoundNumber != roundNumber || lobby.Phase == RoundPhase.Intermission)
                     return;
+                if (outOfTime && lobby.Phase != RoundPhase.Solving)
+                    return; // solved just in time: the normal timer runs
 
                 lobby.Phase = RoundPhase.Intermission;
+                lobby.LimitEndUtc = null;
                 // The point goes to the best solver if they still have a seat (even while reconnecting).
                 if (lobby.BestPlayerId != null && lobby.Players.TryGetValue(lobby.BestPlayerId, out Player? winner))
                 {
@@ -744,6 +787,7 @@ namespace BackendServer.Services
                         : _options.ReplayStepSeconds,
                     ReplayPauseSeconds = _options.ReplayPauseSeconds,
                     MatchWinnerName = matchWinner,
+                    OutOfTime = outOfTime,
                 };
                 skip = new CancellationTokenSource();
                 lobby.ReplaySkip = skip;
@@ -843,7 +887,7 @@ namespace BackendServer.Services
             }
         }
 
-        private static void StartNewRoundLocked(Lobby lobby, PreparedRound prepared)
+        private static void StartNewRoundLocked(Lobby lobby, PreparedRound prepared, DateTime now)
         {
             lobby.RoundNumber++;
             lobby.MatchRound++;
@@ -851,6 +895,8 @@ namespace BackendServer.Services
             lobby.Shortest = prepared.Shortest;
             lobby.Board = BoardCodec.Encode(prepared.Round);
             lobby.Phase = RoundPhase.Solving;
+            int limit = lobby.Settings.RoundLimitSeconds;
+            lobby.LimitEndUtc = limit > 0 ? now.AddSeconds(limit) : null;
             lobby.CountdownEndUtc = null;
             ClearBestLocked(lobby);
             foreach (Player player in lobby.Players.Values)
