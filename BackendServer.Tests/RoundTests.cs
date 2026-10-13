@@ -46,6 +46,21 @@ public class RoundTests
     }
 
     [Fact]
+    public async Task TheReplaysFinalPosition_StaysUpASecond_BeforeTheCountdown()
+    {
+        var (h, alice, bob) = await TwoPlayerMatch();
+        await alice.SubmitShortestAsync();
+        await LobbyHarness.Until(() => bob.Count(HubMethods.RoundEnded) == 1, "the round to end");
+
+        // The winner's replay only (it is the shortest): a pause, then one step per move.
+        RoundResult result = bob.LastResult;
+        double replay = result.ReplayPauseSeconds + MoveCodec.Decode(result.WinnerMoves).Length * result.ReplayStepSeconds;
+        await h.AdvanceAsync(replay + h.Options.AfterReplaySeconds - 0.25);
+        Assert.Equal(1, bob.Count(HubMethods.RoundCountdown));
+        await h.AdvanceUntil(() => bob.Count(HubMethods.RoundCountdown) == 2, "the countdown", stepSeconds: 0.1, maxSeconds: 1);
+    }
+
+    [Fact]
     public async Task FirstSolution_StartsTheTimer_AndTheRoundEndsWhenItRunsOut()
     {
         var (h, alice, bob) = await TwoPlayerMatch();
