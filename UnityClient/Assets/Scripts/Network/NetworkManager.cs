@@ -20,9 +20,12 @@ namespace Ricochet.Client.Network
         [SerializeField] private string _serverUrl = DefaultServer + HubMethods.HubPath;
 
         private readonly ConcurrentQueue<Action> _mainThreadQueue = new ConcurrentQueue<Action>();
+        // Identifies this run of the game to the server, so a reconnect takes back the same seat.
+        private readonly string _playerId = Guid.NewGuid().ToString("N");
         private HubConnection _connection;
         private string _connectedUrl;
         private bool _listening;
+        private string _lobbyCode;
 
         public event Action<LobbyState> LobbyStateChanged;
         /// <summary>(seconds until the next board is dealt)</summary>
@@ -43,6 +46,9 @@ namespace Ricochet.Client.Network
         public event Action<string> RequestFailed;
 
         public bool IsInLobby { get; private set; }
+
+        /// <summary>The connection dropped and is being re-established; the lobby seat is kept meanwhile.</summary>
+        public bool IsReconnecting { get; private set; }
 
         /// <summary>This player's name as the server shows it (unique in the lobby, e.g. "Sam 2").</summary>
         public string PlayerName { get; private set; }
@@ -87,7 +93,8 @@ namespace Ricochet.Client.Network
                 // Lobby messages start arriving before the join call returns.
                 _listening = true;
                 PlayerName = await _connection.InvokeAsync<string>(
-                    HubMethods.JoinLobby, playerName, lobbyCode, HubMethods.ProtocolVersion);
+                    HubMethods.JoinLobby, playerName, lobbyCode, HubMethods.ProtocolVersion, _playerId);
+                _lobbyCode = lobbyCode;
                 IsInLobby = true;
                 SetStatus("In lobby " + lobbyCode.Trim().ToUpperInvariant());
             }
@@ -189,7 +196,9 @@ namespace Ricochet.Client.Network
                 _ = old.DisposeAsync();
 
             IsInLobby = false;
-            HubConnection connection = new HubConnectionBuilder().WithUrl(_serverUrl).Build();
+            IsReconnecting = false;
+            // Retries after 0, 2, 10 and 30 s, well within the server's reconnect grace period.
+            HubConnection connection = new HubConnectionBuilder().WithUrl(_serverUrl).WithAutomaticReconnect().Build();
             _connection = connection;
             _connectedUrl = _serverUrl;
 
@@ -221,6 +230,28 @@ namespace Ricochet.Client.Network
                 PostLobbyEvent(() => RoundEnded?.Invoke(result, winnerMoves, shortest));
             });
 
+            _connection.Reconnecting += error =>
+            {
+                Post(() =>
+                {
+                    if (_connection != connection)
+                        return;
+                    IsReconnecting = true;
+                    SetStatus("Connection lost, reconnecting...");
+                });
+                return Task.CompletedTask;
+            };
+            // A new connection id: join again with the same player id to take back the seat.
+            _connection.Reconnected += _ =>
+            {
+                Post(() =>
+                {
+                    if (_connection == connection)
+                        Rejoin();
+                });
+                return Task.CompletedTask;
+            };
+            // Also raised when the automatic reconnect gives up.
             _connection.Closed += error =>
             {
                 Post(() =>
@@ -229,6 +260,7 @@ namespace Ricochet.Client.Network
                     if (_connection != connection)
                         return;
                     IsInLobby = false;
+                    IsReconnecting = false;
                     _listening = false;
                     SetStatus(error == null ? "Disconnected" : "Disconnected: " + error.Message);
                 });
@@ -236,6 +268,31 @@ namespace Ricochet.Client.Network
             };
 
             await connection.StartAsync();
+        }
+
+        private async void Rejoin()
+        {
+            if (!IsInLobby)
+            {
+                IsReconnecting = false;
+                SetStatus("Reconnected");
+                return;
+            }
+            try
+            {
+                PlayerName = await _connection.InvokeAsync<string>(
+                    HubMethods.JoinLobby, PlayerName, _lobbyCode, HubMethods.ProtocolVersion, _playerId);
+                IsReconnecting = false;
+                SetStatus("Reconnected");
+            }
+            catch (Exception e)
+            {
+                // E.g. the seat expired and the lobby is gone: back to the join screen.
+                IsReconnecting = false;
+                IsInLobby = false;
+                _listening = false;
+                SetStatus("Couldn't rejoin: " + Describe(e));
+            }
         }
 
         private void Update()

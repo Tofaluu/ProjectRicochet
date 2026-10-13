@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharedLogic", "SharedLogic\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharedLogic.Tests", "SharedLogic.Tests\SharedLogic.Tests.csproj", "{0DEF29A5-C362-4FE2-A954-832C76FC5B2B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BackendServer.Tests", "BackendServer.Tests\BackendServer.Tests.csproj", "{F74E39FE-78A7-4DE6-83D7-2131461B6276}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{0DEF29A5-C362-4FE2-A954-832C76FC5B2B}.Release|x64.Build.0 = Release|Any CPU
 		{0DEF29A5-C362-4FE2-A954-832C76FC5B2B}.Release|x86.ActiveCfg = Release|Any CPU
 		{0DEF29A5-C362-4FE2-A954-832C76FC5B2B}.Release|x86.Build.0 = Release|Any CPU
+		{F74E39FE-78A7-4DE6-83D7-2131461B6276}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F74E39FE-78A7-4DE6-83D7-2131461B6276}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F74E39FE-78A7-4DE6-83D7-2131461B6276}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F74E39FE-78A7-4DE6-83D7-2131461B6276}.Debug|x64.Build.0 = Debug|Any CPU
+		{F74E39FE-78A7-4DE6-83D7-2131461B6276}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F74E39FE-78A7-4DE6-83D7-2131461B6276}.Debug|x86.Build.0 = Debug|Any CPU
+		{F74E39FE-78A7-4DE6-83D7-2131461B6276}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F74E39FE-78A7-4DE6-83D7-2131461B6276}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F74E39FE-78A7-4DE6-83D7-2131461B6276}.Release|x64.ActiveCfg = Release|Any CPU
+		{F74E39FE-78A7-4DE6-83D7-2131461B6276}.Release|x64.Build.0 = Release|Any CPU
+		{F74E39FE-78A7-4DE6-83D7-2131461B6276}.Release|x86.ActiveCfg = Release|Any CPU
+		{F74E39FE-78A7-4DE6-83D7-2131461B6276}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

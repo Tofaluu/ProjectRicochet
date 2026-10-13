@@ -234,6 +234,9 @@ namespace Ricochet.Client.UI
 
         private void OnRequestFailed(string message)
         {
+            // A request cut off by the dropped connection; the reconnect message says more.
+            if (_network.IsReconnecting)
+                return;
             _feedbackText.text = message;
         }
 
@@ -257,6 +260,9 @@ namespace Ricochet.Client.UI
         private void OnStatusChanged(string status)
         {
             _statusText.text = status;
+            // Still in the lobby while reconnecting (the server keeps the seat): just say what's happening.
+            if (_network.IsInLobby && _gamePanel.activeSelf && (_network.IsReconnecting || status == "Reconnected"))
+                _feedbackText.text = _network.IsReconnecting ? status : "Reconnected!";
             // Left the lobby or lost the connection: back to the join screen with an offline practice board.
             if (!_network.IsInLobby && _gamePanel.activeSelf)
             {
@@ -293,7 +299,8 @@ namespace Ricochet.Client.UI
             foreach (PlayerInfo player in state.Players.OrderByDescending(p => p.Score))
                 players.AppendLine($"{player.Name}  —  {player.Score}"
                     + (player.Name == state.Host ? "  (host)" : "")
-                    + (player.Leading ? "   (best)" : player.Done ? "   (done)" : ""));
+                    + (!player.Connected ? "   (reconnecting...)"
+                        : player.Leading ? "   (best)" : player.Done ? "   (done)" : ""));
             _playersText.text = players.ToString();
 
             if (_phase != MatchPhase.Playing && (firstState || previous == MatchPhase.Playing))
@@ -308,7 +315,7 @@ namespace Ricochet.Client.UI
             PlayerInfo me = state.Players.FirstOrDefault(p => p.Name == _network.PlayerName);
             _iAmDone = me != null && me.Done;
             _iAmLeading = me != null && me.Leading;
-            PlayerInfo[] voters = state.Players.Where(p => !p.Leading).ToArray();
+            PlayerInfo[] voters = state.Players.Where(p => !p.Leading && p.Connected).ToArray();
             _doneCount = voters.Count(p => p.Done);
             _voterCount = voters.Length;
             _playerNames = new HashSet<string>(state.Players.Select(p => p.Name));

@@ -17,14 +17,17 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 4;
+        public const int ProtocolVersion = 5;
 
         // Client -> server
 
         /// <summary>
-        /// (string playerName, string lobbyCode, int protocolVersion) returns string: the name as shown
-        /// in the lobby, made unique (e.g. "Sam 2"). Clients use it to find themselves in
+        /// (string playerName, string lobbyCode, int protocolVersion, string playerId) returns string: the
+        /// name as shown in the lobby, made unique (e.g. "Sam 2"). Clients use it to find themselves in
         /// <see cref="LobbyState"/>. Fails if protocolVersion != <see cref="ProtocolVersion"/>.
+        /// playerId is a random id the client keeps for its whole run: joining again with it (e.g. after
+        /// an automatic reconnect) takes back the player's seat and score. A dropped player's seat is
+        /// kept for a while; joining with the same name also reclaims it (e.g. after restarting the game).
         /// </summary>
         public const string JoinLobby = "JoinLobby";
 
@@ -175,6 +178,9 @@ namespace SharedLogic
 
         /// <summary>Holds the current best solution this round.</summary>
         public bool Leading { get; set; }
+
+        /// <summary>False while their connection is lost; the seat is kept for them to come back.</summary>
+        public bool Connected { get; set; }
     }
 
     public class LobbyState

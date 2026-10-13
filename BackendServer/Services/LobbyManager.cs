@@ -35,6 +35,12 @@ namespace BackendServer.Services
         /// <summary>Pause on the starting position before each replay.</summary>
         public double ReplayPauseSeconds { get; set; } = 1;
 
+        /// <summary>
+        /// How long a disconnected player's seat (score, host role, place in line) is kept for them to
+        /// reconnect. Leaving on purpose frees it at once.
+        /// </summary>
+        public double ReconnectGraceSeconds { get; set; } = 60;
+
         /// <summary>Boards whose shortest solution is shorter than this are thrown away. Hard boards are always kept.</summary>
         public int MinBoardMoves { get; set; } = 3;
 
@@ -42,6 +48,9 @@ namespace BackendServer.Services
         public double SolverTimeLimitSeconds { get; set; } = 5;
 
         public int MaxSolutionMoves { get; set; } = 64;
+
+        /// <summary>Seeds board generation (for tests); null picks a random seed.</summary>
+        public int? Seed { get; set; }
     }
 
     public enum RoundPhase
@@ -54,10 +63,21 @@ namespace BackendServer.Services
         Intermission,
     }
 
+    /// <summary>
+    /// A seat in a lobby. It outlives the connection: if the player drops, the seat (score, host role,
+    /// place in line) waits <see cref="GameOptions.ReconnectGraceSeconds"/> for them to come back.
+    /// </summary>
     public class Player
     {
-        public string Name { get; init; } = "";
+        /// <summary>Stable id the client sends with each join (falls back to the first connection id).</summary>
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
         public int Score { get; set; }
+
+        /// <summary>Null while disconnected.</summary>
+        public string? ConnectionId { get; set; }
+        public DateTime? DisconnectedAtUtc { get; set; }
+        public bool Connected => ConnectionId != null;
 
         /// <summary>Increases with each join; the host passes to the lowest one left.</summary>
         public long JoinOrder { get; init; }
@@ -75,10 +95,11 @@ namespace BackendServer.Services
     public class Lobby
     {
         public string Code { get; init; } = "";
+        /// <summary>Seats by <see cref="Player.Id"/>, connected or not.</summary>
         public Dictionary<string, Player> Players { get; } = new();
         public bool Closed { get; set; }
 
-        public string? HostConnectionId { get; set; }
+        public string? HostId { get; set; }
         public MatchSettings Settings { get; set; } = new();
         public MatchPhase Match { get; set; } = MatchPhase.Waiting;
         /// <summary>Bumped on every Start, so a board prepared for an older match is dropped.</summary>
@@ -96,7 +117,7 @@ namespace BackendServer.Services
         public RoundPhase Phase { get; set; } = RoundPhase.Intermission;
         public DateTime TimerEndUtc { get; set; }
 
-        public string? BestConnectionId { get; set; }
+        public string? BestPlayerId { get; set; }
         public string? BestPlayerName { get; set; }
         public int BestMoveCount { get; set; }
         public byte[] BestMoves { get; set; } = Array.Empty<byte>();
@@ -114,36 +135,52 @@ namespace BackendServer.Services
     /// <summary>
     /// Owns all lobbies and runs matches: the host (the creator, passed on in join order) picks the
     /// settings and presses Start; rounds repeat until someone reaches the points target, then the
-    /// lobby shows the results until the host starts again. Players can join at any time.
+    /// lobby shows the results until the host starts again. Players can join at any time, and a player
+    /// who drops keeps their seat for a while to reconnect.
     /// All state is guarded by one lock; messages are sent through <see cref="IHubContext{THub}"/>
     /// after releasing it, because hub instances are disposed as soon as each hub call returns.
     /// Boards are generated and solved outside the lock so a slow solve never stalls other lobbies.
+    /// All waiting goes through <see cref="TimeProvider"/> so tests can fast-forward it.
     /// </summary>
     public class LobbyManager
     {
         private static readonly Regex LobbyCodePattern = new("^[A-Z0-9]{1,8}$");
         private const int MaxNameLength = 20;
+        private const int MaxPlayerIdLength = 64;
         private const int MaxBoardAttempts = 50;
+
+        private sealed record Seat(Lobby Lobby, Player Player);
 
         private readonly object _gate = new();
         private readonly Dictionary<string, Lobby> _lobbies = new();
-        private readonly Dictionary<string, Lobby> _lobbyByConnection = new();
-        private readonly Random _random = new();
+        private readonly Dictionary<string, Seat> _seatByConnection = new();
+        private readonly Random _random;
         private long _nextJoinOrder;
 
         private readonly IHubContext<GameHub> _hub;
         private readonly GameOptions _options;
+        private readonly TimeProvider _time;
         private readonly ILogger<LobbyManager> _log;
 
-        public LobbyManager(IHubContext<GameHub> hub, IOptions<GameOptions> options, ILogger<LobbyManager> log)
+        public LobbyManager(IHubContext<GameHub> hub, IOptions<GameOptions> options, TimeProvider time,
+            ILogger<LobbyManager> log)
         {
             _hub = hub;
             _options = options.Value;
+            _time = time;
             _log = log;
+            _random = _options.Seed.HasValue ? new Random(_options.Seed.Value) : new Random();
         }
 
+        private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+
+        /// <summary>
+        /// Joins (or creates) a lobby. A <paramref name="playerId"/> that already has a seat there takes
+        /// it back with its score (reconnecting, or re-joining to change name); so does a name matching
+        /// a disconnected seat (e.g. after restarting the game).
+        /// </summary>
         /// <returns>The player's name as shown in the lobby (made unique, e.g. "Sam 2").</returns>
-        public async Task<string> JoinAsync(string connectionId, string playerName, string lobbyCode)
+        public async Task<string> JoinAsync(string connectionId, string playerName, string lobbyCode, string? playerId)
         {
             string code = (lobbyCode ?? "").Trim().ToUpperInvariant();
             if (!LobbyCodePattern.IsMatch(code))
@@ -153,14 +190,18 @@ namespace BackendServer.Services
             if (name.Length == 0) name = "Player";
             if (name.Length > MaxNameLength) name = name.Substring(0, MaxNameLength);
 
+            string id = string.IsNullOrWhiteSpace(playerId) ? connectionId : playerId.Trim();
+            if (id.Length > MaxPlayerIdLength) id = id.Substring(0, MaxPlayerIdLength);
+
             bool switchingLobby;
             lock (_gate)
-                switchingLobby = _lobbyByConnection.TryGetValue(connectionId, out Lobby? current) && current.Code != code;
+                switchingLobby = _seatByConnection.TryGetValue(connectionId, out Seat? current) && current.Lobby.Code != code;
             if (switchingLobby)
                 await LeaveAsync(connectionId);
 
             Lobby lobby;
             LobbyState state;
+            string? displaced = null;
             bool inRound;
             int round;
             byte[] board;
@@ -189,18 +230,29 @@ namespace BackendServer.Services
                     _log.LogInformation("Lobby {Code} created", code);
                 }
 
-                // Re-joining the same lobby (e.g. to change name) keeps the score and place in line.
-                lobby.Players.TryGetValue(connectionId, out Player? existing);
-                // Names identify players to each other (and each client finds itself by name), so keep them unique.
-                name = UniqueNameLocked(lobby, connectionId, name);
-                lobby.Players[connectionId] = new Player
+                Player? player = FindSeatLocked(lobby, connectionId, id, name);
+                if (player == null)
                 {
-                    Name = name,
-                    Score = existing?.Score ?? 0,
-                    JoinOrder = existing?.JoinOrder ?? ++_nextJoinOrder,
-                };
-                _lobbyByConnection[connectionId] = lobby;
-                lobby.HostConnectionId ??= connectionId;
+                    player = new Player { Id = id, JoinOrder = ++_nextJoinOrder };
+                    lobby.Players[id] = player;
+                }
+                else if (player.ConnectionId != null && player.ConnectionId != connectionId)
+                {
+                    // The same player on a new connection (e.g. reconnected before the server noticed
+                    // the old one drop): the new connection takes over.
+                    displaced = player.ConnectionId;
+                    _seatByConnection.Remove(displaced);
+                }
+                else if (player.ConnectionId == null)
+                    _log.LogInformation("Lobby {Code}: {Name} reconnected", code, player.Name);
+
+                // Names identify players to each other (and each client finds itself by name), so keep them unique.
+                player.Name = UniqueNameLocked(lobby, player.Id, name);
+                player.ConnectionId = connectionId;
+                player.DisconnectedAtUtc = null;
+                _seatByConnection[connectionId] = new Seat(lobby, player);
+                lobby.HostId ??= player.Id;
+                name = player.Name;
 
                 state = SnapshotLocked(lobby);
                 // Joining mid-match is allowed: the newcomer gets the current board (unless it's still being prepared).
@@ -208,14 +260,16 @@ namespace BackendServer.Services
                 round = lobby.RoundNumber;
                 board = lobby.Board;
                 phase = lobby.Phase;
-                secondsLeft = Math.Max(0, (lobby.TimerEndUtc - DateTime.UtcNow).TotalSeconds);
+                secondsLeft = Math.Max(0, (lobby.TimerEndUtc - UtcNow).TotalSeconds);
                 bestName = lobby.BestPlayerName;
                 bestMoves = lobby.BestMoveCount;
                 countdown = lobby.CountdownEndUtc.HasValue
-                    ? Math.Max(0, (lobby.CountdownEndUtc.Value - DateTime.UtcNow).TotalSeconds)
+                    ? Math.Max(0, (lobby.CountdownEndUtc.Value - UtcNow).TotalSeconds)
                     : null;
             }
 
+            if (displaced != null)
+                await _hub.Groups.RemoveFromGroupAsync(displaced, code);
             await _hub.Groups.AddToGroupAsync(connectionId, code);
             await _hub.Clients.Group(code).SendAsync(HubMethods.LobbyState, state);
 
@@ -229,16 +283,41 @@ namespace BackendServer.Services
                     await caller.SendAsync(HubMethods.TimerUpdated, round, secondsLeft);
                     await caller.SendAsync(HubMethods.NewBestSolution, round, bestName, bestMoves);
                 }
+                // Again after the board, which resets the client's view of its own lead / vote.
+                await caller.SendAsync(HubMethods.LobbyState, state);
             }
             if (countdown.HasValue)
                 await caller.SendAsync(HubMethods.RoundCountdown, countdown.Value);
             return name;
         }
 
-        private static string UniqueNameLocked(Lobby lobby, string connectionId, string name)
+        // This connection's seat if it's re-joining, else the seat with this player id, else a
+        // disconnected seat with this name (the player restarted the game). Null for a newcomer.
+        private Player? FindSeatLocked(Lobby lobby, string connectionId, string id, string name)
         {
-            bool Taken(string candidate) => lobby.Players.Any(p =>
-                p.Key != connectionId && string.Equals(p.Value.Name, candidate, StringComparison.OrdinalIgnoreCase));
+            if (_seatByConnection.TryGetValue(connectionId, out Seat? seat) && seat.Lobby == lobby)
+                return seat.Player;
+            if (lobby.Players.TryGetValue(id, out Player? player))
+                return player;
+
+            Player? byName = lobby.Players.Values.FirstOrDefault(p =>
+                !p.Connected && string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (byName != null)
+            {
+                // Re-key the seat under the new id (the host / best references follow it).
+                lobby.Players.Remove(byName.Id);
+                if (lobby.HostId == byName.Id) lobby.HostId = id;
+                if (lobby.BestPlayerId == byName.Id) lobby.BestPlayerId = id;
+                byName.Id = id;
+                lobby.Players[id] = byName;
+            }
+            return byName;
+        }
+
+        private static string UniqueNameLocked(Lobby lobby, string playerId, string name)
+        {
+            bool Taken(string candidate) => lobby.Players.Values.Any(p =>
+                p.Id != playerId && string.Equals(p.Name, candidate, StringComparison.OrdinalIgnoreCase));
 
             string unique = name;
             for (int n = 2; Taken(unique); n++)
@@ -246,44 +325,96 @@ namespace BackendServer.Services
             return unique;
         }
 
+        /// <summary>Leaving on purpose: the seat is freed at once.</summary>
         public async Task LeaveAsync(string connectionId)
         {
-            Lobby? lobby;
-            LobbyState? state = null;
-            bool endRound = false;
-            int round = 0;
+            Seat? seat;
+            LobbyState? state;
+            bool endRound;
+            int round;
             lock (_gate)
             {
-                if (!_lobbyByConnection.Remove(connectionId, out lobby))
+                if (!_seatByConnection.Remove(connectionId, out seat))
                     return;
-
-                lobby.Players.Remove(connectionId);
-                if (lobby.Players.Count == 0)
-                {
-                    lobby.Closed = true;
-                    lobby.ReplaySkip?.Cancel();
-                    _lobbies.Remove(lobby.Code);
-                    _log.LogInformation("Lobby {Code} closed", lobby.Code);
-                }
-                else
-                {
-                    // The host passes to whoever has been here longest.
-                    if (lobby.HostConnectionId == connectionId)
-                        lobby.HostConnectionId = lobby.Players.MinBy(p => p.Value.JoinOrder).Key;
-                    state = SnapshotLocked(lobby);
-                    round = lobby.RoundNumber;
-                    // The one player everyone was waiting on may have just left.
-                    if (lobby.InRound && AllOthersDoneLocked(lobby))
-                    {
-                        if (lobby.Phase == RoundPhase.Intermission)
-                            lobby.ReplaySkip?.Cancel();
-                        else
-                            endRound = true;
-                    }
-                }
+                state = RemoveSeatLocked(seat.Lobby, seat.Player, out endRound, out round);
             }
 
-            await _hub.Groups.RemoveFromGroupAsync(connectionId, lobby.Code);
+            await _hub.Groups.RemoveFromGroupAsync(connectionId, seat.Lobby.Code);
+            await AfterSeatChangeAsync(seat.Lobby, state, endRound, round);
+        }
+
+        /// <summary>
+        /// The connection dropped: the seat stays (shown as disconnected, not waited on in votes) for
+        /// <see cref="GameOptions.ReconnectGraceSeconds"/>, then it's freed as if they'd left.
+        /// </summary>
+        public async Task DisconnectAsync(string connectionId)
+        {
+            Seat? seat;
+            LobbyState state;
+            bool endRound;
+            int round;
+            DateTime stamp;
+            lock (_gate)
+            {
+                if (!_seatByConnection.Remove(connectionId, out seat) || seat.Player.ConnectionId != connectionId)
+                    return;
+                Lobby lobby = seat.Lobby;
+                stamp = UtcNow;
+                seat.Player.ConnectionId = null;
+                seat.Player.DisconnectedAtUtc = stamp;
+                _log.LogInformation("Lobby {Code}: {Name} disconnected", lobby.Code, seat.Player.Name);
+                state = SnapshotLocked(lobby);
+                round = lobby.RoundNumber;
+                // The one player everyone was waiting on may have just dropped.
+                endRound = CheckAllOthersDoneLocked(lobby);
+            }
+
+            await AfterSeatChangeAsync(seat.Lobby, state, endRound, round);
+            RunInBackground(() => ExpireSeatAsync(seat.Lobby, seat.Player, stamp));
+        }
+
+        private async Task ExpireSeatAsync(Lobby lobby, Player player, DateTime disconnectedAt)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(_options.ReconnectGraceSeconds), _time);
+            LobbyState? state;
+            bool endRound;
+            int round;
+            lock (_gate)
+            {
+                // Back already (or gone, or dropped again later, which has its own expiry).
+                if (player.DisconnectedAtUtc != disconnectedAt || !lobby.Players.TryGetValue(player.Id, out Player? seat)
+                    || seat != player)
+                    return;
+                _log.LogInformation("Lobby {Code}: {Name} didn't reconnect", lobby.Code, player.Name);
+                state = RemoveSeatLocked(lobby, player, out endRound, out round);
+            }
+            await AfterSeatChangeAsync(lobby, state, endRound, round);
+        }
+
+        /// <returns>The new state to broadcast, or null if the lobby closed.</returns>
+        private LobbyState? RemoveSeatLocked(Lobby lobby, Player player, out bool endRound, out int round)
+        {
+            endRound = false;
+            round = lobby.RoundNumber;
+            lobby.Players.Remove(player.Id);
+            if (lobby.Players.Count == 0)
+            {
+                lobby.Closed = true;
+                lobby.ReplaySkip?.Cancel();
+                _lobbies.Remove(lobby.Code);
+                _log.LogInformation("Lobby {Code} closed", lobby.Code);
+                return null;
+            }
+
+            // The host passes to whoever has been here longest.
+            if (lobby.HostId == player.Id)
+                lobby.HostId = lobby.Players.Values.MinBy(p => p.JoinOrder)!.Id;
+            endRound = CheckAllOthersDoneLocked(lobby);
+            return SnapshotLocked(lobby);
+        }
+
+        private async Task AfterSeatChangeAsync(Lobby lobby, LobbyState? state, bool endRound, int round)
+        {
             if (state != null)
                 await _hub.Clients.Group(lobby.Code).SendAsync(HubMethods.LobbyState, state);
             if (endRound)
@@ -319,7 +450,7 @@ namespace BackendServer.Services
                     player.Score = 0;
                     player.Done = false;
                 }
-                lobby.CountdownEndUtc = DateTime.UtcNow.AddSeconds(_options.CountdownSeconds);
+                lobby.CountdownEndUtc = UtcNow.AddSeconds(_options.CountdownSeconds);
                 state = SnapshotLocked(lobby);
                 _log.LogInformation("Lobby {Code}: match started, first to {Points}", lobby.Code, lobby.Settings.PointsToWin);
             }
@@ -328,11 +459,15 @@ namespace BackendServer.Services
             await group.SendAsync(HubMethods.LobbyState, state);
             await group.SendAsync(HubMethods.RoundCountdown, _options.CountdownSeconds);
 
-            // The board is generated during the countdown; a slow solve just stretches the wait.
+            // The board is generated during the countdown (a slow solve just stretches the wait). Not
+            // awaited, so the host's StartMatch call returns straight away.
             Task<PreparedRound> prepare = Task.Run(PrepareRound);
-            await Task.Delay(TimeSpan.FromSeconds(_options.CountdownSeconds));
-            PreparedRound prepared = await prepare;
-            await DealRoundAsync(lobby, prepared, () => lobby.MatchId == matchId);
+            RunInBackground(async () =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(_options.CountdownSeconds), _time);
+                PreparedRound prepared = await prepare;
+                await DealRoundAsync(lobby, prepared, () => lobby.MatchId == matchId);
+            });
         }
 
         /// <summary>Deals <paramref name="prepared"/> unless the lobby closed or <paramref name="stillWanted"/> (checked under the lock) is false.</summary>
@@ -373,11 +508,11 @@ namespace BackendServer.Services
 
         private Lobby HostLobbyLocked(string connectionId, string action)
         {
-            if (!_lobbyByConnection.TryGetValue(connectionId, out Lobby? lobby))
+            if (!_seatByConnection.TryGetValue(connectionId, out Seat? seat))
                 throw new HubException("You are not in a lobby.");
-            if (lobby.HostConnectionId != connectionId)
+            if (seat.Lobby.HostId != seat.Player.Id)
                 throw new HubException($"Only the host can {action}.");
-            return lobby;
+            return seat.Lobby;
         }
 
         /// <summary>
@@ -388,39 +523,51 @@ namespace BackendServer.Services
         /// </summary>
         public async Task SetDoneAsync(string connectionId, int roundNumber, bool done)
         {
-            Lobby? lobby;
+            Lobby lobby;
             LobbyState state;
-            bool endRound = false;
+            bool endRound;
             lock (_gate)
             {
-                if (!_lobbyByConnection.TryGetValue(connectionId, out lobby) || !lobby.InRound
-                    || lobby.RoundNumber != roundNumber)
+                if (!_seatByConnection.TryGetValue(connectionId, out Seat? seat) || !seat.Lobby.InRound
+                    || seat.Lobby.RoundNumber != roundNumber)
                     return;
+                lobby = seat.Lobby;
                 // The leader / winner isn't part of either vote.
-                if (connectionId == lobby.BestConnectionId)
+                if (seat.Player.Id == lobby.BestPlayerId)
                     return;
 
-                lobby.Players[connectionId].Done = done;
+                seat.Player.Done = done;
                 state = SnapshotLocked(lobby);
-                if (AllOthersDoneLocked(lobby))
-                {
-                    if (lobby.Phase == RoundPhase.Intermission)
-                        lobby.ReplaySkip?.Cancel();
-                    else
-                        endRound = true;
-                }
+                endRound = CheckAllOthersDoneLocked(lobby);
             }
 
             await _hub.Clients.Group(lobby.Code).SendAsync(HubMethods.LobbyState, state);
-            // Not awaited: ending a round includes the replay and intermission delays.
+            // Not awaited: ending a round includes the replay and countdown delays.
             if (endRound)
                 RunInBackground(() => EndRoundAsync(lobby, roundNumber));
         }
 
-        /// <summary>True when every player except the current leader / winner (if any) has voted.</summary>
+        /// <summary>
+        /// True when at least one player is connected and every connected player except the current
+        /// leader / winner has voted. Disconnected players aren't waited on.
+        /// </summary>
         private static bool AllOthersDoneLocked(Lobby lobby) =>
-            lobby.Players.Count > 0
-            && lobby.Players.Where(p => p.Key != lobby.BestConnectionId).All(p => p.Value.Done);
+            lobby.Players.Values.Any(p => p.Connected)
+            && lobby.Players.Values.Where(p => p.Connected && p.Id != lobby.BestPlayerId).All(p => p.Done);
+
+        /// <summary>
+        /// Acts on a completed vote: after a round it skips the replay (here); during one it returns
+        /// true so the caller ends the round once it has released the lock.
+        /// </summary>
+        private static bool CheckAllOthersDoneLocked(Lobby lobby)
+        {
+            if (!lobby.InRound || !AllOthersDoneLocked(lobby))
+                return false;
+            if (lobby.Phase != RoundPhase.Intermission)
+                return true;
+            lobby.ReplaySkip?.Cancel();
+            return false;
+        }
 
         public async Task SubmitAsync(string connectionId, int roundNumber, byte[] moveData)
         {
@@ -472,13 +619,15 @@ namespace BackendServer.Services
         private string? TryAcceptLocked(string connectionId, int roundNumber, byte[] moveData, out Lobby? lobby,
             out bool timerStarted, out double? secondsLeft, out string playerName, out int moveCount)
         {
+            lobby = null;
             timerStarted = false;
             secondsLeft = null;
             playerName = "";
             moveCount = 0;
 
-            if (!_lobbyByConnection.TryGetValue(connectionId, out lobby))
+            if (!_seatByConnection.TryGetValue(connectionId, out Seat? seat))
                 return "You are not in a lobby.";
+            lobby = seat.Lobby;
             if (!lobby.InRound || roundNumber != lobby.RoundNumber || lobby.Phase == RoundPhase.Intermission)
                 return "That round is over.";
 
@@ -502,7 +651,7 @@ namespace BackendServer.Services
             if (lobby.Phase == RoundPhase.TimerRunning && moves.Length >= lobby.BestMoveCount)
                 return $"Not better than the current best ({lobby.BestMoveCount} moves).";
 
-            DateTime now = DateTime.UtcNow;
+            DateTime now = UtcNow;
             if (lobby.Phase == RoundPhase.Solving)
             {
                 lobby.Phase = RoundPhase.TimerRunning;
@@ -520,12 +669,12 @@ namespace BackendServer.Services
                 }
             }
 
-            Player player = lobby.Players[connectionId];
+            Player player = seat.Player;
             playerName = player.Name;
             moveCount = moves.Length;
             // The leader isn't part of the vote; drop any "skip" they pressed before solving it.
             player.Done = false;
-            lobby.BestConnectionId = connectionId;
+            lobby.BestPlayerId = player.Id;
             lobby.BestPlayerName = playerName;
             lobby.BestMoveCount = moveCount;
             lobby.BestMoves = MoveCodec.Encode(moves);
@@ -542,11 +691,11 @@ namespace BackendServer.Services
                 {
                     if (lobby.Closed || lobby.RoundNumber != roundNumber || lobby.Phase != RoundPhase.TimerRunning)
                         return;
-                    wait = lobby.TimerEndUtc - DateTime.UtcNow;
+                    wait = lobby.TimerEndUtc - UtcNow;
                 }
                 if (wait <= TimeSpan.Zero)
                     break;
-                await Task.Delay(wait);
+                await Task.Delay(wait, _time);
             }
 
             await EndRoundAsync(lobby, roundNumber);
@@ -570,8 +719,8 @@ namespace BackendServer.Services
                     return;
 
                 lobby.Phase = RoundPhase.Intermission;
-                // The point only goes to the best solver if they're still here.
-                if (lobby.BestConnectionId != null && lobby.Players.TryGetValue(lobby.BestConnectionId, out Player? winner))
+                // The point goes to the best solver if they still have a seat (even while reconnecting).
+                if (lobby.BestPlayerId != null && lobby.Players.TryGetValue(lobby.BestPlayerId, out Player? winner))
                 {
                     winner.Score++;
                     if (winner.Score >= lobby.Settings.PointsToWin)
@@ -610,7 +759,7 @@ namespace BackendServer.Services
 
             try
             {
-                await Task.Delay(ReplayDuration(result), skip.Token);
+                await Task.Delay(ReplayDuration(result), _time, skip.Token);
             }
             catch (OperationCanceledException)
             {
@@ -625,7 +774,7 @@ namespace BackendServer.Services
                     return;
 
                 if (next != null)
-                    lobby.CountdownEndUtc = DateTime.UtcNow.AddSeconds(_options.CountdownSeconds);
+                    lobby.CountdownEndUtc = UtcNow.AddSeconds(_options.CountdownSeconds);
                 else
                 {
                     // Results until the host starts again; the last board stays as it was.
@@ -645,7 +794,7 @@ namespace BackendServer.Services
             }
 
             await group.SendAsync(HubMethods.RoundCountdown, _options.CountdownSeconds);
-            await Task.Delay(TimeSpan.FromSeconds(_options.CountdownSeconds));
+            await Task.Delay(TimeSpan.FromSeconds(_options.CountdownSeconds), _time);
             PreparedRound prepared = await next;
             await DealRoundAsync(lobby, prepared, () => lobby.RoundNumber == roundNumber);
         }
@@ -710,7 +859,7 @@ namespace BackendServer.Services
 
         private static void ClearBestLocked(Lobby lobby)
         {
-            lobby.BestConnectionId = null;
+            lobby.BestPlayerId = null;
             lobby.BestPlayerName = null;
             lobby.BestMoveCount = 0;
             lobby.BestMoves = Array.Empty<byte>();
@@ -721,21 +870,22 @@ namespace BackendServer.Services
             return new LobbyState
             {
                 Code = lobby.Code,
-                Host = lobby.HostConnectionId != null && lobby.Players.TryGetValue(lobby.HostConnectionId, out Player? host)
+                Host = lobby.HostId != null && lobby.Players.TryGetValue(lobby.HostId, out Player? host)
                     ? host.Name
                     : null,
                 Phase = lobby.Match,
                 Settings = lobby.Settings,
                 MatchRound = lobby.MatchRound,
                 MatchWinner = lobby.MatchWinner,
-                Players = lobby.Players
-                    .OrderBy(p => p.Value.JoinOrder)
+                Players = lobby.Players.Values
+                    .OrderBy(p => p.JoinOrder)
                     .Select(p => new PlayerInfo
                     {
-                        Name = p.Value.Name,
-                        Score = p.Value.Score,
-                        Done = p.Value.Done,
-                        Leading = p.Key == lobby.BestConnectionId,
+                        Name = p.Name,
+                        Score = p.Score,
+                        Done = p.Done,
+                        Leading = p.Id == lobby.BestPlayerId,
+                        Connected = p.Connected,
                     })
                     .ToArray(),
             };
