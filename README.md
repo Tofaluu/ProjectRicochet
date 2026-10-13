@@ -1,4 +1,4 @@
-# Ricochet (working title)
+# Project Ricochet
 
 A competitive multiplayer puzzle game. Every player gets the same board: robots slide in a straight
 line until they hit a wall or another robot, and the goal is to get the target robot onto the target
