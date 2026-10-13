@@ -54,6 +54,7 @@ namespace Ricochet.Client.Game
         private float _countdownEnd = -1f;
         private float _timerEnd = -1f;
         private float _timerExtendedUntil = -1f;
+        private float _limitEnd = -1f;
         private HashSet<string> _playerNames = new HashSet<string>();
 
         /// <summary>How long "+time" is shown after the timer was topped up.</summary>
@@ -81,6 +82,8 @@ namespace Ricochet.Client.Game
         public int Round { get; private set; }
         public bool RoundOver { get; private set; }
         public bool TimerRunning => _timerEnd >= 0f;
+        /// <summary>Nobody has solved the board yet and the round has a time limit.</summary>
+        public bool HasTimeLimit => _limitEnd >= 0f;
         public string BestPlayer { get; private set; }
         public int BestMoves { get; private set; }
         public bool IAmLeading { get; private set; }
@@ -102,6 +105,7 @@ namespace Ricochet.Client.Game
 
         public float CountdownLeft(float now) => _countdownEnd >= 0f ? System.Math.Max(0f, _countdownEnd - now) : 0f;
         public float TimeLeft(float now) => TimerRunning ? System.Math.Max(0f, _timerEnd - now) : 0f;
+        public float TimeLimitLeft(float now) => HasTimeLimit ? System.Math.Max(0f, _limitEnd - now) : 0f;
         /// <summary>A better solution just bought everyone more time.</summary>
         public bool TimeJustAdded(float now) => now < _timerExtendedUntil;
 
@@ -196,6 +200,16 @@ namespace Ricochet.Client.Game
             if (TimerRunning)
                 _timerExtendedUntil = now + TimeAddedNoticeSeconds;
             _timerEnd = now + secondsRemaining;
+            _limitEnd = -1f; // the normal timer replaces the round's time limit
+            return true;
+        }
+
+        /// <returns>False if it's for another round (or the board was already solved).</returns>
+        public bool OnRoundTimeLimit(int round, float secondsRemaining, float now)
+        {
+            if (round != Round || TimerRunning || RoundOver)
+                return false;
+            _limitEnd = now + secondsRemaining;
             return true;
         }
 
@@ -235,6 +249,8 @@ namespace Ricochet.Client.Game
                 return null;
             RoundOver = true;
             _timerEnd = -1f;
+            _limitEnd = -1f;
+            string skipped = result.OutOfTime ? "Time's up, nobody solved it." : "Board skipped.";
 
             string winner = result.WinnerName;
             var replays = new List<ReplaySegment>();
@@ -258,12 +274,12 @@ namespace Ricochet.Client.Game
             }
             else if (shortest != null)
             {
-                Feedback = $"Board skipped. Here's how it could be done in {shortest.Length} moves:";
+                Feedback = $"{skipped} Here's how it could be done in {shortest.Length} moves:";
                 replays.Add(new ReplaySegment("Shortest possible", shortest, (float)result.ShortestReplayStepSeconds, isShortest: true));
             }
             else
             {
-                Feedback = "Board skipped. Next board soon...";
+                Feedback = $"{skipped} Next board soon...";
             }
 
             string matchWinner = result.MatchWinnerName;
@@ -331,6 +347,7 @@ namespace Ricochet.Client.Game
             _countdownEnd = -1f;
             _timerEnd = -1f;
             _timerExtendedUntil = -1f;
+            _limitEnd = -1f;
             BestPlayer = null;
             IAmDone = false;
             IAmLeading = false;

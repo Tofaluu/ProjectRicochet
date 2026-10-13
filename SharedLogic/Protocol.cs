@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 6;
+        public const int ProtocolVersion = 7;
 
         // Client -> server
 
@@ -75,9 +75,17 @@ namespace SharedLogic
 
         /// <summary>
         /// (int roundNumber, double secondsRemaining). Sent when the first valid solution starts the
-        /// countdown and whenever a better solution extends it.
+        /// countdown and whenever a better solution extends it. Replaces the round's time limit.
         /// </summary>
         public const string TimerUpdated = "TimerUpdated";
+
+        /// <summary>
+        /// (int roundNumber, double secondsRemaining). The round's time limit
+        /// (<see cref="MatchSettings.RoundLimitSeconds"/>), sent after <see cref="RoundStarted"/> while
+        /// nobody has solved the board. If it runs out first, the board ends unsolved (no point). The
+        /// first solution switches to the normal timer (<see cref="TimerUpdated"/>) instead.
+        /// </summary>
+        public const string RoundTimeLimit = "RoundTimeLimit";
 
         /// <summary>(int roundNumber, string playerName, int moveCount)</summary>
         public const string NewBestSolution = "NewBestSolution";
@@ -116,6 +124,9 @@ namespace SharedLogic
         /// <summary>Pause on the starting position before each replay.</summary>
         public double ReplayPauseSeconds { get; set; }
 
+        /// <summary>Nobody solved the board before the round's time limit ran out.</summary>
+        public bool OutOfTime { get; set; }
+
         /// <summary>
         /// Set when this round's point won the match. The lobby switches to
         /// <see cref="MatchPhase.Finished"/> once the replays are over.
@@ -144,6 +155,7 @@ namespace SharedLogic
     {
         public const int MinPointsToWin = 1, MaxPointsToWin = 50;
         public const int MinTimerSeconds = 10, MaxTimerSeconds = 600;
+        public const int MinRoundLimitSeconds = 60, MaxRoundLimitSeconds = 3600;
 
         public GameMode Mode { get; set; }
         public int PointsToWin { get; set; }
@@ -154,6 +166,12 @@ namespace SharedLogic
         /// <summary>Each better solution tops the timer up to at least this much.</summary>
         public int ExtensionSeconds { get; set; }
 
+        /// <summary>
+        /// Time to find a first solution before the board ends unsolved; 0 = no limit. Once someone
+        /// solves it the normal timer takes over, so a late solution still gets its full countdown.
+        /// </summary>
+        public int RoundLimitSeconds { get; set; }
+
         public MatchSettings Clamped()
         {
             return new MatchSettings
@@ -162,6 +180,7 @@ namespace SharedLogic
                 PointsToWin = Clamp(PointsToWin, MinPointsToWin, MaxPointsToWin),
                 FirstTimerSeconds = Clamp(FirstTimerSeconds, MinTimerSeconds, MaxTimerSeconds),
                 ExtensionSeconds = Clamp(ExtensionSeconds, MinTimerSeconds, MaxTimerSeconds),
+                RoundLimitSeconds = RoundLimitSeconds <= 0 ? 0 : Clamp(RoundLimitSeconds, MinRoundLimitSeconds, MaxRoundLimitSeconds),
             };
         }
 

@@ -34,6 +34,8 @@ namespace Ricochet.Client.Network
         public event Action<int, RoundSetup> RoundStarted;
         /// <summary>(round number, seconds remaining)</summary>
         public event Action<int, float> TimerUpdated;
+        /// <summary>(round number, seconds of the round's time limit remaining)</summary>
+        public event Action<int, float> RoundTimeLimit;
         /// <summary>(round number, player name, move count)</summary>
         public event Action<int, string, int> NewBestSolution;
         /// <summary>(reason)</summary>
@@ -217,6 +219,8 @@ namespace Ricochet.Client.Network
             });
             _connection.On<int, double>(HubMethods.TimerUpdated,
                 (round, seconds) => PostLobbyEvent(() => TimerUpdated?.Invoke(round, (float)seconds)));
+            _connection.On<int, double>(HubMethods.RoundTimeLimit,
+                (round, seconds) => PostLobbyEvent(() => RoundTimeLimit?.Invoke(round, (float)seconds)));
             _connection.On<int, string, int>(HubMethods.NewBestSolution,
                 (round, player, moves) => PostLobbyEvent(() => NewBestSolution?.Invoke(round, player, moves)));
             _connection.On<string>(HubMethods.SolutionRejected,

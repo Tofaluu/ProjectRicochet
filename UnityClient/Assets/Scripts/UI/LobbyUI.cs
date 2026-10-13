@@ -50,6 +50,7 @@ namespace Ricochet.Client.UI
         [SerializeField] private InputField _pointsInput;
         [SerializeField] private InputField _firstTimerInput;
         [SerializeField] private InputField _extensionInput;
+        [SerializeField] private InputField _roundLimitInput;
         [SerializeField] private Button _startButton;
         [SerializeField] private Text _startLabel;
 
@@ -76,6 +77,7 @@ namespace Ricochet.Client.UI
             _pointsInput.onEndEdit.AddListener(_ => OnSettingsEdited());
             _firstTimerInput.onEndEdit.AddListener(_ => OnSettingsEdited());
             _extensionInput.onEndEdit.AddListener(_ => OnSettingsEdited());
+            _roundLimitInput.onEndEdit.AddListener(_ => OnSettingsEdited());
         }
 
         // Optional command-line overrides for quick testing, e.g.
@@ -114,6 +116,7 @@ namespace Ricochet.Client.UI
             _network.RoundStarted += OnRoundStarted;
             _network.RoundCountdown += OnRoundCountdown;
             _network.TimerUpdated += OnTimerUpdated;
+            _network.RoundTimeLimit += OnRoundTimeLimit;
             _network.NewBestSolution += OnNewBest;
             _network.SolutionRejected += OnRejected;
             _network.RoundEnded += OnRoundEnded;
@@ -127,6 +130,7 @@ namespace Ricochet.Client.UI
             _network.RoundStarted -= OnRoundStarted;
             _network.RoundCountdown -= OnRoundCountdown;
             _network.TimerUpdated -= OnTimerUpdated;
+            _network.RoundTimeLimit -= OnRoundTimeLimit;
             _network.NewBestSolution -= OnNewBest;
             _network.SolutionRejected -= OnRejected;
             _network.RoundEnded -= OnRoundEnded;
@@ -183,7 +187,7 @@ namespace Ricochet.Client.UI
             _network.SetDone(_match.ToggleDone());
         }
 
-        // Sends all three settings when the host finishes editing any of them. The server clamps them
+        // Sends all the settings when the host finishes editing any of them. The server clamps them
         // and echoes them back in the next LobbyState, which rewrites the fields (see ShowSettings).
         private void OnSettingsEdited()
         {
@@ -197,9 +201,11 @@ namespace Ricochet.Client.UI
                 PointsToWin = ParseOr(_pointsInput.text, settings.PointsToWin),
                 FirstTimerSeconds = ParseOr(_firstTimerInput.text, settings.FirstTimerSeconds),
                 ExtensionSeconds = ParseOr(_extensionInput.text, settings.ExtensionSeconds),
+                // Entered in minutes; 0 = no limit.
+                RoundLimitSeconds = ParseOr(_roundLimitInput.text, settings.RoundLimitSeconds / 60) * 60,
             };
             if (edited.PointsToWin == settings.PointsToWin && edited.FirstTimerSeconds == settings.FirstTimerSeconds
-                && edited.ExtensionSeconds == settings.ExtensionSeconds)
+                && edited.ExtensionSeconds == settings.ExtensionSeconds && edited.RoundLimitSeconds == settings.RoundLimitSeconds)
             {
                 ShowSettings(settings); // undo anything unparseable
                 return;
@@ -259,6 +265,9 @@ namespace Ricochet.Client.UI
 
         private void OnTimerUpdated(int round, float secondsRemaining) =>
             _match.OnTimerUpdated(round, secondsRemaining, Time.time);
+
+        private void OnRoundTimeLimit(int round, float secondsRemaining) =>
+            _match.OnRoundTimeLimit(round, secondsRemaining, Time.time);
 
         private void OnNewBest(int round, string player, int moves)
         {
@@ -345,6 +354,7 @@ namespace Ricochet.Client.UI
             if (!_pointsInput.isFocused) _pointsInput.text = settings.PointsToWin.ToString();
             if (!_firstTimerInput.isFocused) _firstTimerInput.text = settings.FirstTimerSeconds.ToString();
             if (!_extensionInput.isFocused) _extensionInput.text = settings.ExtensionSeconds.ToString();
+            if (!_roundLimitInput.isFocused) _roundLimitInput.text = (settings.RoundLimitSeconds / 60).ToString();
         }
 
         private string RoundText(MatchStage stage)
@@ -371,6 +381,8 @@ namespace Ricochet.Client.UI
             }
             else if (stage == MatchStage.RoundOver)
                 text.Append("Round over");
+            else if (_match.HasTimeLimit)
+                text.Append($"Time limit: {Clock(_match.TimeLimitLeft(now))} — the timer starts on the first solution");
             else if (!_match.TimerRunning)
                 text.Append("No solution yet — timer starts on the first one");
             else
@@ -382,6 +394,12 @@ namespace Ricochet.Client.UI
             if (_match.BestPlayer != null && stage == MatchStage.Solving)
                 text.Append($"\nBest: {_match.BestPlayer} ({_match.BestMoves} moves)");
             return text.ToString();
+        }
+
+        private static string Clock(float seconds)
+        {
+            int s = Mathf.CeilToInt(seconds);
+            return $"{s / 60}:{s % 60:00}";
         }
 
         private string DoneLabel()
@@ -415,7 +433,8 @@ namespace Ricochet.Client.UI
                     ? $"Waiting for {_match.Host} to start a new match."
                     : $"Waiting for {_match.Host} to start the match.");
                 text.Append($"Classic: first to {settings.PointsToWin} points, "
-                    + $"{settings.FirstTimerSeconds}s timer, +{settings.ExtensionSeconds}s for better solutions");
+                    + $"{settings.FirstTimerSeconds}s timer, +{settings.ExtensionSeconds}s for better solutions, "
+                    + (settings.RoundLimitSeconds > 0 ? $"{settings.RoundLimitSeconds / 60} min to find a first solution" : "no round limit"));
             }
             _matchText.text = text.ToString();
         }
