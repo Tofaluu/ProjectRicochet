@@ -877,6 +877,7 @@ namespace BackendServer.Services
                 Settings = lobby.Settings,
                 MatchRound = lobby.MatchRound,
                 MatchWinner = lobby.MatchWinner,
+                RoundOver = lobby.InRound && lobby.Phase == RoundPhase.Intermission,
                 Players = lobby.Players.Values
                     .OrderBy(p => p.JoinOrder)
                     .Select(p => new PlayerInfo

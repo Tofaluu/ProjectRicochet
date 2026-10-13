@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using SharedLogic;
 
-namespace Ricochet.Client.Scratchpad
+namespace Ricochet.Client.Game
 {
     /// <summary>One solution to replay from the round's start, e.g. "Bob's solution" or "Shortest possible".</summary>
     public sealed class ReplaySegment

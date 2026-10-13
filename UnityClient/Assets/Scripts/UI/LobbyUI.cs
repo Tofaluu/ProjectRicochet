@@ -1,6 +1,6 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
+using Ricochet.Client.Game;
 using Ricochet.Client.Network;
 using Ricochet.Client.Scratchpad;
 using SharedLogic;
@@ -14,7 +14,9 @@ namespace Ricochet.Client.UI
     /// <summary>
     /// Join panel (name, lobby code) and in-game panel: players, then either the match setup / results
     /// (host settings + Start) between matches, or the round (timer, best solution, Lock In) during one.
-    /// Glue between <see cref="NetworkManager"/> and the <see cref="ScratchpadController"/> board.
+    /// Feeds the <see cref="NetworkManager"/>'s messages into <see cref="MatchState"/> (which decides
+    /// what's going on), keeps the <see cref="ScratchpadController"/> board in step, and shows the state
+    /// with placeholder uGUI widgets.
     /// </summary>
     public class LobbyUI : MonoBehaviour
     {
@@ -54,28 +56,9 @@ namespace Ricochet.Client.UI
         private const string NamePrefKey = "Ricochet.PlayerName";
         private const string ServerPrefKey = "Ricochet.Server";
 
-        private int _round;
-        private bool _roundOver;
-        // Time.time when the next board is due (RoundCountdown), or -1.
-        private float _countdownEnd = -1f;
-        private float _timerEnd = -1f;
-        private float _timerExtendedUntil = -1f;
-        private string _bestPlayer;
-        private int _bestMoves;
-        // From the latest LobbyState: this player's vote/lead, and the vote among non-leaders.
-        private bool _iAmDone;
-        private bool _iAmLeading;
-        private int _doneCount;
-        private int _voterCount;
-        private HashSet<string> _playerNames = new HashSet<string>();
-        // From the latest LobbyState: the match.
-        private bool _hasState;
-        private MatchPhase _phase;
-        private string _host;
-        private bool _iAmHost;
-        private MatchSettings _settings;
-        private int _matchRound;
-        private string _matchWinner;
+        private readonly MatchState _match = new MatchState();
+
+        private BoardSession Board => _scratchpad.Session;
 
         private void Awake()
         {
@@ -150,6 +133,8 @@ namespace Ricochet.Client.UI
             _network.RequestFailed -= OnRequestFailed;
         }
 
+        // ---- Player actions ----
+
         private void OnJoinClicked() => Join(save: true);
 
         private void Join(bool save)
@@ -173,17 +158,8 @@ namespace Ricochet.Client.UI
         private void OnLockInClicked()
         {
             ClearButtonFocus();
-            int moveCount = _scratchpad.Moves.Count;
-            // Only strictly shorter solutions can take the lead; say so instead of sending a sure rejection.
-            if (_bestPlayer != null && moveCount >= _bestMoves)
-            {
-                _feedbackText.text = _bestPlayer == _network.PlayerName
-                    ? $"You already lead with {_bestMoves} moves."
-                    : $"Your {moveCount} moves don't beat {_bestPlayer}'s {_bestMoves}. Find a shorter one!";
-                return;
-            }
-            _network.SubmitSolution(_scratchpad.Moves.ToArray());
-            _feedbackText.text = $"Submitted {moveCount} moves...";
+            if (_match.TryLockIn(Board.Moves.Count))
+                _network.SubmitSolution(new List<Move>(Board.Moves).ToArray());
         }
 
         private void OnLeaveClicked()
@@ -196,58 +172,42 @@ namespace Ricochet.Client.UI
         {
             ClearButtonFocus();
             _network.StartMatch();
-            _feedbackText.text = "Starting...";
+            _match.OnStartRequested();
+        }
+
+        // Toggles this player's vote to end the round early (or skip the replay); the server acts once
+        // everyone has voted.
+        private void OnDoneClicked()
+        {
+            ClearButtonFocus();
+            _network.SetDone(_match.ToggleDone());
         }
 
         // Sends all three settings when the host finishes editing any of them. The server clamps them
         // and echoes them back in the next LobbyState, which rewrites the fields (see ShowSettings).
         private void OnSettingsEdited()
         {
-            if (!_iAmHost || _settings == null)
+            MatchSettings settings = _match.Settings;
+            if (!_match.IAmHost || settings == null)
                 return;
 
             var edited = new MatchSettings
             {
-                Mode = _settings.Mode,
-                PointsToWin = ParseOr(_pointsInput.text, _settings.PointsToWin),
-                FirstTimerSeconds = ParseOr(_firstTimerInput.text, _settings.FirstTimerSeconds),
-                ExtensionSeconds = ParseOr(_extensionInput.text, _settings.ExtensionSeconds),
+                Mode = settings.Mode,
+                PointsToWin = ParseOr(_pointsInput.text, settings.PointsToWin),
+                FirstTimerSeconds = ParseOr(_firstTimerInput.text, settings.FirstTimerSeconds),
+                ExtensionSeconds = ParseOr(_extensionInput.text, settings.ExtensionSeconds),
             };
-            if (edited.PointsToWin == _settings.PointsToWin && edited.FirstTimerSeconds == _settings.FirstTimerSeconds
-                && edited.ExtensionSeconds == _settings.ExtensionSeconds)
+            if (edited.PointsToWin == settings.PointsToWin && edited.FirstTimerSeconds == settings.FirstTimerSeconds
+                && edited.ExtensionSeconds == settings.ExtensionSeconds)
             {
-                ShowSettings(_settings); // undo anything unparseable
+                ShowSettings(settings); // undo anything unparseable
                 return;
             }
             _network.UpdateSettings(edited);
         }
 
         private static int ParseOr(string text, int fallback) => int.TryParse(text, out int value) ? value : fallback;
-
-        private void ShowSettings(MatchSettings settings)
-        {
-            // Don't overwrite a field the host is typing in.
-            if (!_pointsInput.isFocused) _pointsInput.text = settings.PointsToWin.ToString();
-            if (!_firstTimerInput.isFocused) _firstTimerInput.text = settings.FirstTimerSeconds.ToString();
-            if (!_extensionInput.isFocused) _extensionInput.text = settings.ExtensionSeconds.ToString();
-        }
-
-        private void OnRequestFailed(string message)
-        {
-            // A request cut off by the dropped connection; the reconnect message says more.
-            if (_network.IsReconnecting)
-                return;
-            _feedbackText.text = message;
-        }
-
-        // Toggles this player's vote to end the round early; the server ends it once everyone has voted.
-        private void OnDoneClicked()
-        {
-            ClearButtonFocus();
-            // Flip locally for instant feedback; the next LobbyState confirms it.
-            _iAmDone = !_iAmDone;
-            _network.SetDone(_iAmDone);
-        }
 
         // A clicked button stays selected, and the UI treats Enter as "press the selected button".
         // Deselect so Enter only ever means Lock In (see Update), never a second click.
@@ -257,294 +217,205 @@ namespace Ricochet.Client.UI
                 EventSystem.current.SetSelectedGameObject(null);
         }
 
+        // ---- Server messages: update the state, keep the board in step ----
+
         private void OnStatusChanged(string status)
         {
             _statusText.text = status;
-            // Still in the lobby while reconnecting (the server keeps the seat): just say what's happening.
-            if (_network.IsInLobby && _gamePanel.activeSelf && (_network.IsReconnecting || status == "Reconnected"))
-                _feedbackText.text = _network.IsReconnecting ? status : "Reconnected!";
             // Left the lobby or lost the connection: back to the join screen with an offline practice board.
-            if (!_network.IsInLobby && _gamePanel.activeSelf)
-            {
-                _hasState = false;
-                _round = 0;
-                _joinPanel.SetActive(true);
-                _gamePanel.SetActive(false);
+            if (_match.OnConnectionStatus(status, _network.IsInLobby, _network.IsReconnecting))
                 _scratchpad.PlayOffline();
-            }
         }
 
         private void OnLobbyState(LobbyState state)
         {
-            _joinPanel.SetActive(false);
-            _gamePanel.SetActive(true);
-            _lobbyText.text = "Lobby " + state.Code;
-
-            MatchPhase previous = _phase;
-            bool firstState = !_hasState;
-            _hasState = true;
-            _phase = state.Phase;
-            _host = state.Host;
-            _iAmHost = state.Host == _network.PlayerName;
-            _settings = state.Settings;
-            _matchRound = state.MatchRound;
-            _matchWinner = state.MatchWinner;
+            LobbyChange change = _match.OnLobbyState(state, _network.PlayerName);
             ShowSettings(state.Settings);
-
-            _playersHeader.text = _phase == MatchPhase.Finished
-                ? "Final standings"
-                : $"Players — first to {state.Settings.PointsToWin} wins";
-            var players = new StringBuilder();
-            // Stable sort: ties stay in join order.
-            foreach (PlayerInfo player in state.Players.OrderByDescending(p => p.Score))
-                players.AppendLine($"{player.Name}  —  {player.Score}"
-                    + (player.Name == state.Host ? "  (host)" : "")
-                    + (!player.Connected ? "   (reconnecting...)"
-                        : player.Leading ? "   (best)" : player.Done ? "   (done)" : ""));
-            _playersText.text = players.ToString();
-
-            if (_phase != MatchPhase.Playing && (firstState || previous == MatchPhase.Playing))
-                EnterBetweenMatches();
-            else if (_phase == MatchPhase.Playing && !firstState && previous != MatchPhase.Playing)
+            switch (change)
             {
-                // The host pressed Start; the first board follows shortly.
-                _round = 0;
-                _feedbackText.text = "Match started! Get ready...";
+                case LobbyChange.BetweenMatches:
+                    // Free practice until the next Start (keeps a practice board the player is on).
+                    if (!Board.IsPractice)
+                        _scratchpad.PlayOffline();
+                    break;
+                case LobbyChange.RoundOver:
+                    _scratchpad.EndRound();
+                    break;
             }
-
-            PlayerInfo me = state.Players.FirstOrDefault(p => p.Name == _network.PlayerName);
-            _iAmDone = me != null && me.Done;
-            _iAmLeading = me != null && me.Leading;
-            PlayerInfo[] voters = state.Players.Where(p => !p.Leading && p.Connected).ToArray();
-            _doneCount = voters.Count(p => p.Done);
-            _voterCount = voters.Length;
-            _playerNames = new HashSet<string>(state.Players.Select(p => p.Name));
-        }
-
-        // Lobby just joined, or the match just ended: free practice on a local board until the next Start.
-        private void EnterBetweenMatches()
-        {
-            _round = 0;
-            _roundOver = false;
-            _timerEnd = -1f;
-            _countdownEnd = -1f;
-            _bestPlayer = null;
-            _iAmDone = false;
-            _iAmLeading = false;
-            _scratchpad.HideCountdown();
-            if (!_scratchpad.AllowNewBoard)
-                _scratchpad.PlayOffline();
-
-            // The match text above says who won.
-            _feedbackText.text = _phase == MatchPhase.Finished
-                ? "Practice on your own board until the next match."
-                : "Practice on your own board while you wait.";
         }
 
         // The next board is dealt in a few seconds: after Start, or after the previous round's replays.
         private void OnRoundCountdown(float seconds)
         {
-            _countdownEnd = Time.time + seconds;
-            _scratchpad.ShowCountdown(seconds, $"Round {_matchRound + 1} starts in");
+            _match.OnCountdown(seconds, Time.time);
+            _scratchpad.ShowCountdown(seconds, $"Round {_match.MatchRound + 1} starts in");
         }
 
         private void OnRoundStarted(int round, RoundSetup setup)
         {
-            _round = round;
-            _roundOver = false;
-            _timerEnd = -1f;
-            _countdownEnd = -1f;
-            _bestPlayer = null;
-            _iAmDone = false;
-            _iAmLeading = false;
-            _feedbackText.text = "Find the shortest solution, then Lock In!";
-            _scratchpad.AllowNewBoard = false;
+            _match.OnRoundStarted(round);
             _scratchpad.LoadRound(setup);
         }
 
-        private void OnTimerUpdated(int round, float secondsRemaining)
-        {
-            if (round != _round)
-                return;
-            // A later update means a better solution bought everyone more time.
-            if (_timerEnd >= 0f)
-                _timerExtendedUntil = Time.time + 2f;
-            _timerEnd = Time.time + secondsRemaining;
-        }
+        private void OnTimerUpdated(int round, float secondsRemaining) =>
+            _match.OnTimerUpdated(round, secondsRemaining, Time.time);
 
         private void OnNewBest(int round, string player, int moves)
         {
-            if (round != _round)
-                return;
-            _bestPlayer = player;
-            _bestMoves = moves;
-            if (player == _network.PlayerName)
-            {
-                _feedbackText.text = $"Accepted! You lead with {moves} moves.";
-                return;
-            }
-
-            // Someone beat (or matched) the solution still sitting on this board: put the robots back so
-            // the player can go for a shorter one. Boards mid-attempt, or holding an even shorter
-            // solution, are left alone.
-            if (_scratchpad.IsSolved && !_scratchpad.IsReplaying && _scratchpad.Moves.Count >= moves)
-            {
+            int onBoard = Board.IsSolved && !Board.IsReplaying ? Board.Moves.Count : -1;
+            if (_match.OnNewBest(round, player, moves, onBoard))
                 _scratchpad.ResetToStart();
-                _feedbackText.text = $"{player} found {moves} moves — your board was reset, try to beat it!";
-            }
         }
 
-        private void OnRejected(string reason)
-        {
-            _feedbackText.text = "Rejected: " + reason;
-        }
+        private void OnRejected(string reason) => _match.OnRejected(reason);
 
-        // Replays the winner's solution, then the shortest one if it's shorter (or only the shortest when
-        // nobody solved it). The server waits for these before dealing the next board.
+        private void OnRequestFailed(string message) => _match.OnRequestFailed(message, _network.IsReconnecting);
+
+        // The server waits for these replays before dealing the next board.
         private void OnRoundEnded(RoundResult result, Move[] winnerMoves, Move[] shortest)
         {
-            if (result.RoundNumber != _round)
+            IReadOnlyList<ReplaySegment> replays = _match.OnRoundEnded(result, winnerMoves, shortest);
+            if (replays == null)
                 return;
-            _roundOver = true;
-            _timerEnd = -1f;
-
-            string winner = result.WinnerName;
-            var replays = new List<ReplaySegment>();
-            if (winnerMoves.Length > 0)
-            {
-                bool wasShortest = shortest != null && winnerMoves.Length <= shortest.Length;
-                // The best solver only scores if they're still here.
-                if (!_playerNames.Contains(winner))
-                    _feedbackText.text = $"{winner} had the best solution ({winnerMoves.Length} moves) but left, so no point this round.";
-                else if (wasShortest)
-                    _feedbackText.text = $"{winner} found the shortest possible solution! ({winnerMoves.Length} moves)";
-                else if (shortest != null)
-                    _feedbackText.text = $"{winner} wins with {winnerMoves.Length} moves. Shortest possible: {shortest.Length}.";
-                else
-                    _feedbackText.text = $"{winner} wins the round with {winnerMoves.Length} moves!";
-
-                string whose = winner == _network.PlayerName ? "Your solution" : $"{winner}'s solution";
-                replays.Add(new ReplaySegment(whose, winnerMoves, (float)result.ReplayStepSeconds));
-                if (shortest != null && !wasShortest)
-                    replays.Add(new ReplaySegment("Shortest possible", shortest, (float)result.ShortestReplayStepSeconds, isShortest: true));
-            }
-            else if (shortest != null)
-            {
-                _feedbackText.text = $"Board skipped. Here's how it could be done in {shortest.Length} moves:";
-                replays.Add(new ReplaySegment("Shortest possible", shortest, (float)result.ShortestReplayStepSeconds, isShortest: true));
-            }
-            else
-            {
-                _feedbackText.text = "Board skipped. Next board soon...";
-            }
-
-            string matchWinner = result.MatchWinnerName;
-            if (matchWinner != null)
-                _feedbackText.text += matchWinner == _network.PlayerName
-                    ? "\nThat's the match — you win!"
-                    : $"\nThat's the match — {matchWinner} wins!";
-
             if (replays.Count > 0)
                 _scratchpad.PlayReplays(replays, (float)result.ReplayPauseSeconds);
+            else
+                _scratchpad.EndRound();
         }
+
+        // ---- Showing the state ----
 
         private void Update()
         {
-            if (!_gamePanel.activeSelf)
+            _joinPanel.SetActive(!_match.InLobby);
+            _gamePanel.SetActive(_match.InLobby);
+            if (!_match.InLobby)
                 return;
 
+            _feedbackText.text = _match.Feedback;
+            _lobbyText.text = "Lobby " + _match.LobbyCode;
+            ShowPlayers();
+
             // Between matches: setup / results (settings + Start for the host). During one: the round.
-            bool playing = _phase == MatchPhase.Playing;
-            bool hasBoard = playing && _round > 0;
-            bool countingDown = playing && _countdownEnd >= 0f;
+            MatchStage stage = _match.Stage;
+            bool playing = stage != MatchStage.BetweenMatches;
             _matchText.gameObject.SetActive(!playing);
-            _settingsGroup.SetActive(!playing && _iAmHost);
-            _startButton.gameObject.SetActive(!playing && _iAmHost);
+            _settingsGroup.SetActive(!playing && _match.IAmHost);
+            _startButton.gameObject.SetActive(!playing && _match.IAmHost);
             _roundText.gameObject.SetActive(playing);
             _lockInButton.gameObject.SetActive(playing);
-            // The leader (or, after the round, the winner) isn't part of the vote, so they don't get the
-            // button. During a round it ends the round early; after it, it skips the replay.
-            // Nothing left to skip during the countdown.
-            _doneButton.gameObject.SetActive(hasBoard && !_iAmLeading && !countingDown);
+            _doneButton.gameObject.SetActive(_match.DoneAction != DoneAction.None);
 
             if (!playing)
             {
-                UpdateMatchText();
+                ShowMatchText();
                 return;
             }
-            if (countingDown || !hasBoard)
-            {
-                float left = _countdownEnd - Time.time;
-                _roundText.text = !countingDown ? "Dealing the first board..."
-                    : left > 0f ? $"Round {_matchRound + 1} starts in {Mathf.CeilToInt(left)}..."
-                    : $"Round {_matchRound + 1} — dealing...";
-                _lockInButton.interactable = false;
-                _lockInLabel.text = "Lock In";
-                return;
-            }
+            _roundText.text = RoundText(stage);
+            _doneLabel.text = DoneLabel();
 
-            var text = new StringBuilder($"Round {_matchRound}\n");
-            ReplaySegment replay = _scratchpad.CurrentReplay;
-            if (_roundOver && _scratchpad.IsReplaying && replay != null)
-            {
-                int step = _scratchpad.ReplayStep;
-                IReadOnlyList<Move> moves = replay.Moves;
-                text.Append(step == 0 ? $"{replay.Label}:"
-                    : $"{replay.Label} — step {step}/{moves.Count}: {moves[step - 1].Robot} {moves[step - 1].Direction}");
-            }
-            else if (_roundOver)
-                text.Append("Round over");
-            else if (_timerEnd < 0f)
-                text.Append("No solution yet — timer starts on the first one");
-            else
-            {
-                text.Append($"Time left: {Mathf.Max(0f, _timerEnd - Time.time):0}s");
-                if (Time.time < _timerExtendedUntil)
-                    text.Append("  (+time!)");
-            }
-            if (_bestPlayer != null && !_roundOver)
-                text.Append($"\nBest: {_bestPlayer} ({_bestMoves} moves)");
-            _roundText.text = text.ToString();
-
-            int moveCount = _scratchpad.Moves.Count;
-            // Enabled for any solution; OnLockInClicked explains when it doesn't beat the best.
-            _lockInButton.interactable = !_roundOver && _scratchpad.IsSolved;
-            _lockInLabel.text = _scratchpad.IsSolved ? $"Lock In ({moveCount} moves) [Enter]" : "Lock In";
-
+            // Enabled for any solution; MatchState.TryLockIn explains when it doesn't beat the best.
+            _lockInButton.interactable = _match.CanLockIn(Board.IsSolved);
+            _lockInLabel.text = _lockInButton.interactable ? $"Lock In ({Board.Moves.Count} moves) [Enter]" : "Lock In";
             Keyboard keyboard = Keyboard.current;
             if (_lockInButton.interactable && keyboard != null
                 && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame))
                 OnLockInClicked();
-
-            if (_iAmDone)
-                _doneLabel.text = $"Waiting for others ({_doneCount}/{_voterCount}) — undo";
-            else if (_roundOver)
-                _doneLabel.text = "Skip replay";
-            else
-                _doneLabel.text = _timerEnd < 0f ? "Skip board" : "I'm done";
         }
 
-        private void UpdateMatchText()
+        private void ShowPlayers()
         {
-            if (_settings == null)
-                return;
-            var text = new StringBuilder();
-            if (_phase == MatchPhase.Finished)
-                text.AppendLine(_matchWinner == _network.PlayerName ? "You win the match!" : $"{_matchWinner} wins the match!");
-            if (_iAmHost)
+            _playersHeader.text = _match.Phase == MatchPhase.Finished
+                ? "Final standings"
+                : $"Players — first to {_match.Settings.PointsToWin} wins";
+            var players = new StringBuilder();
+            foreach (PlayerInfo player in _match.Standings)
+                players.AppendLine($"{player.Name}  —  {player.Score}"
+                    + (player.Name == _match.Host ? "  (host)" : "")
+                    + (!player.Connected ? "   (reconnecting...)"
+                        : player.Leading ? "   (best)" : player.Done ? "   (done)" : ""));
+            _playersText.text = players.ToString();
+        }
+
+        // From each LobbyState (not every frame, so a field the host just left keeps the new value
+        // until the server echoes it back).
+        private void ShowSettings(MatchSettings settings)
+        {
+            // Don't overwrite a field the host is typing in.
+            if (!_pointsInput.isFocused) _pointsInput.text = settings.PointsToWin.ToString();
+            if (!_firstTimerInput.isFocused) _firstTimerInput.text = settings.FirstTimerSeconds.ToString();
+            if (!_extensionInput.isFocused) _extensionInput.text = settings.ExtensionSeconds.ToString();
+        }
+
+        private string RoundText(MatchStage stage)
+        {
+            float now = Time.time;
+            int next = _match.MatchRound + 1;
+            switch (stage)
             {
-                text.Append(_phase == MatchPhase.Finished
+                case MatchStage.Dealing:
+                    return "Dealing the first board...";
+                case MatchStage.Countdown:
+                    float left = _match.CountdownLeft(now);
+                    return left > 0f ? $"Round {next} starts in {Mathf.CeilToInt(left)}..." : $"Round {next} — dealing...";
+            }
+
+            var text = new StringBuilder($"Round {_match.MatchRound}\n");
+            ReplaySegment replay = Board.CurrentReplay;
+            if (stage == MatchStage.RoundOver && replay != null)
+            {
+                int step = Board.ReplayStep;
+                IReadOnlyList<Move> moves = replay.Moves;
+                text.Append(step == 0 ? $"{replay.Label}:"
+                    : $"{replay.Label} — step {step}/{moves.Count}: {moves[step - 1].Robot} {moves[step - 1].Direction}");
+            }
+            else if (stage == MatchStage.RoundOver)
+                text.Append("Round over");
+            else if (!_match.TimerRunning)
+                text.Append("No solution yet — timer starts on the first one");
+            else
+            {
+                text.Append($"Time left: {_match.TimeLeft(now):0}s");
+                if (_match.TimeJustAdded(now))
+                    text.Append("  (+time!)");
+            }
+            if (_match.BestPlayer != null && stage == MatchStage.Solving)
+                text.Append($"\nBest: {_match.BestPlayer} ({_match.BestMoves} moves)");
+            return text.ToString();
+        }
+
+        private string DoneLabel()
+        {
+            if (_match.IAmDone)
+                return $"Waiting for others ({_match.DoneCount}/{_match.VoterCount}) — undo";
+            switch (_match.DoneAction)
+            {
+                case DoneAction.SkipReplay: return "Skip replay";
+                case DoneAction.ImDone: return "I'm done";
+                default: return "Skip board";
+            }
+        }
+
+        private void ShowMatchText()
+        {
+            MatchSettings settings = _match.Settings;
+            var text = new StringBuilder();
+            if (_match.Phase == MatchPhase.Finished)
+                text.AppendLine(_match.MatchWinner == _match.MyName ? "You win the match!" : $"{_match.MatchWinner} wins the match!");
+            if (_match.IAmHost)
+            {
+                text.Append(_match.Phase == MatchPhase.Finished
                     ? "Change the settings or play again."
                     : "You're the host: pick the settings, then Start when everyone's in.");
-                _startLabel.text = _phase == MatchPhase.Finished ? "Play again" : "Start match";
+                _startLabel.text = _match.Phase == MatchPhase.Finished ? "Play again" : "Start match";
             }
             else
             {
-                text.AppendLine(_phase == MatchPhase.Finished
-                    ? $"Waiting for {_host} to start a new match."
-                    : $"Waiting for {_host} to start the match.");
-                text.Append($"Classic: first to {_settings.PointsToWin} points, "
-                    + $"{_settings.FirstTimerSeconds}s timer, +{_settings.ExtensionSeconds}s for better solutions");
+                text.AppendLine(_match.Phase == MatchPhase.Finished
+                    ? $"Waiting for {_match.Host} to start a new match."
+                    : $"Waiting for {_match.Host} to start the match.");
+                text.Append($"Classic: first to {settings.PointsToWin} points, "
+                    + $"{settings.FirstTimerSeconds}s timer, +{settings.ExtensionSeconds}s for better solutions");
             }
             _matchText.text = text.ToString();
         }

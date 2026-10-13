@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using Ricochet.Client.Game;
+using Ricochet.Client.Theme;
 using SharedLogic;
 using UnityEngine;
 
@@ -23,9 +25,7 @@ namespace Ricochet.Client.Board
 
         [Tooltip("Cells per second. 50 crosses the whole board in about 0.3 s.")]
         [SerializeField] private float _slideSpeed = 50f;
-        [SerializeField] private Color _tileColorA = new Color(0.86f, 0.84f, 0.80f);
-        [SerializeField] private Color _tileColorB = new Color(0.82f, 0.80f, 0.76f);
-        [SerializeField] private Color _wallColor = new Color(0.15f, 0.15f, 0.18f);
+        [SerializeField] private GameTheme _theme;
 
         private readonly Dictionary<RobotColor, Transform> _robots = new Dictionary<RobotColor, Transform>();
         private readonly Dictionary<RobotColor, Vector3> _robotDestinations = new Dictionary<RobotColor, Vector3>();
@@ -39,19 +39,7 @@ namespace Ricochet.Client.Board
 
         public static GridPos WorldToCell(Vector3 world) => new GridPos(Mathf.FloorToInt(world.x), Mathf.FloorToInt(world.y));
 
-        public static Color ColorOf(RobotColor robot)
-        {
-            switch (robot)
-            {
-                case RobotColor.Red: return new Color(0.86f, 0.20f, 0.20f);
-                case RobotColor.Blue: return new Color(0.20f, 0.40f, 0.90f);
-                case RobotColor.Green: return new Color(0.15f, 0.65f, 0.30f);
-                default: return new Color(0.95f, 0.75f, 0.10f);
-            }
-        }
-
-        public static Color ColorOf(Target target) =>
-            target.Robot.HasValue ? ColorOf(target.Robot.Value) : new Color(0.60f, 0.30f, 0.80f);
+        private GameTheme Colors => GameTheme.OrDefault(_theme);
 
         public void Build(RoundSetup round, RobotPositions robots)
         {
@@ -63,7 +51,7 @@ namespace Ricochet.Client.Board
             _robotDestinations.Clear();
 
             GridState grid = round.Grid;
-            Color activeColor = ColorOf(round.Target);
+            Color activeColor = Colors.TargetColor(round.Target);
 
             for (int x = 0; x < grid.Width; x++)
             {
@@ -72,7 +60,7 @@ namespace Ricochet.Client.Board
                     var pos = new GridPos(x, y);
                     // Fully walled-in cells are the centre block; it shows the active target's colour.
                     Color tile = grid.IsEnclosed(pos) ? Color.Lerp(activeColor, Color.black, 0.3f)
-                        : (x + y) % 2 == 0 ? _tileColorA : _tileColorB;
+                        : (x + y) % 2 == 0 ? Colors.TileA : Colors.TileB;
                     CreateSprite("Tile", PlaceholderSprites.Square, tile, CellCenter(pos), Vector2.one, TileOrder);
 
                     Walls walls = grid.GetWalls(pos);
@@ -92,7 +80,7 @@ namespace Ricochet.Client.Board
             {
                 Target target = grid.Targets[i];
                 bool active = i == round.TargetIndex;
-                Color color = ColorOf(target);
+                Color color = Colors.TargetColor(target);
                 if (!active)
                     color.a = 0.45f;
                 float size = active ? 0.6f : 0.4f;
@@ -101,12 +89,12 @@ namespace Ricochet.Client.Board
                 marker.transform.localRotation = Quaternion.Euler(0, 0, 45);
             }
 
-            _selectionRing = CreateSprite("Selection", PlaceholderSprites.Circle, Color.white,
+            _selectionRing = CreateSprite("Selection", PlaceholderSprites.Circle, Colors.Selection,
                 Vector3.zero, new Vector2(0.95f, 0.95f), SelectionOrder).transform;
 
             foreach (RobotColor color in new[] { RobotColor.Red, RobotColor.Blue, RobotColor.Green, RobotColor.Yellow })
             {
-                SpriteRenderer robot = CreateSprite(color + " Robot", PlaceholderSprites.Circle, ColorOf(color),
+                SpriteRenderer robot = CreateSprite(color + " Robot", PlaceholderSprites.Circle, Colors.RobotColor(color),
                     CellCenter(robots[color]), new Vector2(0.75f, 0.75f), RobotOrder);
                 _robots[color] = robot.transform;
             }
@@ -156,20 +144,20 @@ namespace Ricochet.Client.Board
         private void CreateWall(Vector3 center, bool horizontal)
         {
             Vector2 size = horizontal ? new Vector2(1f + WallThickness, WallThickness) : new Vector2(WallThickness, 1f + WallThickness);
-            CreateSprite("Wall", PlaceholderSprites.Square, _wallColor, center, size, WallOrder);
+            CreateSprite("Wall", PlaceholderSprites.Square, Colors.Wall, center, size, WallOrder);
         }
 
         private void CreateBorder(int width, int height)
         {
             float t = WallThickness;
-            CreateSprite("Border", PlaceholderSprites.Square, _wallColor, new Vector3(width / 2f, 0f), new Vector2(width + t, t), WallOrder);
-            CreateSprite("Border", PlaceholderSprites.Square, _wallColor, new Vector3(width / 2f, height), new Vector2(width + t, t), WallOrder);
-            CreateSprite("Border", PlaceholderSprites.Square, _wallColor, new Vector3(0f, height / 2f), new Vector2(t, height + t), WallOrder);
-            CreateSprite("Border", PlaceholderSprites.Square, _wallColor, new Vector3(width, height / 2f), new Vector2(t, height + t), WallOrder);
+            CreateSprite("Border", PlaceholderSprites.Square, Colors.Wall, new Vector3(width / 2f, 0f), new Vector2(width + t, t), WallOrder);
+            CreateSprite("Border", PlaceholderSprites.Square, Colors.Wall, new Vector3(width / 2f, height), new Vector2(width + t, t), WallOrder);
+            CreateSprite("Border", PlaceholderSprites.Square, Colors.Wall, new Vector3(0f, height / 2f), new Vector2(t, height + t), WallOrder);
+            CreateSprite("Border", PlaceholderSprites.Square, Colors.Wall, new Vector3(width, height / 2f), new Vector2(t, height + t), WallOrder);
         }
 
         // A thick band just outside the border whose colour says what the board is showing
-        // (the player's own attempt, a player's replay, the shortest solution); see SetFrameColor.
+        // (the player's own attempt, a player's replay, the shortest solution); see ShowMode.
         private void CreateFrame(int width, int height)
         {
             _frame.Clear();
@@ -182,8 +170,12 @@ namespace Ricochet.Client.Board
             _frame.Add(CreateSprite("Frame", PlaceholderSprites.Square, _frameColor, new Vector3(width + outer, height / 2f), new Vector2(f, height + t), WallOrder));
         }
 
-        public void SetFrameColor(Color color)
+        /// <summary>Colours the frame for what the board is showing (see <see cref="BoardMode"/>).</summary>
+        public void ShowMode(BoardMode mode)
         {
+            Color color = Colors.FrameColor(mode);
+            if (color == _frameColor)
+                return;
             _frameColor = color;
             foreach (SpriteRenderer part in _frame)
                 part.color = color;
