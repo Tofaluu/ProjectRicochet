@@ -41,6 +41,9 @@ namespace BackendServer.Services
         /// <summary>Pause on the starting position before each replay.</summary>
         public double ReplayPauseSeconds { get; set; } = 1;
 
+        /// <summary>Pause on the replay's final position before the next countdown (not after a skipped replay).</summary>
+        public double AfterReplaySeconds { get; set; } = 1;
+
         /// <summary>
         /// How long a disconnected player's seat (score, host role, place in line) is kept for them to
         /// reconnect. Leaving on purpose frees it at once.
@@ -803,7 +806,7 @@ namespace BackendServer.Services
 
             try
             {
-                await Task.Delay(ReplayDuration(result), _time, skip.Token);
+                await Task.Delay(ReplayDuration(result) + TimeSpan.FromSeconds(_options.AfterReplaySeconds), _time, skip.Token);
             }
             catch (OperationCanceledException)
             {
