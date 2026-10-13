@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSignalR();
 builder.Services.Configure<GameOptions>(builder.Configuration.GetSection("Game"));
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LobbyManager>();
 
 // Only browser clients (e.g. a future WebGL build) need CORS; the Unity desktop client doesn't.

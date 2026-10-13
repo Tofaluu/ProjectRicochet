@@ -18,13 +18,13 @@ namespace BackendServer.Hubs
         }
 
         [HubMethodName(HubMethods.JoinLobby)]
-        public Task<string> JoinLobby(string playerName, string lobbyCode, int protocolVersion)
+        public Task<string> JoinLobby(string playerName, string lobbyCode, int protocolVersion, string playerId)
         {
             if (protocolVersion < HubMethods.ProtocolVersion)
                 throw new HubException("Your game is out of date. Please download the latest version.");
             if (protocolVersion > HubMethods.ProtocolVersion)
                 throw new HubException("The server is running an older version than your game. Ask the host to update it.");
-            return _lobbies.JoinAsync(Context.ConnectionId, playerName, lobbyCode);
+            return _lobbies.JoinAsync(Context.ConnectionId, playerName, lobbyCode, playerId);
         }
 
         [HubMethodName(HubMethods.LeaveLobby)]
@@ -47,7 +47,8 @@ namespace BackendServer.Hubs
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            await _lobbies.LeaveAsync(Context.ConnectionId);
+            // Unlike LeaveLobby, the seat is kept for a while in case they reconnect.
+            await _lobbies.DisconnectAsync(Context.ConnectionId);
             await base.OnDisconnectedAsync(exception);
         }
     }
