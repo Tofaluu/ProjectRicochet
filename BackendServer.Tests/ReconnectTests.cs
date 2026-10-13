@@ -39,6 +39,27 @@ public class ReconnectTests
     }
 
     [Fact]
+    public async Task RejoiningDuringTheReplays_IsToldTheRoundIsOver()
+    {
+        var h = new LobbyHarness();
+        TestClient alice = await h.JoinAsync("Alice");
+        TestClient bob = await h.JoinAsync("Bob");
+        await h.StartMatchAsync(alice);
+        Assert.False(bob.State.RoundOver);
+        await alice.SubmitShortestAsync();
+        await LobbyHarness.Until(() => bob.Count(HubMethods.RoundEnded) == 1, "the round to end");
+        Assert.True(bob.State.RoundOver);
+
+        await h.DropAsync(bob);
+        TestClient back = await h.RejoinAsync(bob);
+        Assert.Equal(alice.BoardBytes, back.BoardBytes); // the old board...
+        Assert.True(back.State.RoundOver); // ...which can't be solved any more
+
+        await h.AdvanceUntil(() => back.Count(HubMethods.RoundStarted) == 2, "the next board");
+        Assert.False(back.State.RoundOver);
+    }
+
+    [Fact]
     public async Task RejoiningWithTheSameName_AfterARestart_ReclaimsTheSeat()
     {
         var h = new LobbyHarness();

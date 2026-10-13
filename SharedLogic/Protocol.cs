@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 5;
+        public const int ProtocolVersion = 6;
 
         // Client -> server
 
@@ -201,5 +201,11 @@ namespace SharedLogic
 
         /// <summary>Set while <see cref="Phase"/> is <see cref="MatchPhase.Finished"/>.</summary>
         public string MatchWinner { get; set; }
+
+        /// <summary>
+        /// True from <see cref="HubMethods.RoundEnded"/> until the next board (replays, then the countdown):
+        /// the current board can't be solved any more. Tells a player who (re)joins then.
+        /// </summary>
+        public bool RoundOver { get; set; }
     }
 }
