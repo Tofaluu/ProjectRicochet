@@ -26,11 +26,11 @@ namespace Ricochet.Client.Board
             Mathf.Sin(2f * Mathf.PI * 1250f * t) * Mathf.Exp(-t * 70f) * 0.5f));
 
         /// <summary>Solving it yourself: a soft, short three-note rise.</summary>
-        public static AudioClip Success => _success != null ? _success : (_success = Create("Success", 0.5f, t =>
+        public static AudioClip Success => _success != null ? _success : (_success = Create("Success", 1.1f, t =>
             Notes(t, 0.06f, 7f, 523.25f, 659.25f, 783.99f) * 0.22f));
 
         /// <summary>An opponent locked in a new best: a gentle two-note "ding-dong", distinct from Success.</summary>
-        public static AudioClip OpponentSolved => _opponent != null ? _opponent : (_opponent = Create("OpponentSolved", 0.7f, t =>
+        public static AudioClip OpponentSolved => _opponent != null ? _opponent : (_opponent = Create("OpponentSolved", 1.3f, t =>
             Notes(t, 0.16f, 5f, 880f, 659.25f) * 0.24f));
 
         // Sine notes starting <paramref name="gap"/> apart, each fading out at <paramref name="decay"/>.
@@ -54,8 +54,10 @@ namespace Ricochet.Client.Board
             for (int i = 0; i < count; i++)
             {
                 float t = i / (float)Rate;
-                // A few-millisecond fade at both ends so clips never pop.
-                float fade = Mathf.Clamp01(t / 0.003f) * Mathf.Clamp01((seconds - t) / 0.01f);
+                // A tiny fade-in so clips never pop, and a smooth fade over the last fifth so tails die out
+                // gently instead of being cut.
+                float fadeOut = Mathf.Clamp01((seconds - t) / (seconds * 0.2f));
+                float fade = Mathf.Clamp01(t / 0.003f) * fadeOut * fadeOut;
                 data[i] = Mathf.Clamp(sample(t) * fade, -1f, 1f);
             }
             AudioClip clip = AudioClip.Create(name, count, 1, Rate, false);
