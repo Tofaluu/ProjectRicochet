@@ -17,6 +17,7 @@ namespace Ricochet.Client.Board
     {
         private const int CardRadius = 14;
         private const float CardWidth = 340f;
+        private const float HeaderHeight = 22f;
 
         [SerializeField] private GameTheme _theme;
 
@@ -75,7 +76,7 @@ namespace Ricochet.Client.Board
                 normal = { textColor = Colors.PanelText },
             };
             _bodyStyle = new GUIStyle(_goalStyle) { font = Colors.Font, fontSize = 16 };
-            _headerStyle = new GUIStyle(_goalStyle) { fontSize = 13, normal = { textColor = Colors.MutedText } };
+            _headerStyle = new GUIStyle(_goalStyle) { fontSize = 13, clipping = TextClipping.Overflow, normal = { textColor = Colors.MutedText } };
             _keyStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter, font = Colors.BoldFont, fontSize = 13, wordWrap = false,
@@ -180,7 +181,7 @@ namespace Ricochet.Client.Board
 
             float goalHeight = Mathf.Max(28f, _goalStyle.CalcHeight(new GUIContent(goal), inner - 36f));
             float statusHeight = _bodyStyle.CalcHeight(new GUIContent(status), inner);
-            float height = pad + 18f + goalHeight + 6f + statusHeight + 14f + 22f + controls.Count * rowHeight + pad - 4f;
+            float height = pad + HeaderHeight + goalHeight + 6f + statusHeight + 14f + HeaderHeight + 4f + controls.Count * rowHeight + pad - 4f;
 
             var card = new Rect(16f, 16f, CardWidth, height);
             Color previous = GUI.backgroundColor;
@@ -188,8 +189,8 @@ namespace Ricochet.Client.Board
             GUI.Box(card, GUIContent.none, _cardStyle);
 
             float x = card.x + pad, y = card.y + pad;
-            GUI.Label(new Rect(x, y, inner, 18f), "GOAL", _headerStyle);
-            y += 18f;
+            GUI.Label(new Rect(x, y, inner, HeaderHeight), "GOAL", _headerStyle);
+            y += HeaderHeight;
             // The target's symbol in its colour, as on the board.
             Color previousColor = GUI.color;
             GUI.color = Tint(targetColor);
@@ -200,8 +201,8 @@ namespace Ricochet.Client.Board
             GUI.Label(new Rect(x, y, inner, statusHeight), status, _bodyStyle);
             y += statusHeight + 14f;
 
-            GUI.Label(new Rect(x, y, inner, 18f), "CONTROLS", _headerStyle);
-            y += 22f;
+            GUI.Label(new Rect(x, y, inner, HeaderHeight), "CONTROLS", _headerStyle);
+            y += HeaderHeight + 4f;
             Color body = _bodyStyle.normal.textColor;
             _bodyStyle.normal.textColor = Colors.MutedText;
             GUI.backgroundColor = Tint(Colors.Input);
