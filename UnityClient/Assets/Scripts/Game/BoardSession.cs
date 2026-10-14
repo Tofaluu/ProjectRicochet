@@ -31,6 +31,8 @@ namespace Ricochet.Client.Game
         private readonly List<RobotPositions> _history = new List<RobotPositions>();
         private float _countdownEnd = -1f;
         private bool _roundOver;
+        // A finished unlocked replay still on the board (see FinishReplays).
+        private bool _replayHeld;
 
         public RoundSetup Round { get; private set; }
         public RobotPositions Robots { get; private set; }
@@ -54,6 +56,8 @@ namespace Ricochet.Client.Game
         public int ReplayStep { get; private set; }
         public bool ReplayFinished { get; private set; }
         public bool IsReplaying => CurrentReplay != null;
+        /// <summary>A finished practice solution is still shown; the player's next action starts from the start.</summary>
+        public bool IsHoldingReplay => _replayHeld;
 
         public bool IsCountingDown => _countdownEnd >= 0f;
         public string CountdownCaption { get; private set; }
@@ -65,8 +69,11 @@ namespace Ricochet.Client.Game
             : IsPractice ? BoardMode.Practice
             : BoardMode.Round;
 
-        /// <summary>False while a replay, countdown or finished round has the board.</summary>
-        public bool AcceptsInput => Round != null && !IsReplaying && !IsCountingDown && !_roundOver;
+        /// <summary>
+        /// False while a replay, countdown or finished round has the board. A finished unlocked replay (the
+        /// practice hint) stays shown but takes input: the player's next action starts again from the start.
+        /// </summary>
+        public bool AcceptsInput => Round != null && (!IsReplaying || _replayHeld) && !IsCountingDown && !_roundOver;
 
         /// <summary>Shows a new board (offline practice or the server's round) and clears everything on it.</summary>
         public void Load(RoundSetup round, bool practice, int seed = 0)
@@ -84,6 +91,13 @@ namespace Ricochet.Client.Game
         /// <summary>Robots back at the round's start, no moves (R).</summary>
         public void Reset()
         {
+            if (_replayHeld)
+                StopReplay();
+            ResetBoard();
+        }
+
+        private void ResetBoard()
+        {
             Robots = Round.Robots;
             _moves.Clear();
             _history.Clear();
@@ -98,6 +112,9 @@ namespace Ricochet.Client.Game
         /// <summary>Moves the selected robot; false if it can't move or the board is already solved.</summary>
         public bool TryMove(Direction direction)
         {
+            // A shown solution isn't the player's attempt: their first move starts from the beginning.
+            if (_replayHeld)
+                Reset();
             if (IsSolved)
                 return false;
             var move = new Move(Selected, direction);
@@ -113,6 +130,11 @@ namespace Ricochet.Client.Game
 
         public bool Undo()
         {
+            if (_replayHeld)
+            {
+                Reset();
+                return true;
+            }
             if (_moves.Count == 0)
                 return false;
             Robots = _history[_history.Count - 1];
@@ -130,7 +152,8 @@ namespace Ricochet.Client.Game
             CurrentReplay = segment;
             ReplayStep = 0;
             ReplayFinished = false;
-            Reset();
+            _replayHeld = false;
+            ResetBoard();
         }
 
         /// <summary>Plays the replay's next move (if it can be played; it always can for a valid solution).</summary>
@@ -147,14 +170,13 @@ namespace Ricochet.Client.Game
         }
 
         /// <summary>
-        /// The last replay is over. Locked: it stays on the board until the next one; otherwise the
-        /// player can carry on from the final position (R to retry).
+        /// The last replay is over and stays on the board. Locked: until the next board; otherwise until the
+        /// player acts (a move, undo or R starts again from the round's start, see <see cref="AcceptsInput"/>).
         /// </summary>
         public void FinishReplays(bool lockUntilNextBoard)
         {
             ReplayFinished = true;
-            if (!lockUntilNextBoard)
-                StopReplay();
+            _replayHeld = !lockUntilNextBoard;
         }
 
         public void StopReplay()
@@ -162,6 +184,7 @@ namespace Ricochet.Client.Game
             CurrentReplay = null;
             ReplayStep = 0;
             ReplayFinished = false;
+            _replayHeld = false;
         }
 
         /// <summary>The round is over without a replay to show: the board stays as it is, locked.</summary>

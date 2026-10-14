@@ -169,7 +169,7 @@ namespace Ricochet.Client.Scratchpad
             }
             PlayReplay(result.Moves, HintStepSeconds, lockUntilNextBoard: false);
             Session.HintText = $"Shortest solution: {result.Moves.Length} moves (found in {result.Elapsed.TotalSeconds:0.0} s). " +
-                "R to try it yourself.";
+                "Make a move to try it yourself.";
         }
 
         private void NewBoard()
@@ -205,14 +205,28 @@ namespace Ricochet.Client.Scratchpad
 
         private void TryMove(Direction direction)
         {
+            ClearShownSolution();
             if (Session.TryMove(direction))
                 _boardView.ShowRobots(Session.Robots, instant: false);
         }
 
         private void Undo()
         {
+            if (Session.IsHoldingReplay)
+            {
+                ClearShownSolution();
+                return;
+            }
             if (Session.Undo())
                 _boardView.ShowRobots(Session.Robots, instant: false);
+        }
+
+        // The practice hint's solution is still on the board: snap back to the start (no diagonal slides)
+        // before the player's own move.
+        private void ClearShownSolution()
+        {
+            if (Session.IsHoldingReplay)
+                Apply(Session.Reset);
         }
 
         private void Update()

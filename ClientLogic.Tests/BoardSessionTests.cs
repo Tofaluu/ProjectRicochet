@@ -86,13 +86,36 @@ namespace ClientLogic.Tests
         }
 
         [Fact]
-        public void UnlockedReplay_HandsTheBoardBack()
+        public void UnlockedReplay_StaysShown_ThenTheFirstMoveStartsFresh()
         {
             BoardSession board = Loaded(practice: true);
             board.BeginReplay(new ReplaySegment("Shortest solution", Shortest, 0.6f, isShortest: true));
+            while (board.ReplayStep < Shortest.Length)
+                board.ReplayNextMove();
             board.FinishReplays(lockUntilNextBoard: false);
-            Assert.Equal(BoardMode.Practice, board.Mode);
+            Assert.Equal(BoardMode.ShortestReplay, board.Mode);
             Assert.True(board.AcceptsInput);
+
+            // The replayed moves aren't the player's: the first move starts again from the round's start.
+            Assert.True(board.TryMove(Direction.Up));
+            Assert.Equal(BoardMode.Practice, board.Mode);
+            Assert.Single(board.Moves);
+            Assert.False(board.IsSolved);
+        }
+
+        [Fact]
+        public void UnlockedReplay_UndoOrReset_GoesBackToTheStart()
+        {
+            BoardSession board = Loaded(practice: true);
+            board.BeginReplay(new ReplaySegment("Shortest solution", Shortest, 0.6f, isShortest: true));
+            while (board.ReplayStep < Shortest.Length)
+                board.ReplayNextMove();
+            board.FinishReplays(lockUntilNextBoard: false);
+
+            Assert.True(board.Undo());
+            Assert.Equal(BoardMode.Practice, board.Mode);
+            Assert.Empty(board.Moves);
+            Assert.Equal(Round.Robots, board.Robots);
         }
 
         [Fact]
