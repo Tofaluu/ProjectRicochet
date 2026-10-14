@@ -385,7 +385,9 @@ namespace Ricochet.Client.Board
                 Spawn(spark ? ShapeSprites.Circle : star, spark ? Color.white : light, at + direction * 0.4f,
                     direction * Random.Range(4.5f, 7.5f), spark ? 0.14f : 0.32f, 0.04f, Random.Range(0.55f, 0.85f), EffectOrder);
             }
-            Play(BoardSounds.Success, 0.7f);
+            // Only for the player's own solve; replays (theirs or the shortest) just show the burst.
+            if (_mode == BoardMode.Practice || _mode == BoardMode.Round)
+                Play(BoardSounds.Success, 0.7f);
         }
 
         // ---- Short-lived effect sprites ----
@@ -432,6 +434,9 @@ namespace Ricochet.Client.Board
                 p.Renderer.color = c;
             }
         }
+
+        /// <summary>Another player locked in a new best solution.</summary>
+        public void PlayOpponentSolved() => Play(BoardSounds.OpponentSolved, 0.8f);
 
         private void Play(AudioClip clip, float volume)
         {

@@ -327,6 +327,8 @@ namespace Ricochet.Client.UI
 
         private void OnNewBest(int round, string player, int moves)
         {
+            if (player != _match.MyName && round == _network.CurrentRound)
+                _scratchpad.View.PlayOpponentSolved();
             int onBoard = Board.IsSolved && !Board.IsReplaying ? Board.Moves.Count : -1;
             if (_match.OnNewBest(round, player, moves, onBoard))
                 _scratchpad.ResetToStart();
