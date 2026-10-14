@@ -1,0 +1,5 @@
+# HTTPS in front of the game server: Caddy gets and renews the certificate itself.
+# WebSockets (SignalR) pass through reverse_proxy as is.
+ricochet.thomasliu.dev {
+	reverse_proxy server:8080
+}

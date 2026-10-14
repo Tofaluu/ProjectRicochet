@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/bin~/
+**/obj~/
+.git/
+.github/
+UnityClient/
+Builds/
+Tools/
+*.Tests/
