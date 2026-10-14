@@ -10,6 +10,7 @@ namespace Ricochet.Client.Board
         private static AudioClip _thud;
         private static AudioClip _select;
         private static AudioClip _success;
+        private static AudioClip _opponent;
 
         /// <summary>A robot stopping against a wall or another robot: a soft, low knock.</summary>
         public static AudioClip Thud => _thud != null ? _thud : (_thud = Create("Thud", 0.16f, t =>
@@ -24,23 +25,27 @@ namespace Ricochet.Client.Board
         public static AudioClip Select => _select != null ? _select : (_select = Create("Select", 0.06f, t =>
             Mathf.Sin(2f * Mathf.PI * 1250f * t) * Mathf.Exp(-t * 70f) * 0.5f));
 
-        /// <summary>The target robot reaching the target: a rising four-note arpeggio.</summary>
-        public static AudioClip Success => _success != null ? _success : (_success = Create("Success", 0.75f, t =>
+        /// <summary>Solving it yourself: a soft, short three-note rise.</summary>
+        public static AudioClip Success => _success != null ? _success : (_success = Create("Success", 0.5f, t =>
+            Notes(t, 0.06f, 7f, 523.25f, 659.25f, 783.99f) * 0.22f));
+
+        /// <summary>An opponent locked in a new best: a gentle two-note "ding-dong", distinct from Success.</summary>
+        public static AudioClip OpponentSolved => _opponent != null ? _opponent : (_opponent = Create("OpponentSolved", 0.7f, t =>
+            Notes(t, 0.16f, 5f, 880f, 659.25f) * 0.24f));
+
+        // Sine notes starting <paramref name="gap"/> apart, each fading out at <paramref name="decay"/>.
+        private static float Notes(float t, float gap, float decay, params float[] frequencies)
         {
-            float[] notes = { 523.25f, 659.25f, 783.99f, 1046.5f };
             float sum = 0f;
-            for (int i = 0; i < notes.Length; i++)
+            for (int i = 0; i < frequencies.Length; i++)
             {
-                float start = i * 0.07f;
-                if (t < start)
+                float local = t - i * gap;
+                if (local < 0f)
                     break;
-                float local = t - start;
-                // Soft square-ish tone: a sine plus a little of its third harmonic.
-                float phase = 2f * Mathf.PI * notes[i] * local;
-                sum += (Mathf.Sin(phase) + 0.2f * Mathf.Sin(3f * phase)) * Mathf.Exp(-local * 6f);
+                sum += Mathf.Sin(2f * Mathf.PI * frequencies[i] * local) * Mathf.Exp(-local * decay);
             }
-            return sum * 0.28f;
-        }));
+            return sum;
+        }
 
         private static AudioClip Create(string name, float seconds, System.Func<float, float> sample)
         {

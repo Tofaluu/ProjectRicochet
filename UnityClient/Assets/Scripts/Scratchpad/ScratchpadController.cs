@@ -36,6 +36,7 @@ namespace Ricochet.Client.Scratchpad
         /// <summary>What's on the board; views read it.</summary>
         public BoardSession Session { get; } = new BoardSession();
         public Camera Camera => _camera;
+        public BoardView View => _boardView;
 
         private void Start()
         {
