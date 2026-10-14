@@ -65,6 +65,13 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
+## Nunito font
+
+`UnityClient/Assets/Fonts/Nunito-*.ttf` - Copyright 2014 The Nunito Project Authors
+(https://github.com/googlefonts/nunito), licensed under the SIL Open Font License 1.1; the full licence
+is in `UnityClient/Assets/Fonts/OFL.txt`. The fonts may be bundled and sold with software; they may not be
+sold on their own.
+
 ## Unity
 
 The client is made with Unity 6 and its packages, under the Unity Terms of Service and the
