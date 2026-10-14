@@ -192,7 +192,8 @@ namespace Ricochet.Client.Board
 
         public void ShowSelection(RobotColor robot)
         {
-            if (_hasSelection && robot != _selected)
+            // The blip is for the player's own picks; replays switch robots silently.
+            if (_hasSelection && robot != _selected && (_mode == BoardMode.Practice || _mode == BoardMode.Round))
                 Play(BoardSounds.Select, 0.6f);
             _selected = robot;
             _hasSelection = true;
