@@ -47,6 +47,8 @@ namespace Ricochet.Client.Network
         public event Action<string> StatusChanged;
         /// <summary>A lobby request (start, settings) was refused; the message is for the player.</summary>
         public event Action<string> RequestFailed;
+        /// <summary>(this player's name in the lobby) The join (or rejoin) went through. Usually comes after the first LobbyStateChanged.</summary>
+        public event Action<string> Joined;
 
         public bool IsInLobby { get; private set; }
 
@@ -99,6 +101,7 @@ namespace Ricochet.Client.Network
                     HubMethods.JoinLobby, playerName, lobbyCode, HubMethods.ProtocolVersion, _playerId);
                 _lobbyCode = lobbyCode;
                 IsInLobby = true;
+                Joined?.Invoke(PlayerName);
                 SetStatus("In lobby " + lobbyCode.Trim().ToUpperInvariant());
             }
             catch (Exception e)
@@ -290,6 +293,7 @@ namespace Ricochet.Client.Network
             {
                 PlayerName = await _connection.InvokeAsync<string>(
                     HubMethods.JoinLobby, PlayerName, _lobbyCode, HubMethods.ProtocolVersion, _playerId);
+                Joined?.Invoke(PlayerName);
                 IsReconnecting = false;
                 SetStatus("Reconnected");
             }

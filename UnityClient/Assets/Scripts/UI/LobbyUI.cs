@@ -158,6 +158,7 @@ namespace Ricochet.Client.UI
         private void OnEnable()
         {
             _network.StatusChanged += OnStatusChanged;
+            _network.Joined += OnJoined;
             _network.LobbyStateChanged += OnLobbyState;
             _network.RoundStarted += OnRoundStarted;
             _network.RoundCountdown += OnRoundCountdown;
@@ -172,6 +173,7 @@ namespace Ricochet.Client.UI
         private void OnDisable()
         {
             _network.StatusChanged -= OnStatusChanged;
+            _network.Joined -= OnJoined;
             _network.LobbyStateChanged -= OnLobbyState;
             _network.RoundStarted -= OnRoundStarted;
             _network.RoundCountdown -= OnRoundCountdown;
@@ -278,6 +280,13 @@ namespace Ricochet.Client.UI
             // Left the lobby or lost the connection: back to the join screen with an offline practice board.
             if (_match.OnConnectionStatus(status, _network.IsInLobby, _network.IsReconnecting))
                 _scratchpad.PlayOffline();
+        }
+
+        // The lobby usually arrives before the join's answer, so only now do we know if we're the host.
+        private void OnJoined(string myName)
+        {
+            _match.OnJoined(myName);
+            ShowSettings(_match.Settings);
         }
 
         private void OnLobbyState(LobbyState state)
