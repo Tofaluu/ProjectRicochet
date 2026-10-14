@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Ricochet.Client.Game;
 using Ricochet.Client.Scratchpad;
 using Ricochet.Client.Theme;
@@ -27,6 +28,7 @@ namespace Ricochet.Client.Board
         private GUIStyle _goalStyle;
         private GUIStyle _bodyStyle;
         private GUIStyle _headerStyle;
+        private GUIStyle _keyStyle;
 
         private GameTheme Colors => GameTheme.OrDefault(_theme);
 
@@ -74,6 +76,13 @@ namespace Ricochet.Client.Board
             };
             _bodyStyle = new GUIStyle(_goalStyle) { font = Colors.Font, fontSize = 16 };
             _headerStyle = new GUIStyle(_goalStyle) { fontSize = 13, normal = { textColor = Colors.MutedText } };
+            _keyStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter, font = Colors.BoldFont, fontSize = 13, wordWrap = false,
+                clipping = TextClipping.Overflow,
+                normal = { background = ShapeSprites.RoundedTexture(6), textColor = Colors.PanelText },
+                border = new RectOffset(6, 6, 6, 6), padding = new RectOffset(9, 9, 0, 0),
+            };
         }
 
         // The board's corners in IMGUI coordinates (pixels, y down), including the frame.
@@ -91,7 +100,9 @@ namespace Ricochet.Client.Board
             const float height = 38f;
             var banner = new Rect(board.x + board.width * 0.15f, board.y - height - 8f, board.width * 0.7f, height);
             Color previous = GUI.backgroundColor;
-            GUI.backgroundColor = Colors.FrameColor(session.Mode);
+            Color frame = Colors.FrameColor(session.Mode);
+            GUI.backgroundColor = frame;
+            _bannerStyle.normal.textColor = Colors.TextOn(frame);
             GUI.Label(banner, BannerText(session), _bannerStyle);
             GUI.backgroundColor = previous;
         }
@@ -138,10 +149,11 @@ namespace Ricochet.Client.Board
             GUI.Label(board, left > 0f ? Mathf.CeilToInt(left).ToString() : "Go!", _numberStyle);
         }
 
-        // Top-left card: the goal (with the target's symbol), the move count, then the controls.
+        // Top-left card: the goal (with the target's symbol), the move count, then the controls as
+        // "action  [key] [key]" rows.
         private void DrawCard(BoardSession session)
         {
-            const float pad = 18f;
+            const float pad = 18f, rowHeight = 30f, actionWidth = 104f;
             float inner = CardWidth - 2 * pad;
             Target target = session.Round.Target;
             Color targetColor = Colors.TargetColor(target);
@@ -153,19 +165,27 @@ namespace Ricochet.Client.Board
                 : session.IsSolved ? $"<b>Solved in {moves} moves!</b>" : $"Moves: {moves}";
             if (session.IsPractice && session.HintText != null)
                 status += "\n" + session.HintText;
-            string controls = "Click, 1-4 or Tab   select\nArrows, WASD or drag   move\nZ   undo        R   reset" +
-                (session.IsPractice ? "\nN   new board   H   shortest" : "");
+
+            var controls = new List<(string action, string[] keys)>
+            {
+                ("Select", new[] { "Click", "1-4", "Tab" }),
+                ("Move", new[] { "Arrows", "WASD", "Drag" }),
+                ("Undo / reset", new[] { "Z", "R" }),
+            };
+            if (session.IsPractice)
+            {
+                controls.Add(("New board", new[] { "N" }));
+                controls.Add(("Shortest", new[] { "H" }));
+            }
 
             float goalHeight = Mathf.Max(28f, _goalStyle.CalcHeight(new GUIContent(goal), inner - 36f));
             float statusHeight = _bodyStyle.CalcHeight(new GUIContent(status), inner);
-            float controlsHeight = _bodyStyle.CalcHeight(new GUIContent(controls), inner);
-            float height = pad + 18f + goalHeight + 6f + statusHeight + 14f + 18f + controlsHeight + pad;
+            float height = pad + 18f + goalHeight + 6f + statusHeight + 14f + 22f + controls.Count * rowHeight + pad - 4f;
 
             var card = new Rect(16f, 16f, CardWidth, height);
             Color previous = GUI.backgroundColor;
             GUI.backgroundColor = Colors.Panel;
             GUI.Box(card, GUIContent.none, _cardStyle);
-            GUI.backgroundColor = previous;
 
             float x = card.x + pad, y = card.y + pad;
             GUI.Label(new Rect(x, y, inner, 18f), "GOAL", _headerStyle);
@@ -179,12 +199,26 @@ namespace Ricochet.Client.Board
             y += goalHeight + 6f;
             GUI.Label(new Rect(x, y, inner, statusHeight), status, _bodyStyle);
             y += statusHeight + 14f;
+
             GUI.Label(new Rect(x, y, inner, 18f), "CONTROLS", _headerStyle);
-            y += 18f;
-            Color muted = _bodyStyle.normal.textColor;
+            y += 22f;
+            Color body = _bodyStyle.normal.textColor;
             _bodyStyle.normal.textColor = Colors.MutedText;
-            GUI.Label(new Rect(x, y, inner, controlsHeight), controls, _bodyStyle);
-            _bodyStyle.normal.textColor = muted;
+            GUI.backgroundColor = Colors.Input;
+            foreach ((string action, string[] keys) in controls)
+            {
+                GUI.Label(new Rect(x, y, actionWidth, rowHeight - 4f), action, _bodyStyle);
+                float keyX = x + actionWidth;
+                foreach (string key in keys)
+                {
+                    float width = _keyStyle.CalcSize(new GUIContent(key)).x + 2f;
+                    GUI.Label(new Rect(keyX, y + 1f, width, rowHeight - 8f), key, _keyStyle);
+                    keyX += width + 6f;
+                }
+                y += rowHeight;
+            }
+            _bodyStyle.normal.textColor = body;
+            GUI.backgroundColor = previous;
         }
 
         private static string Colorize(string text, Color color) =>
