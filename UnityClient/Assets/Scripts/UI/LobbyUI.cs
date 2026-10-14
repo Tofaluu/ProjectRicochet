@@ -68,7 +68,20 @@ namespace Ricochet.Client.UI
             _gamePanel.SetActive(false);
             _statusText.text = "";
             _nameInput.text = PlayerPrefs.GetString(NamePrefKey, "");
-            _serverInput.text = PlayerPrefs.GetString(ServerPrefKey, NetworkManager.DefaultServer);
+            // Players always use the cloud server; the Server field is only for testing a local server
+            // from the Editor (builds can still be pointed elsewhere with -server / ?server=).
+            if (Application.isEditor)
+            {
+                _serverInput.text = PlayerPrefs.GetString(ServerPrefKey, NetworkManager.DefaultServer);
+            }
+            else
+            {
+                _serverInput.text = NetworkManager.DefaultServer;
+                _serverInput.gameObject.SetActive(false);
+                Transform label = _serverInput.transform.parent.Find("Server Label");
+                if (label != null)
+                    label.gameObject.SetActive(false);
+            }
 
             _joinButton.onClick.AddListener(OnJoinClicked);
             _lockInButton.onClick.AddListener(OnLockInClicked);
@@ -81,15 +94,22 @@ namespace Ricochet.Client.UI
             _roundLimitInput.onEndEdit.AddListener(_ => OnSettingsEdited());
         }
 
-        // Optional command-line overrides for quick testing, e.g.
+        // Optional overrides, e.g. for quick testing or a link to a lobby. Desktop command line:
         //   Ricochet.exe -name Alice -lobby TEST -server http://localhost:5022
-        // Passing -lobby joins straight away.
+        // Browser: the page's query string, e.g. https://ricochet.thomasliu.dev/?lobby=TEST&name=Alice
+        // Passing a lobby joins straight away.
         private void Start()
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            string name = QueryValue(Application.absoluteURL, "name");
+            string server = QueryValue(Application.absoluteURL, "server");
+            string lobby = QueryValue(Application.absoluteURL, "lobby");
+#else
             string[] args = System.Environment.GetCommandLineArgs();
             string name = ArgValue(args, "-name");
             string server = ArgValue(args, "-server");
             string lobby = ArgValue(args, "-lobby");
+#endif
 
             if (name != null) _nameInput.text = name;
             if (server != null) _serverInput.text = server;
@@ -98,6 +118,25 @@ namespace Ricochet.Client.UI
                 _codeInput.text = lobby;
                 Join(save: false);
             }
+        }
+
+        private static string QueryValue(string url, string key)
+        {
+            int start = url.IndexOf('?');
+            if (start < 0)
+                return null;
+            int end = url.IndexOf('#');
+            string query = end > start ? url.Substring(start + 1, end - start - 1) : url.Substring(start + 1);
+            foreach (string pair in query.Split('&'))
+            {
+                int eq = pair.IndexOf('=');
+                if (eq > 0 && string.Equals(pair.Substring(0, eq), key, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    string value = System.Uri.UnescapeDataString(pair.Substring(eq + 1).Replace('+', ' ')).Trim();
+                    return value.Length > 0 ? value : null;
+                }
+            }
+            return null;
         }
 
         private static string ArgValue(string[] args, string flag)
@@ -154,7 +193,8 @@ namespace Ricochet.Client.UI
             if (save)
             {
                 PlayerPrefs.SetString(NamePrefKey, _nameInput.text.Trim());
-                PlayerPrefs.SetString(ServerPrefKey, _serverInput.text.Trim());
+                if (Application.isEditor)
+                    PlayerPrefs.SetString(ServerPrefKey, _serverInput.text.Trim());
             }
             _network.ServerUrl = _serverInput.text;
             _network.JoinLobby(_nameInput.text, code);

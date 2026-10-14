@@ -62,8 +62,10 @@ jobs:
           echo "$SSH_KEY" > ~/.ssh/key && chmod 600 ~/.ssh/key
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
           SSH="ssh -i $HOME/.ssh/key ubuntu@$HOST"
-          $SSH 'mkdir -p ~/ricochet'
+          $SSH 'mkdir -p ~/ricochet/web'
           scp -i ~/.ssh/key deploy/docker-compose.yml deploy/Caddyfile "ubuntu@$HOST:ricochet/"
           $SSH "echo TAG=${{ github.sha }} > ~/ricochet/.env"
           echo "$TOKEN" | $SSH "docker login ghcr.io -u $ACTOR --password-stdin"
           $SSH 'cd ~/ricochet && docker compose pull && docker compose up -d && docker image prune -f; docker logout ghcr.io'
+          # A changed Caddyfile doesn't recreate the container; reload it (no downtime).
+          $SSH 'cd ~/ricochet && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile'

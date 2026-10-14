@@ -1,0 +1,5 @@
+<!-- IL2CPP builds (browser): keep the wire DTOs whole. Newtonsoft fills them by reflection, so their
+     constructors and property setters look unused to the code stripper. -->
+<linker>
+  <assembly fullname="SharedLogic" preserve="all" />
+</linker>

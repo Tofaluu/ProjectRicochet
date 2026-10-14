@@ -119,7 +119,8 @@ namespace Ricochet.Client.Scratchpad
 
         // ---- Offline hint (H): solve in the background, then replay the shortest solution ----
 
-        private const float HintStepSeconds = 0.6f;
+        // Same pace as a player's replay in a lobby (the faster 0.6 s is only for a shortest after it).
+        private const float HintStepSeconds = 1f;
         // Generated boards solve in well under a second; this only guards against a pathological one.
         private static readonly System.TimeSpan HintTimeLimit = System.TimeSpan.FromSeconds(30);
         private Task<SolverResult> _hintTask;
@@ -132,7 +133,12 @@ namespace Ricochet.Client.Scratchpad
             RoundSetup round = Session.Round;
             _hintRound = round;
             Session.HintText = "Finding the shortest solution...";
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // Browsers have no threads: solve right here (usually ~1 ms; a rare hard board stalls a moment).
+            _hintTask = Task.FromResult(Solver.Solve(round, timeLimit: HintTimeLimit));
+#else
             _hintTask = Task.Run(() => Solver.Solve(round, timeLimit: HintTimeLimit));
+#endif
         }
 
         // Called every frame; applies the hint once the background solve finishes.
