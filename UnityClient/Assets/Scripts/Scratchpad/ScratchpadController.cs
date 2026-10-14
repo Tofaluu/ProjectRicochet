@@ -236,10 +236,28 @@ namespace Ricochet.Client.Scratchpad
             if (!Session.AcceptsInput)
             {
                 _dragging = false;
+                HandleHintShortcuts();
                 return;
             }
             HandleKeyboard();
             HandlePointer();
+        }
+
+        // The practice hint's replay can be cut short (online replays can't): R back to the start, N a new board.
+        private void HandleHintShortcuts()
+        {
+            Keyboard keyboard = Keyboard.current;
+            if (!Session.IsPractice || !Session.IsReplaying || keyboard == null || IsTypingInUI())
+                return;
+            if (keyboard.rKey.wasPressedThisFrame)
+            {
+                StopReplay();
+                ResetToStart();
+            }
+            else if (keyboard.nKey.wasPressedThisFrame)
+            {
+                NewBoard();
+            }
         }
 
         private void HandleKeyboard()
