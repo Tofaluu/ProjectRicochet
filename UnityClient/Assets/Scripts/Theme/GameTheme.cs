@@ -35,10 +35,14 @@ namespace Ricochet.Client.Theme
         [SerializeField] private Color _anyRobot = new Color(0.61f, 0.36f, 0.90f);
 
         [Header("What the board shows (frame + banner)")]
+        [Tooltip("Offline practice. During a round the frame takes the target's colour instead.")]
         [SerializeField] private Color _ownBoard = new Color(0.47f, 0.42f, 0.78f);
-        [SerializeField] private Color _playerReplay = new Color(0.98f, 0.74f, 0.25f);
-        [SerializeField] private Color _shortestReplay = new Color(0.62f, 0.61f, 0.72f);
-        [SerializeField] private Color _roundOver = new Color(0.33f, 0.33f, 0.43f);
+        [Tooltip("Replays are neutral so they never look like a target colour.")]
+        [SerializeField] private Color _playerReplay = new Color(0.95f, 0.92f, 0.85f);
+        [SerializeField] private Color _shortestReplay = new Color(0.55f, 0.56f, 0.62f);
+        [SerializeField] private Color _roundOver = new Color(0.30f, 0.31f, 0.39f);
+        [Tooltip("Highlighted panel text (the feedback line).")]
+        [SerializeField] private Color _highlightText = new Color(0.98f, 0.74f, 0.25f);
         [Tooltip("Banner text on light frames; dark frames get the panel text colour.")]
         [SerializeField] private Color _bannerText = new Color(0.08f, 0.07f, 0.16f);
 
@@ -85,6 +89,7 @@ namespace Ricochet.Client.Theme
         public Color Wall => _wall;
         public Color Selection => _selection;
         public Color BannerText => _bannerText;
+        public Color HighlightText => _highlightText;
 
         /// <summary>Readable text on <paramref name="background"/>: dark on light colours, light on dark ones.</summary>
         public Color TextOn(Color background) =>
@@ -105,10 +110,15 @@ namespace Ricochet.Client.Theme
 
         public Color TargetColor(Target target) => target.Robot.HasValue ? RobotColor(target.Robot.Value) : _anyRobot;
 
-        public Color FrameColor(BoardMode mode)
+        /// <summary>
+        /// The frame/banner colour for what the board shows: practice indigo, a live round in the target's
+        /// colour, neutral shades for replays (colour = playing, neutral = watching).
+        /// </summary>
+        public Color FrameColor(BoardMode mode, Target target)
         {
             switch (mode)
             {
+                case BoardMode.Round: return TargetColor(target);
                 case BoardMode.PlayerReplay: return _playerReplay;
                 case BoardMode.ShortestReplay: return _shortestReplay;
                 case BoardMode.RoundOver: return _roundOver;

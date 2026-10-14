@@ -100,7 +100,7 @@ namespace Ricochet.Client.Board
             const float height = 38f;
             var banner = new Rect(board.x + board.width * 0.15f, board.y - height - 8f, board.width * 0.7f, height);
             Color previous = GUI.backgroundColor;
-            Color frame = Colors.FrameColor(session.Mode);
+            Color frame = Colors.FrameColor(session.Mode, session.Round.Target);
             GUI.backgroundColor = frame;
             _bannerStyle.normal.textColor = Colors.TextOn(frame);
             GUI.Label(banner, BannerText(session), _bannerStyle);

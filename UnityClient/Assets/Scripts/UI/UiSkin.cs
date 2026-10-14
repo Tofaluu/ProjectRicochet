@@ -37,7 +37,7 @@ namespace Ricochet.Client.UI
                 else if (name.EndsWith("Label") || name.EndsWith("Header"))
                     SetText(text, theme.BoldFont, theme.MutedText, text.fontSize);
                 else if (name == "Feedback")
-                    SetText(text, theme.BoldFont, theme.FrameColor(Game.BoardMode.PlayerReplay), text.fontSize);
+                    SetText(text, theme.BoldFont, theme.HighlightText, text.fontSize);
                 else
                     SetText(text, theme.Font, theme.PanelText, text.fontSize);
             }

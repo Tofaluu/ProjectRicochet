@@ -50,7 +50,7 @@ namespace Ricochet.Client.Board
 
         private readonly Dictionary<RobotColor, RobotVisual> _robots = new Dictionary<RobotColor, RobotVisual>();
         private readonly List<Particle> _particles = new List<Particle>();
-        private Color _frameColor = Color.clear;
+        private BoardMode _mode;
         private SpriteRenderer _frame;
         private Transform _content;
         private SpriteRenderer _selectionRing;
@@ -96,7 +96,7 @@ namespace Ricochet.Client.Board
             float frameSize = 2f * (FrameThickness + WallThickness / 2f);
             CreateRounded("Plate Shadow", 0.6f, Colors.Shadow, centre + new Vector3(0.15f, -0.3f),
                 new Vector2(width + frameSize + 0.3f, height + frameSize + 0.3f), PlateShadowOrder);
-            _frame = CreateRounded("Frame", 0.45f, _frameColor, centre, new Vector2(width + frameSize, height + frameSize), FrameOrder);
+            _frame = CreateRounded("Frame", 0.45f, Colors.FrameColor(_mode, _target), centre, new Vector2(width + frameSize, height + frameSize), FrameOrder);
             CreateRounded("Grout", 0.12f, Colors.Grout, centre, new Vector2(width + WallThickness, height + WallThickness), GroutOrder);
 
             GridPos blockMin = new GridPos(width, height), blockMax = new GridPos(-1, -1);
@@ -192,15 +192,12 @@ namespace Ricochet.Client.Board
             _hasSelection = true;
         }
 
-        /// <summary>Colours the frame for what the board is showing (see <see cref="BoardMode"/>).</summary>
+        /// <summary>Colours the frame for what the board is showing (see <see cref="GameTheme.FrameColor"/>).</summary>
         public void ShowMode(BoardMode mode)
         {
-            Color color = Colors.FrameColor(mode);
-            if (color == _frameColor)
-                return;
-            _frameColor = color;
+            _mode = mode;
             if (_frame != null)
-                _frame.color = color;
+                _frame.color = Colors.FrameColor(mode, _target);
         }
 
         private void Update()
