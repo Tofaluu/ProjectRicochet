@@ -101,7 +101,7 @@ namespace Ricochet.Client.Board
             var banner = new Rect(board.x + board.width * 0.15f, board.y - height - 8f, board.width * 0.7f, height);
             Color previous = GUI.backgroundColor;
             Color frame = Colors.FrameColor(session.Mode, session.Round.Target);
-            GUI.backgroundColor = frame;
+            GUI.backgroundColor = Tint(frame);
             _bannerStyle.normal.textColor = Colors.TextOn(frame);
             GUI.Label(banner, BannerText(session), _bannerStyle);
             GUI.backgroundColor = previous;
@@ -133,7 +133,7 @@ namespace Ricochet.Client.Board
         private void DrawCountdown(BoardSession session, Rect board)
         {
             Color previous = GUI.backgroundColor;
-            GUI.backgroundColor = Colors.CountdownDim;
+            GUI.backgroundColor = Tint(Colors.CountdownDim);
             GUI.Box(board, GUIContent.none, _cardStyle);
             GUI.backgroundColor = previous;
 
@@ -184,7 +184,7 @@ namespace Ricochet.Client.Board
 
             var card = new Rect(16f, 16f, CardWidth, height);
             Color previous = GUI.backgroundColor;
-            GUI.backgroundColor = Colors.Panel;
+            GUI.backgroundColor = Tint(Colors.Panel);
             GUI.Box(card, GUIContent.none, _cardStyle);
 
             float x = card.x + pad, y = card.y + pad;
@@ -192,7 +192,7 @@ namespace Ricochet.Client.Board
             y += 18f;
             // The target's symbol in its colour, as on the board.
             Color previousColor = GUI.color;
-            GUI.color = targetColor;
+            GUI.color = Tint(targetColor);
             GUI.DrawTexture(new Rect(x, y + 2f, 26f, 26f), ShapeSprites.TargetSymbol(target.Robot).texture);
             GUI.color = previousColor;
             GUI.Label(new Rect(x + 36f, y, inner - 36f, goalHeight), goal, _goalStyle);
@@ -204,7 +204,7 @@ namespace Ricochet.Client.Board
             y += 22f;
             Color body = _bodyStyle.normal.textColor;
             _bodyStyle.normal.textColor = Colors.MutedText;
-            GUI.backgroundColor = Colors.Input;
+            GUI.backgroundColor = Tint(Colors.Input);
             foreach ((string action, string[] keys) in controls)
             {
                 GUI.Label(new Rect(x, y, actionWidth, rowHeight - 4f), action, _bodyStyle);
@@ -219,6 +219,17 @@ namespace Ricochet.Client.Board
             }
             _bodyStyle.normal.textColor = body;
             GUI.backgroundColor = previous;
+        }
+
+        // In browser builds (linear colour space) IMGUI gamma-corrects tint colours once more than on desktop,
+        // washing backgrounds out; text colours aren't affected. Pre-linearize the tints there.
+        private static Color Tint(Color color)
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            if (QualitySettings.activeColorSpace == ColorSpace.Linear)
+                return color.linear;
+#endif
+            return color;
         }
 
         private static string Colorize(string text, Color color) =>
