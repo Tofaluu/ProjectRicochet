@@ -15,7 +15,8 @@ namespace Ricochet.Client.Network
     /// </summary>
     public class NetworkManager : MonoBehaviour
     {
-        public const string DefaultServer = "http://localhost:5022";
+        // The cloud server (deploy/). Local testing: type localhost:5022 in the Server field.
+        public const string DefaultServer = "https://ricochet.thomasliu.dev";
 
         [SerializeField] private string _serverUrl = DefaultServer + HubMethods.HubPath;
 
