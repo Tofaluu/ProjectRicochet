@@ -55,7 +55,8 @@ namespace Ricochet.Client.UI
         [SerializeField] private Text _startLabel;
 
         private const string NamePrefKey = "Ricochet.PlayerName";
-        private const string ServerPrefKey = "Ricochet.Server";
+        // Renamed when the cloud server came in, so tunnel addresses saved by playtest builds are dropped.
+        private const string ServerPrefKey = "Ricochet.ServerAddress";
 
         private readonly MatchState _match = new MatchState();
 

@@ -26,8 +26,7 @@ Mac (one-time setup):
 ----------------
   Name        anything you like
   Lobby code  the code your host tells you (everyone uses the same one)
-  Server      the address your host sends you, e.g.  some-random-words.trycloudflare.com
-              (it changes every session, so check for the new one each time)
+  Server      leave it as it is (ricochet.thomasliu.dev)
 
 Then press Join.
 
