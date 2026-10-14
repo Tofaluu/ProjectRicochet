@@ -68,6 +68,12 @@ namespace Ricochet.Client.Board
 
         private void Awake()
         {
+            // Nothing is audible without a listener; the scene's camera doesn't have one.
+            if (FindAnyObjectByType<AudioListener>() == null)
+            {
+                Camera camera = Camera.main;
+                (camera != null ? camera.gameObject : gameObject).AddComponent<AudioListener>();
+            }
             _audio = gameObject.AddComponent<AudioSource>();
             _audio.playOnAwake = false;
             _audio.spatialBlend = 0f;
