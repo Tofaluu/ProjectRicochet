@@ -376,10 +376,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Ricochet.Client::Ricochet.Client.UI.LobbyUI
   _network: {fileID: 443306825}
   _scratchpad: {fileID: 208475584}
+  _theme: {fileID: 11400000, guid: ad578699253788146b9792d34401d227, type: 2}
   _joinPanel: {fileID: 1472686770}
   _nameInput: {fileID: 1699201520}
   _codeInput: {fileID: 1256351557}
   _serverInput: {fileID: 1448990040}
+  _showServerField: 0
   _joinButton: {fileID: 864459940}
   _statusText: {fileID: 1900682810}
   _gamePanel: {fileID: 1956792327}
@@ -778,6 +780,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Ricochet.Client::Ricochet.Client.Board.BoardView
   _slideSpeed: 50
   _theme: {fileID: 11400000, guid: ad578699253788146b9792d34401d227, type: 2}
+  _volume: 0.5
 --- !u!4 &208475586
 Transform:
   m_ObjectHideFlags: 0

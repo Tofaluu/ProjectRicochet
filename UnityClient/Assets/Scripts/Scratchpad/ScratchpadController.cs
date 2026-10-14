@@ -119,8 +119,8 @@ namespace Ricochet.Client.Scratchpad
 
         // ---- Offline hint (H): solve in the background, then replay the shortest solution ----
 
-        // Same pace as a player's replay in a lobby (the faster 0.6 s is only for a shortest after it).
-        private const float HintStepSeconds = 1f;
+        // The quicker pace of the shortest-solution replay in a lobby (a player's replay is 1 s/move).
+        private const float HintStepSeconds = 0.6f;
         // Generated boards solve in well under a second; this only guards against a pathological one.
         private static readonly System.TimeSpan HintTimeLimit = System.TimeSpan.FromSeconds(30);
         private Task<SolverResult> _hintTask;

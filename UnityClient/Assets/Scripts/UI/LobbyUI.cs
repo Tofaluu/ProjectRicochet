@@ -3,6 +3,7 @@ using System.Text;
 using Ricochet.Client.Game;
 using Ricochet.Client.Network;
 using Ricochet.Client.Scratchpad;
+using Ricochet.Client.Theme;
 using SharedLogic;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -22,12 +23,16 @@ namespace Ricochet.Client.UI
     {
         [SerializeField] private NetworkManager _network;
         [SerializeField] private ScratchpadController _scratchpad;
+        [Tooltip("Fonts and colours for the panel (see UiSkin).")]
+        [SerializeField] private GameTheme _theme;
 
         [Header("Join panel")]
         [SerializeField] private GameObject _joinPanel;
         [SerializeField] private InputField _nameInput;
         [SerializeField] private InputField _codeInput;
         [SerializeField] private InputField _serverInput;
+        [Tooltip("Editor only: show the Server field, e.g. to test against a local server (localhost:5022).")]
+        [SerializeField] private bool _showServerField;
         [SerializeField] private Button _joinButton;
         [SerializeField] private Text _statusText;
 
@@ -64,13 +69,14 @@ namespace Ricochet.Client.UI
 
         private void Awake()
         {
+            UiSkin.Apply(transform, GameTheme.OrDefault(_theme));
             _joinPanel.SetActive(true);
             _gamePanel.SetActive(false);
             _statusText.text = "";
             _nameInput.text = PlayerPrefs.GetString(NamePrefKey, "");
             // Players always use the cloud server; the Server field is only for testing a local server
-            // from the Editor (builds can still be pointed elsewhere with -server / ?server=).
-            if (Application.isEditor)
+            // from the Editor when ticked (builds can still be pointed elsewhere with -server / ?server=).
+            if (Application.isEditor && _showServerField)
             {
                 _serverInput.text = PlayerPrefs.GetString(ServerPrefKey, NetworkManager.DefaultServer);
             }
@@ -193,7 +199,7 @@ namespace Ricochet.Client.UI
             if (save)
             {
                 PlayerPrefs.SetString(NamePrefKey, _nameInput.text.Trim());
-                if (Application.isEditor)
+                if (Application.isEditor && _showServerField)
                     PlayerPrefs.SetString(ServerPrefKey, _serverInput.text.Trim());
             }
             _network.ServerUrl = _serverInput.text;
