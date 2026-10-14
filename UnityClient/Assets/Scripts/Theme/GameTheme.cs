@@ -35,11 +35,12 @@ namespace Ricochet.Client.Theme
         [SerializeField] private Color _anyRobot = new Color(0.61f, 0.36f, 0.90f);
 
         [Header("What the board shows (frame + banner)")]
-        [SerializeField] private Color _ownBoard = new Color(0.10f, 0.65f, 0.75f);
-        [SerializeField] private Color _playerReplay = new Color(1.00f, 0.72f, 0.15f);
-        [SerializeField] private Color _shortestReplay = new Color(0.55f, 0.57f, 0.62f);
-        [SerializeField] private Color _roundOver = new Color(0.40f, 0.42f, 0.46f);
-        [SerializeField] private Color _bannerText = Color.black;
+        [SerializeField] private Color _ownBoard = new Color(0.47f, 0.42f, 0.78f);
+        [SerializeField] private Color _playerReplay = new Color(0.98f, 0.74f, 0.25f);
+        [SerializeField] private Color _shortestReplay = new Color(0.62f, 0.61f, 0.72f);
+        [SerializeField] private Color _roundOver = new Color(0.33f, 0.33f, 0.43f);
+        [Tooltip("Banner text on light frames; dark frames get the panel text colour.")]
+        [SerializeField] private Color _bannerText = new Color(0.08f, 0.07f, 0.16f);
 
         [Header("UI panels and text")]
         [Tooltip("Body text (falls back to Unity's built-in font when empty).")]
@@ -53,7 +54,7 @@ namespace Ricochet.Client.Theme
         [SerializeField] private Color _mutedText = new Color(0.60f, 0.63f, 0.74f);
         [SerializeField] private Color _input = new Color(0.16f, 0.18f, 0.26f);
         [Tooltip("Main actions: Join, Lock In, Start.")]
-        [SerializeField] private Color _primaryButton = new Color(0.10f, 0.62f, 0.72f);
+        [SerializeField] private Color _primaryButton = new Color(0.47f, 0.42f, 0.82f);
         [Tooltip("Votes: Skip board / I'm done / Skip replay.")]
         [SerializeField] private Color _secondaryButton = new Color(0.27f, 0.29f, 0.40f);
         [Tooltip("Leave lobby.")]
@@ -84,6 +85,10 @@ namespace Ricochet.Client.Theme
         public Color Wall => _wall;
         public Color Selection => _selection;
         public Color BannerText => _bannerText;
+
+        /// <summary>Readable text on <paramref name="background"/>: dark on light colours, light on dark ones.</summary>
+        public Color TextOn(Color background) =>
+            0.2126f * background.r + 0.7152f * background.g + 0.0722f * background.b > 0.5f ? _bannerText : _panelText;
         public Color CountdownDim => _countdownDim;
         public Color CountdownText => _countdownText;
 
