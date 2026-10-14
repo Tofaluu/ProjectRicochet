@@ -1,0 +1,69 @@
+name: CI
+
+# Every push runs the tests. Deploying is manual (Actions > CI > Run workflow) because a restart
+# ends every game in progress: lobbies live in the server's memory.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy to the game server
+        type: boolean
+        default: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - run: dotnet test RicochetGame.sln --blame-hang-timeout 60s
+
+  deploy:
+    needs: test
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy
+    runs-on: ubuntu-latest
+    concurrency: deploy
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/tofaluu/ricochet-server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+
+      # Secrets: EC2_HOST (the server's address) and EC2_SSH_KEY (its private key). Never in the repo.
+      - name: Deploy to the server
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/key && chmod 600 ~/.ssh/key
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          SSH="ssh -i $HOME/.ssh/key ubuntu@$HOST"
+          $SSH 'mkdir -p ~/ricochet'
+          scp -i ~/.ssh/key deploy/docker-compose.yml deploy/Caddyfile "ubuntu@$HOST:ricochet/"
+          $SSH "echo TAG=${{ github.sha }} > ~/ricochet/.env"
+          echo "$TOKEN" | $SSH "docker login ghcr.io -u $ACTOR --password-stdin"
+          $SSH 'cd ~/ricochet && docker compose pull && docker compose up -d && docker image prune -f; docker logout ghcr.io'

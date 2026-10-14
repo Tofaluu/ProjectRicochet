@@ -1,0 +1,24 @@
+# Runs on the cloud server in ~/ricochet (copied there by the deploy job with a .env holding TAG,
+# the image's commit). Lobbies live in memory, so restarting the server ends every game in progress.
+services:
+  server:
+    image: ghcr.io/tofaluu/ricochet-server:${TAG:-latest}
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - server
+
+volumes:
+  caddy_data:
+  caddy_config:
