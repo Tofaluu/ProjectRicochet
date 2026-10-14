@@ -26,7 +26,6 @@ Mac (one-time setup):
 ----------------
   Name        anything you like
   Lobby code  the code your host tells you (everyone uses the same one)
-  Server      leave it as it is (ricochet.thomasliu.dev)
 
 Then press Join.
 

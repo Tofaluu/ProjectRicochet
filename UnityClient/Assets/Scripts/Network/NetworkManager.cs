@@ -2,16 +2,16 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.SignalR.Client;
 using SharedLogic;
 using UnityEngine;
 
 namespace Ricochet.Client.Network
 {
     /// <summary>
-    /// SignalR connection to the game server. Server messages arrive on background threads,
+    /// SignalR connection to the game server. Server messages may arrive on background threads,
     /// so they're queued and raised as events on the main thread in <see cref="Update"/>.
-    /// See <see cref="HubMethods"/> for the wire contract.
+    /// See <see cref="HubMethods"/> for the wire contract, <see cref="IHubConnection"/> for the
+    /// desktop / browser clients.
     /// </summary>
     public class NetworkManager : MonoBehaviour
     {
@@ -23,7 +23,7 @@ namespace Ricochet.Client.Network
         private readonly ConcurrentQueue<Action> _mainThreadQueue = new ConcurrentQueue<Action>();
         // Identifies this run of the game to the server, so a reconnect takes back the same seat.
         private readonly string _playerId = Guid.NewGuid().ToString("N");
-        private HubConnection _connection;
+        private IHubConnection _connection;
         private string _connectedUrl;
         private bool _listening;
         private string _lobbyCode;
@@ -89,7 +89,7 @@ namespace Ricochet.Client.Network
         {
             try
             {
-                if (_connection == null || _connection.State == HubConnectionState.Disconnected || _connectedUrl != _serverUrl)
+                if (_connection == null || _connection.IsDisconnected || _connectedUrl != _serverUrl)
                     await ConnectAsync();
 
                 SetStatus("Joining " + lobbyCode + "...");
@@ -194,14 +194,11 @@ namespace Ricochet.Client.Network
         private async Task ConnectAsync()
         {
             SetStatus("Connecting to " + _serverUrl + "...");
-            HubConnection old = _connection;
-            if (old != null)
-                _ = old.DisposeAsync();
+            _connection?.Dispose();
 
             IsInLobby = false;
             IsReconnecting = false;
-            // Retries after 0, 2, 10 and 30 s, well within the server's reconnect grace period.
-            HubConnection connection = new HubConnectionBuilder().WithUrl(_serverUrl).WithAutomaticReconnect().Build();
+            IHubConnection connection = CreateConnection(_serverUrl);
             _connection = connection;
             _connectedUrl = _serverUrl;
 
@@ -235,7 +232,7 @@ namespace Ricochet.Client.Network
                 PostLobbyEvent(() => RoundEnded?.Invoke(result, winnerMoves, shortest));
             });
 
-            _connection.Reconnecting += error =>
+            _connection.Reconnecting += () =>
             {
                 Post(() =>
                 {
@@ -244,17 +241,15 @@ namespace Ricochet.Client.Network
                     IsReconnecting = true;
                     SetStatus("Connection lost, reconnecting...");
                 });
-                return Task.CompletedTask;
             };
             // A new connection id: join again with the same player id to take back the seat.
-            _connection.Reconnected += _ =>
+            _connection.Reconnected += () =>
             {
                 Post(() =>
                 {
                     if (_connection == connection)
                         Rejoin();
                 });
-                return Task.CompletedTask;
             };
             // Also raised when the automatic reconnect gives up.
             _connection.Closed += error =>
@@ -267,12 +262,20 @@ namespace Ricochet.Client.Network
                     IsInLobby = false;
                     IsReconnecting = false;
                     _listening = false;
-                    SetStatus(error == null ? "Disconnected" : "Disconnected: " + error.Message);
+                    SetStatus(error == null ? "Disconnected" : "Disconnected: " + error);
                 });
-                return Task.CompletedTask;
             };
 
             await connection.StartAsync();
+        }
+
+        private static IHubConnection CreateConnection(string url)
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return new JsHubConnection(url);
+#else
+            return new DotNetHubConnection(url);
+#endif
         }
 
         private async void Rejoin()
@@ -317,10 +320,9 @@ namespace Ricochet.Client.Network
 
         private void OnDestroy()
         {
-            HubConnection connection = _connection;
+            IHubConnection connection = _connection;
             _connection = null;
-            if (connection != null)
-                _ = connection.DisposeAsync();
+            connection?.Dispose();
         }
 
         private void Post(Action action) => _mainThreadQueue.Enqueue(action);

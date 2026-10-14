@@ -1,5 +1,26 @@
 # HTTPS in front of the game server: Caddy gets and renews the certificate itself.
-# WebSockets (SignalR) pass through reverse_proxy as is.
 ricochet.thomasliu.dev {
-	reverse_proxy server:8080
+	# The game server (SignalR; WebSockets pass through reverse_proxy as is).
+	handle /gamehub* {
+		reverse_proxy server:8080
+	}
+
+	# The browser build (Builds/WebGL, uploaded by Tools/deploy-web.sh). Unity's files are
+	# pre-compressed (gzip, or Brotli), so they need these headers; no-cache = revalidate by ETag, so a
+	# new upload is picked up on the next load.
+	handle {
+		root * /srv/web
+		header Cache-Control no-cache
+		@gz path *.gz
+		header @gz Content-Encoding gzip
+		@br path *.br
+		header @br Content-Encoding br
+		@wasm path *.wasm.gz *.wasm.br
+		header @wasm Content-Type application/wasm
+		@js path *.js.gz *.js.br
+		header @js Content-Type application/javascript
+		@data path *.data.gz *.data.br
+		header @data Content-Type application/octet-stream
+		file_server
+	}
 }
