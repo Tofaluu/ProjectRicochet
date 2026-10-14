@@ -46,6 +46,18 @@ namespace ClientLogic.Tests
         }
 
         [Fact]
+        public void TheJoinAnswer_ArrivingAfterTheFirstLobbyState_StillMakesMeHost()
+        {
+            // The server sends the lobby before answering the join with our (possibly de-duplicated) name.
+            var match = new MatchState();
+            match.OnLobbyState(Lobby(), null);
+            Assert.False(match.IAmHost);
+
+            match.OnJoined(Me);
+            Assert.True(match.IAmHost);
+        }
+
+        [Fact]
         public void Joining_BetweenMatches_MeansPractice()
         {
             var match = new MatchState();

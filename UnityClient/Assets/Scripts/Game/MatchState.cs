@@ -127,6 +127,12 @@ namespace Ricochet.Client.Game
 
         // ---- Server messages ----
 
+        /// <summary>
+        /// The join call's answer: this player's name as the lobby shows it. It can arrive after the first
+        /// <see cref="OnLobbyState"/> (sent while joining), which then didn't know who we are.
+        /// </summary>
+        public void OnJoined(string myName) => MyName = myName;
+
         public LobbyChange OnLobbyState(LobbyState state, string myName)
         {
             MyName = myName;
