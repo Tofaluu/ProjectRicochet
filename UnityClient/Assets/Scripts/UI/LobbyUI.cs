@@ -595,10 +595,10 @@ namespace Ricochet.Client.UI
                 text.AppendLine(_match.Phase == MatchPhase.Finished
                     ? $"Waiting for {_match.Host} to start a new match."
                     : $"Waiting for {_match.Host} to start the match.");
-                text.Append($"Classic: first to {settings.PointsToWin} points, "
-                    + $"{settings.FirstTimerSeconds}s timer, +{settings.ExtensionSeconds}s for better solutions, "
-                    + (settings.RoundLimitSeconds > 0 ? $"{settings.RoundLimitSeconds / 60} min to find a first solution" : "no round limit")
-                    + (settings.ShowBestSolution ? ", the best solution is shown" : ""));
+                // Kept to about three lines: the feedback text sits right under it.
+                text.Append($"First to {settings.PointsToWin}, {settings.FirstTimerSeconds}s timer (+{settings.ExtensionSeconds}s), "
+                    + (settings.RoundLimitSeconds > 0 ? $"{settings.RoundLimitSeconds / 60} min limit" : "no limit")
+                    + (settings.ShowBestSolution ? ", best solution shown" : ""));
             }
             _matchText.text = text.ToString();
         }
