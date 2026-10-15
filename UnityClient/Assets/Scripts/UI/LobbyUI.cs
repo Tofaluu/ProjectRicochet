@@ -42,7 +42,8 @@ namespace Ricochet.Client.UI
         [SerializeField] private Text _playersText;
         [SerializeField] private Text _roundText;
         [SerializeField] private Text _feedbackText;
-        [Tooltip("Unused since solutions are sent on reaching the target; hidden at startup.")]
+        [Tooltip("The old Lock In button (solutions are sent on reaching the target), reused at runtime as "
+            + "\"Watch X's best\" when the lobby shows the best solution.")]
         [SerializeField] private Button _lockInButton;
         [SerializeField] private Button _doneButton;
         [SerializeField] private Text _doneLabel;
@@ -67,12 +68,20 @@ namespace Ricochet.Client.UI
         private const string ServerPrefKey = "Ricochet.ServerAddress";
 
         private readonly MatchState _match = new MatchState();
+        private Text _watchLabel;
+        private Button _showBestButton;
+        private Text _showBestLabel;
 
         private BoardSession Board => _scratchpad.Session;
 
         private void Awake()
         {
+            // Widgets the scene doesn't have yet, made before the skin styles everything.
+            _lockInButton.gameObject.name = "Watch Button";
+            _watchLabel = _lockInButton.GetComponentInChildren<Text>(true);
+            CreateShowBestRow();
             UiSkin.Apply(transform, GameTheme.OrDefault(_theme));
+            gameObject.AddComponent<MatchHistoryOverlay>().Init(_match, _scratchpad, _theme);
             _joinPanel.SetActive(true);
             _lockInButton.gameObject.SetActive(false);
             _gamePanel.SetActive(false);
@@ -99,6 +108,8 @@ namespace Ricochet.Client.UI
             _scratchpad.SidePanel = _joinPanel.transform.parent as RectTransform;
 
             _joinButton.onClick.AddListener(OnJoinClicked);
+            _lockInButton.onClick.AddListener(OnWatchClicked);
+            _showBestButton.onClick.AddListener(OnShowBestClicked);
             _doneButton.onClick.AddListener(OnDoneClicked);
             _leaveButton.onClick.AddListener(OnLeaveClicked);
             _startButton.onClick.AddListener(OnStartClicked);
@@ -106,6 +117,43 @@ namespace Ricochet.Client.UI
             _firstTimerInput.onEndEdit.AddListener(_ => OnSettingsEdited());
             _extensionInput.onEndEdit.AddListener(_ => OnSettingsEdited());
             _roundLimitInput.onEndEdit.AddListener(_ => OnSettingsEdited());
+        }
+
+        // A host setting row like the others, with an On/Off button instead of a number: a copy of the round
+        // limit row, made at runtime so the scene needn't change (placeholder until the UI pass).
+        private void CreateShowBestRow()
+        {
+            GameObject source = _roundLimitInput.transform.parent.gameObject;
+            GameObject row = Instantiate(source, source.transform.parent);
+            row.name = "Show Best Row";
+            row.transform.SetSiblingIndex(source.transform.GetSiblingIndex() + 1);
+
+            InputField input = row.GetComponentInChildren<InputField>(true);
+            foreach (Text text in row.GetComponentsInChildren<Text>(true))
+            {
+                if (text.GetComponentInParent<InputField>() == null)
+                    text.text = "Show the best solution";
+            }
+            GameObject button = Instantiate(_startButton.gameObject, row.transform);
+            button.name = "Toggle Show Best";
+            button.transform.SetSiblingIndex(input.transform.GetSiblingIndex());
+            // Not ??: Unity's "missing component" objects only compare equal to null with ==.
+            LayoutElement layout = button.GetComponent<LayoutElement>();
+            if (layout == null)
+                layout = button.AddComponent<LayoutElement>();
+            var inputLayout = input.GetComponent<LayoutElement>();
+            if (inputLayout != null)
+            {
+                layout.preferredWidth = inputLayout.preferredWidth;
+                layout.preferredHeight = inputLayout.preferredHeight;
+                layout.minWidth = inputLayout.minWidth;
+                layout.minHeight = inputLayout.minHeight;
+                layout.flexibleWidth = inputLayout.flexibleWidth;
+            }
+            DestroyImmediate(input.gameObject);
+            _showBestButton = button.GetComponent<Button>();
+            _showBestButton.onClick = new Button.ButtonClickedEvent(); // drop the copied Start listener
+            _showBestLabel = button.GetComponentInChildren<Text>(true);
         }
 
         // Optional overrides, e.g. for quick testing or a link to a lobby. Desktop command line:
@@ -173,6 +221,7 @@ namespace Ricochet.Client.UI
             _network.TimerUpdated += OnTimerUpdated;
             _network.RoundTimeLimit += OnRoundTimeLimit;
             _network.NewBestSolution += OnNewBest;
+            _network.MatchHistory += OnMatchHistory;
             _network.SolutionRejected += OnRejected;
             _network.RoundEnded += OnRoundEnded;
             _network.RequestFailed += OnRequestFailed;
@@ -189,6 +238,7 @@ namespace Ricochet.Client.UI
             _network.TimerUpdated -= OnTimerUpdated;
             _network.RoundTimeLimit -= OnRoundTimeLimit;
             _network.NewBestSolution -= OnNewBest;
+            _network.MatchHistory -= OnMatchHistory;
             _network.SolutionRejected -= OnRejected;
             _network.RoundEnded -= OnRoundEnded;
             _network.RequestFailed -= OnRequestFailed;
@@ -224,10 +274,16 @@ namespace Ricochet.Client.UI
         {
             if (!_match.InLobby || _match.Stage != MatchStage.Solving)
                 return; // practice: just "Solved in N"
+            Move[] solution = new List<Move>(Board.Moves).ToArray();
             if (_match.OnSolved(moves))
-                _network.SubmitSolution(new List<Move>(Board.Moves).ToArray());
+            {
+                _network.SubmitSolution(solution);
+            }
             else
+            {
+                _network.RecordSolution(solution); // still the player's own best for the match history
                 _scratchpad.View.MarkNotShorter();
+            }
             _scratchpad.ResetAfter(SolvedResetDelay);
         }
 
@@ -246,6 +302,35 @@ namespace Ricochet.Client.UI
 
         // Toggles this player's vote to end the round early (or skip the replay); the server acts once
         // everyone has voted.
+        // Plays the current best (shown by the lobby) on this player's board, then puts their attempt back.
+        private void OnWatchClicked()
+        {
+            ClearButtonFocus();
+            if (_match.CanWatchBest)
+                _scratchpad.WatchSolution(new ReplaySegment($"{_match.BestPlayer}'s best", _match.BestSolution, 0.6f));
+        }
+
+        private void OnShowBestClicked()
+        {
+            ClearButtonFocus();
+            MatchSettings settings = _match.Settings;
+            if (!_match.IAmHost || settings == null)
+                return;
+            MatchSettings edited = Copy(settings);
+            edited.ShowBestSolution = !settings.ShowBestSolution;
+            _network.UpdateSettings(edited);
+        }
+
+        private static MatchSettings Copy(MatchSettings settings) => new MatchSettings
+        {
+            Mode = settings.Mode,
+            PointsToWin = settings.PointsToWin,
+            FirstTimerSeconds = settings.FirstTimerSeconds,
+            ExtensionSeconds = settings.ExtensionSeconds,
+            RoundLimitSeconds = settings.RoundLimitSeconds,
+            ShowBestSolution = settings.ShowBestSolution,
+        };
+
         private void OnDoneClicked()
         {
             ClearButtonFocus();
@@ -263,15 +348,12 @@ namespace Ricochet.Client.UI
             if (!_match.IAmHost || settings == null)
                 return;
 
-            var edited = new MatchSettings
-            {
-                Mode = settings.Mode,
-                PointsToWin = ParseOr(_pointsInput.text, settings.PointsToWin),
-                FirstTimerSeconds = ParseOr(_firstTimerInput.text, settings.FirstTimerSeconds),
-                ExtensionSeconds = ParseOr(_extensionInput.text, settings.ExtensionSeconds),
-                // Entered in minutes; 0 = no limit.
-                RoundLimitSeconds = ParseOr(_roundLimitInput.text, settings.RoundLimitSeconds / 60) * 60,
-            };
+            MatchSettings edited = Copy(settings);
+            edited.PointsToWin = ParseOr(_pointsInput.text, settings.PointsToWin);
+            edited.FirstTimerSeconds = ParseOr(_firstTimerInput.text, settings.FirstTimerSeconds);
+            edited.ExtensionSeconds = ParseOr(_extensionInput.text, settings.ExtensionSeconds);
+            // Entered in minutes; 0 = no limit.
+            edited.RoundLimitSeconds = ParseOr(_roundLimitInput.text, settings.RoundLimitSeconds / 60) * 60;
             if (edited.PointsToWin == settings.PointsToWin && edited.FirstTimerSeconds == settings.FirstTimerSeconds
                 && edited.ExtensionSeconds == settings.ExtensionSeconds && edited.RoundLimitSeconds == settings.RoundLimitSeconds)
             {
@@ -344,12 +426,14 @@ namespace Ricochet.Client.UI
         private void OnRoundTimeLimit(int round, float secondsRemaining) =>
             _match.OnRoundTimeLimit(round, secondsRemaining, Time.time);
 
-        private void OnNewBest(int round, string player, int moves)
+        private void OnMatchHistory(RoundRecord[] rounds) => _match.OnMatchHistory(rounds);
+
+        private void OnNewBest(int round, string player, int moves, Move[] shown)
         {
             if (player != _match.MyName && round == _network.CurrentRound)
                 _scratchpad.View.PlayOpponentSolved();
             int onBoard = Board.IsSolved && !Board.IsReplaying ? Board.Moves.Count : -1;
-            if (_match.OnNewBest(round, player, moves, onBoard))
+            if (_match.OnNewBest(round, player, moves, onBoard, shown))
                 _scratchpad.ResetToStart();
         }
 
@@ -392,6 +476,12 @@ namespace Ricochet.Client.UI
             _startButton.gameObject.SetActive(!playing && _match.IAmHost);
             _roundText.gameObject.SetActive(playing);
             _doneButton.gameObject.SetActive(_match.DoneAction != DoneAction.None);
+            _lockInButton.gameObject.SetActive(_match.CanWatchBest);
+            if (_match.CanWatchBest)
+            {
+                _lockInButton.interactable = !Board.IsReplaying;
+                _watchLabel.text = $"Watch {_match.BestPlayer}'s {_match.BestMoves}";
+            }
 
             if (!playing)
             {
@@ -425,6 +515,7 @@ namespace Ricochet.Client.UI
             if (!_firstTimerInput.isFocused) _firstTimerInput.text = settings.FirstTimerSeconds.ToString();
             if (!_extensionInput.isFocused) _extensionInput.text = settings.ExtensionSeconds.ToString();
             if (!_roundLimitInput.isFocused) _roundLimitInput.text = (settings.RoundLimitSeconds / 60).ToString();
+            _showBestLabel.text = settings.ShowBestSolution ? "On" : "Off";
         }
 
         private string RoundText(MatchStage stage)
@@ -506,7 +597,8 @@ namespace Ricochet.Client.UI
                     : $"Waiting for {_match.Host} to start the match.");
                 text.Append($"Classic: first to {settings.PointsToWin} points, "
                     + $"{settings.FirstTimerSeconds}s timer, +{settings.ExtensionSeconds}s for better solutions, "
-                    + (settings.RoundLimitSeconds > 0 ? $"{settings.RoundLimitSeconds / 60} min to find a first solution" : "no round limit"));
+                    + (settings.RoundLimitSeconds > 0 ? $"{settings.RoundLimitSeconds / 60} min to find a first solution" : "no round limit")
+                    + (settings.ShowBestSolution ? ", the best solution is shown" : ""));
             }
             _matchText.text = text.ToString();
         }

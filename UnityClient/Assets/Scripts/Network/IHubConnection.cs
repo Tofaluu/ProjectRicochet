@@ -23,6 +23,7 @@ namespace Ricochet.Client.Network
         void On<T1>(string method, Action<T1> handler);
         void On<T1, T2>(string method, Action<T1, T2> handler);
         void On<T1, T2, T3>(string method, Action<T1, T2, T3> handler);
+        void On<T1, T2, T3, T4>(string method, Action<T1, T2, T3, T4> handler);
 
         Task StartAsync();
         Task InvokeAsync(string method, params object[] args);

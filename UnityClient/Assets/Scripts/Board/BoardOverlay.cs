@@ -47,6 +47,9 @@ namespace Ricochet.Client.Board
         /// <summary>Screen pixels on the left taken by the card; the camera keeps the board right of it.</summary>
         public float LeftInsetPixels => (CardMargin * 2f + CardWidth) * UiScale;
 
+        /// <summary>Bottom of the card and toggles, in unscaled GUI units (multiply by <see cref="UiScale"/>), for what goes under them.</summary>
+        public float LeftColumnBottom { get; private set; } = CardMargin;
+
         private void Awake() => _controller = GetComponent<ScratchpadController>();
 
         private void OnGUI()
@@ -74,6 +77,7 @@ namespace Ricochet.Client.Board
             y += ToggleHeight + 6f;
             if (DrawToggle(new Rect(card.x, y, ToggleWidth, ToggleHeight), "Big burst", PlayerSettings.BigBurst))
                 PlayerSettings.BigBurst = !PlayerSettings.BigBurst;
+            LeftColumnBottom = y + ToggleHeight;
             GUI.matrix = matrix;
         }
 

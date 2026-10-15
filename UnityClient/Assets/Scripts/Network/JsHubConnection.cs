@@ -63,6 +63,9 @@ namespace Ricochet.Client.Network
         public void On<T1, T2, T3>(string method, Action<T1, T2, T3> handler) =>
             Register(method, args => handler(Arg<T1>(args, 0), Arg<T2>(args, 1), Arg<T3>(args, 2)));
 
+        public void On<T1, T2, T3, T4>(string method, Action<T1, T2, T3, T4> handler) =>
+            Register(method, args => handler(Arg<T1>(args, 0), Arg<T2>(args, 1), Arg<T3>(args, 2), Arg<T4>(args, 3)));
+
         public async Task StartAsync()
         {
             await Call(id => RicochetHub_Start(_handle, id));

@@ -56,6 +56,7 @@ namespace Ricochet.Client.Game
         private float _timerExtendedUntil = -1f;
         private float _limitEnd = -1f;
         private HashSet<string> _playerNames = new HashSet<string>();
+        private readonly List<HistoryRound> _history = new List<HistoryRound>();
 
         /// <summary>How long "+time" is shown after the timer was topped up.</summary>
         public const float TimeAddedNoticeSeconds = 2f;
@@ -86,11 +87,18 @@ namespace Ricochet.Client.Game
         public bool HasTimeLimit => _limitEnd >= 0f;
         public string BestPlayer { get; private set; }
         public int BestMoves { get; private set; }
+        /// <summary>The best's moves, when the lobby shows them (<see cref="MatchSettings.ShowBestSolution"/>); else null.</summary>
+        public IReadOnlyList<Move> BestSolution { get; private set; }
+        /// <summary>Someone else leads and the lobby shows their solution: offer to watch it.</summary>
+        public bool CanWatchBest => Stage == MatchStage.Solving && BestSolution != null && BestSolution.Count > 0 && BestPlayer != MyName;
         public bool IAmLeading { get; private set; }
         public bool IAmDone { get; private set; }
         /// <summary>The vote among the players who can vote (connected, not leading).</summary>
         public int DoneCount { get; private set; }
         public int VoterCount { get; private set; }
+
+        /// <summary>The current (or just finished) match's boards with everyone's solutions, in order.</summary>
+        public IReadOnlyList<HistoryRound> History => _history;
 
         /// <summary>The latest message for the player (results, rejections, what to do next).</summary>
         public string Feedback { get; private set; } = "";
@@ -136,6 +144,8 @@ namespace Ricochet.Client.Game
             MyName = myName;
             bool first = !InLobby;
             MatchPhase previous = Phase;
+            if (first)
+                _history.Clear(); // a mid-match joiner gets the match's boards so far (OnMatchHistory)
             InLobby = true;
             LobbyCode = state.Code;
             Phase = state.Phase;
@@ -171,6 +181,7 @@ namespace Ricochet.Client.Game
             if (Phase == MatchPhase.Playing && !first && previous != MatchPhase.Playing)
             {
                 ClearRound();
+                _history.Clear();
                 Feedback = "Match started! Get ready...";
                 return LobbyChange.MatchStarted;
             }
@@ -224,12 +235,14 @@ namespace Ricochet.Client.Game
         /// </summary>
         /// <param name="boardSolution">Moves of the solution on this player's board, or -1 if it isn't solved.</param>
         /// <returns>True if the board should be reset.</returns>
-        public bool OnNewBest(int round, string player, int moves, int boardSolution)
+        /// <param name="shownMoves">The best's moves if the lobby shows them, else null or empty.</param>
+        public bool OnNewBest(int round, string player, int moves, int boardSolution, IReadOnlyList<Move> shownMoves = null)
         {
             if (round != Round)
                 return false;
             BestPlayer = player;
             BestMoves = moves;
+            BestSolution = shownMoves != null && shownMoves.Count > 0 ? shownMoves : null;
             // Our own solution was accepted; the board already went back to the start when it was sent.
             if (player == MyName)
             {
@@ -252,7 +265,10 @@ namespace Ricochet.Client.Game
         {
             if (result.RoundNumber != Round)
                 return null;
+            if (result.Record != null)
+                AddToHistory(HistoryRound.From(result.Record));
             RoundOver = true;
+            BestSolution = null;
             _timerEnd = -1f;
             _limitEnd = -1f;
             string skipped = result.OutOfTime ? "Time's up, nobody solved it." : "Board skipped.";
@@ -291,6 +307,22 @@ namespace Ricochet.Client.Game
             if (matchWinner != null)
                 Feedback += matchWinner == MyName ? "\nThat's the match — you win!" : $"\nThat's the match — {matchWinner} wins!";
             return replays;
+        }
+
+        /// <summary>The match's boards so far, sent on (re)joining mid-match or on the results.</summary>
+        public void OnMatchHistory(IEnumerable<RoundRecord> rounds)
+        {
+            _history.Clear();
+            foreach (RoundRecord record in rounds)
+                AddToHistory(HistoryRound.From(record));
+        }
+
+        private void AddToHistory(HistoryRound round)
+        {
+            // A rejoin's catch-up may overlap a RoundEnded.
+            _history.RemoveAll(r => r.MatchRound == round.MatchRound);
+            _history.Add(round);
+            _history.Sort((a, b) => a.MatchRound.CompareTo(b.MatchRound));
         }
 
         public void OnRequestFailed(string message, bool reconnecting)
@@ -355,6 +387,7 @@ namespace Ricochet.Client.Game
             _timerExtendedUntil = -1f;
             _limitEnd = -1f;
             BestPlayer = null;
+            BestSolution = null;
             IAmDone = false;
             IAmLeading = false;
         }
@@ -368,6 +401,7 @@ namespace Ricochet.Client.Game
             MatchWinner = null;
             Standings = new PlayerInfo[0];
             Phase = MatchPhase.Waiting;
+            _history.Clear();
         }
     }
 }

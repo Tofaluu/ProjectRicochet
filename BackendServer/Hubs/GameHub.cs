@@ -41,6 +41,10 @@ namespace BackendServer.Hubs
         public Task SubmitSolution(int roundNumber, byte[] moves) =>
             _lobbies.SubmitAsync(Context.ConnectionId, roundNumber, moves);
 
+        [HubMethodName(HubMethods.RecordSolution)]
+        public Task RecordSolution(int roundNumber, byte[] moves) =>
+            _lobbies.RecordAsync(Context.ConnectionId, roundNumber, moves);
+
         [HubMethodName(HubMethods.SetDone)]
         public Task SetDone(int roundNumber, bool done) =>
             _lobbies.SetDoneAsync(Context.ConnectionId, roundNumber, done);
