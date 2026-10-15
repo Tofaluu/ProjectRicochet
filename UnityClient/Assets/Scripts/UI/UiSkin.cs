@@ -72,21 +72,33 @@ namespace Ricochet.Client.UI
             ColorBlock colors = input.colors;
             colors.normalColor = Color.white;
             colors.highlightedColor = new Color(1.12f, 1.12f, 1.12f);
-            colors.selectedColor = new Color(1.18f, 1.18f, 1.18f);
+            // No brightening while typing: the caret shows which field is active.
+            colors.selectedColor = Color.white;
             colors.disabledColor = new Color(0.8f, 0.8f, 0.8f, 0.5f);
             input.colors = colors;
             input.caretColor = theme.PanelText;
             input.customCaretColor = true;
             input.selectionColor = new Color(theme.PrimaryButton.r, theme.PrimaryButton.g, theme.PrimaryButton.b, 0.45f);
+            if (input.GetComponent<CaretAtEndOnFocus>() == null)
+                input.gameObject.AddComponent<CaretAtEndOnFocus>();
 
+            // Settings rows ("... Row": a label and a number) centre their values, like the On/Off button.
+            Transform parent = input.transform.parent;
+            bool setting = parent != null && parent.name.EndsWith("Row");
             if (input.textComponent != null)
+            {
                 SetText(input.textComponent, theme.Font, theme.PanelText, input.textComponent.fontSize);
+                if (setting)
+                    input.textComponent.alignment = TextAnchor.MiddleCenter;
+            }
             if (input.placeholder is Text placeholder)
             {
                 Color muted = theme.MutedText;
                 muted.a = 0.7f;
                 SetText(placeholder, theme.Font, muted, placeholder.fontSize);
                 placeholder.fontStyle = FontStyle.Normal;
+                if (setting)
+                    placeholder.alignment = TextAnchor.MiddleCenter;
             }
         }
 
