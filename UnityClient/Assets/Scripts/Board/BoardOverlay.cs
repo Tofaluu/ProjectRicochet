@@ -18,6 +18,7 @@ namespace Ricochet.Client.Board
         private const int CardRadius = 14;
         private const float CardWidth = 340f;
         private const float HeaderHeight = 22f;
+        private const float CardMargin = 16f;
 
         [SerializeField] private GameTheme _theme;
 
@@ -30,8 +31,15 @@ namespace Ricochet.Client.Board
         private GUIStyle _bodyStyle;
         private GUIStyle _headerStyle;
         private GUIStyle _keyStyle;
+        private GUIStyle _soundStyle;
 
         private GameTheme Colors => GameTheme.OrDefault(_theme);
+
+        /// <summary>The card's scale, following the side panel's (its canvas scales with the screen from 1920x1080).</summary>
+        public static float UiScale => Mathf.Clamp(Mathf.Sqrt(Screen.width / 1920f * Screen.height / 1080f), 0.7f, 1.3f);
+
+        /// <summary>Screen pixels on the left taken by the card; the camera keeps the board right of it.</summary>
+        public float LeftInsetPixels => (CardMargin * 2f + CardWidth) * UiScale;
 
         private void Awake() => _controller = GetComponent<ScratchpadController>();
 
@@ -47,7 +55,24 @@ namespace Ricochet.Client.Board
             DrawBanner(session, board);
             if (session.IsCountingDown)
                 DrawCountdown(session, board);
-            DrawCard(session);
+            // The card and sound toggle scale with the screen like the side panel does.
+            Matrix4x4 matrix = GUI.matrix;
+            GUI.matrix = Matrix4x4.Scale(new Vector3(UiScale, UiScale, 1f));
+            Rect card = DrawCard(session);
+            DrawSoundToggle(new Rect(card.x, card.yMax + 10f, 150f, 30f));
+            GUI.matrix = matrix;
+        }
+
+        // A pill under the card: click it or press M.
+        private void DrawSoundToggle(Rect rect)
+        {
+            Color previous = GUI.backgroundColor;
+            GUI.backgroundColor = Tint(SoundSettings.Muted ? Colors.Input : Colors.Panel);
+            _soundStyle.normal.textColor = SoundSettings.Muted ? Colors.MutedText : Colors.PanelText;
+            _soundStyle.hover.textColor = Colors.PanelText;
+            if (GUI.Button(rect, SoundSettings.Muted ? "Sound off  ·  M" : "Sound on  ·  M", _soundStyle))
+                SoundSettings.ToggleMute();
+            GUI.backgroundColor = previous;
         }
 
         private void CreateStyles()
@@ -83,6 +108,12 @@ namespace Ricochet.Client.Board
                 clipping = TextClipping.Overflow,
                 normal = { background = ShapeSprites.RoundedTexture(6), textColor = Colors.PanelText },
                 border = new RectOffset(6, 6, 6, 6), padding = new RectOffset(9, 9, 0, 0),
+            };
+            _soundStyle = new GUIStyle(GUI.skin.button)
+            {
+                alignment = TextAnchor.MiddleCenter, font = Colors.BoldFont, fontSize = 13,
+                normal = { background = rounded }, hover = { background = rounded }, active = { background = rounded },
+                border = new RectOffset(CardRadius, CardRadius, CardRadius, CardRadius),
             };
         }
 
@@ -152,7 +183,7 @@ namespace Ricochet.Client.Board
 
         // Top-left card: the goal (with the target's symbol), the move count, then the controls as
         // "action  [key] [key]" rows.
-        private void DrawCard(BoardSession session)
+        private Rect DrawCard(BoardSession session)
         {
             const float pad = 18f, rowHeight = 30f, actionWidth = 104f;
             float inner = CardWidth - 2 * pad;
@@ -183,7 +214,7 @@ namespace Ricochet.Client.Board
             float statusHeight = _bodyStyle.CalcHeight(new GUIContent(status), inner);
             float height = pad + HeaderHeight + goalHeight + 6f + statusHeight + 14f + HeaderHeight + 4f + controls.Count * rowHeight + pad - 4f;
 
-            var card = new Rect(16f, 16f, CardWidth, height);
+            var card = new Rect(CardMargin, CardMargin, CardWidth, height);
             Color previous = GUI.backgroundColor;
             GUI.backgroundColor = Tint(Colors.Panel);
             GUI.Box(card, GUIContent.none, _cardStyle);
@@ -220,6 +251,7 @@ namespace Ricochet.Client.Board
             }
             _bodyStyle.normal.textColor = body;
             GUI.backgroundColor = previous;
+            return card;
         }
 
         // In browser builds (linear colour space) IMGUI gamma-corrects tint colours once more than on desktop,

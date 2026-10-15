@@ -32,16 +32,20 @@ namespace Ricochet.Client.Scratchpad
         private bool _dragging;
         private Vector3 _dragStart;
         private Coroutine _replay;
+        private BoardOverlay _overlay;
 
         /// <summary>What's on the board; views read it.</summary>
         public BoardSession Session { get; } = new BoardSession();
         public Camera Camera => _camera;
         public BoardView View => _boardView;
+        /// <summary>The UI panel on the right; the camera keeps the board clear of it.</summary>
+        public RectTransform SidePanel { get; set; }
 
         private void Start()
         {
             if (_camera == null)
                 _camera = Camera.main;
+            _overlay = GetComponent<BoardOverlay>();
             if (Session.Round == null)
                 NewBoard();
         }
@@ -189,6 +193,13 @@ namespace Ricochet.Client.Scratchpad
             FrameCamera();
         }
 
+        // Every frame, so resizing the window (or the browser) keeps the board in view.
+        private void LateUpdate()
+        {
+            if (Session.Round != null)
+                FrameCamera();
+        }
+
         // Runs a change to the session, then shows where the robots ended up.
         private void Apply(System.Action change)
         {
@@ -233,6 +244,9 @@ namespace Ricochet.Client.Scratchpad
         {
             CheckHint();
             _boardView.ShowMode(Session.Mode);
+            Keyboard keys = Keyboard.current;
+            if (keys != null && keys.mKey.wasPressedThisFrame && !IsTypingInUI())
+                SoundSettings.ToggleMute();
             if (!Session.AcceptsInput)
             {
                 _dragging = false;
@@ -335,6 +349,8 @@ namespace Ricochet.Client.Scratchpad
             }
         }
 
+        // Fits the board (plus room for the banner above it) into the screen area between the overlay card
+        // on the left and the side panel on the right.
         private void FrameCamera()
         {
             if (_camera == null)
@@ -343,12 +359,32 @@ namespace Ricochet.Client.Scratchpad
             float width = Session.Round.Grid.Width;
             float height = Session.Round.Grid.Height;
             // Extra room above the board for the banner (see BoardOverlay).
-            const float margin = 1f;
+            const float margin = 0.6f;
             const float bottom = 0.8f;
             const float top = 2f;
+
+            float screenWidth = _camera.pixelWidth;
+            float left = _overlay != null ? _overlay.LeftInsetPixels : 0f;
+            float right = SidePanel != null && SidePanel.gameObject.activeInHierarchy ? screenWidth - PanelLeftPixels() : 0f;
+            // In a very narrow window, let the card overlap the board rather than shrink the board to nothing.
+            if (screenWidth - left - right < screenWidth * 0.45f)
+                left = 0f;
+            float free = Mathf.Max(1f, screenWidth - left - right);
+            float pixelsPerUnit = Mathf.Min(free / (width + 2f * margin), _camera.pixelHeight / (height + top + bottom));
+
             _camera.orthographic = true;
-            _camera.transform.position = new Vector3(width / 2f, height / 2f + (top - bottom) / 2f, -10f);
-            _camera.orthographicSize = Mathf.Max((height + top + bottom) / 2f, width / 2f / _camera.aspect + margin);
+            _camera.orthographicSize = _camera.pixelHeight / pixelsPerUnit / 2f;
+            // Centre the board in the free area instead of the screen.
+            float offset = (left - right) / 2f / pixelsPerUnit;
+            _camera.transform.position = new Vector3(width / 2f - offset, height / 2f + (top - bottom) / 2f, -10f);
+        }
+
+        // The panel's left edge in screen pixels (the canvas is screen-space overlay).
+        private float PanelLeftPixels()
+        {
+            var corners = new Vector3[4];
+            SidePanel.GetWorldCorners(corners);
+            return corners[0].x - 16f;
         }
     }
 }

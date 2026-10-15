@@ -89,6 +89,11 @@ namespace Ricochet.Client.UI
                     label.gameObject.SetActive(false);
             }
 
+            // Lobby codes aren't case-sensitive; show them the way they're displayed in the lobby.
+            _codeInput.onValidateInput += (text, index, c) => char.ToUpperInvariant(c);
+            // Keep the board clear of the panel.
+            _scratchpad.SidePanel = _joinPanel.transform.parent as RectTransform;
+
             _joinButton.onClick.AddListener(OnJoinClicked);
             _lockInButton.onClick.AddListener(OnLockInClicked);
             _doneButton.onClick.AddListener(OnDoneClicked);
@@ -121,7 +126,7 @@ namespace Ricochet.Client.UI
             if (server != null) _serverInput.text = server;
             if (lobby != null)
             {
-                _codeInput.text = lobby;
+                _codeInput.text = lobby.ToUpperInvariant();
                 Join(save: false);
             }
         }
