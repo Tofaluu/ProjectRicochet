@@ -441,7 +441,7 @@ namespace Ricochet.Client.Board
 
         private void Play(AudioClip clip, float volume)
         {
-            if (_audio != null && _volume > 0f)
+            if (_audio != null && _volume > 0f && !SoundSettings.Muted)
                 _audio.PlayOneShot(clip, volume * _volume);
         }
 
