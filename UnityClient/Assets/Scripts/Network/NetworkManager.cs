@@ -37,8 +37,10 @@ namespace Ricochet.Client.Network
         public event Action<int, float> TimerUpdated;
         /// <summary>(round number, seconds of the round's time limit remaining)</summary>
         public event Action<int, float> RoundTimeLimit;
-        /// <summary>(round number, player name, move count)</summary>
-        public event Action<int, string, int> NewBestSolution;
+        /// <summary>(round number, player name, move count, their moves if the lobby shows them (else empty))</summary>
+        public event Action<int, string, int, Move[]> NewBestSolution;
+        /// <summary>(the match's boards so far) on joining mid-match or on the results</summary>
+        public event Action<RoundRecord[]> MatchHistory;
         /// <summary>(reason)</summary>
         public event Action<string> SolutionRejected;
         /// <summary>(result, winner's moves (empty if none), shortest moves (null if the solver gave up))</summary>
@@ -178,6 +180,22 @@ namespace Ricochet.Client.Network
             }
         }
 
+        /// <summary>A valid solution that doesn't beat the best: kept by the server for the match history only.</summary>
+        public async void RecordSolution(IReadOnlyList<Move> moves)
+        {
+            if (_connection == null || !IsInLobby)
+                return;
+
+            try
+            {
+                await _connection.InvokeAsync(HubMethods.RecordSolution, CurrentRound, MoveCodec.Encode(moves));
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Network] Record failed: " + Describe(e));
+            }
+        }
+
         /// <summary>Vote (or take back the vote) to end the current round early.</summary>
         public async void SetDone(bool done)
         {
@@ -222,8 +240,13 @@ namespace Ricochet.Client.Network
                 (round, seconds) => PostLobbyEvent(() => TimerUpdated?.Invoke(round, (float)seconds)));
             _connection.On<int, double>(HubMethods.RoundTimeLimit,
                 (round, seconds) => PostLobbyEvent(() => RoundTimeLimit?.Invoke(round, (float)seconds)));
-            _connection.On<int, string, int>(HubMethods.NewBestSolution,
-                (round, player, moves) => PostLobbyEvent(() => NewBestSolution?.Invoke(round, player, moves)));
+            _connection.On<int, string, int, byte[]>(HubMethods.NewBestSolution, (round, player, count, shown) =>
+            {
+                Move[] moves = MoveCodec.Decode(shown ?? Array.Empty<byte>());
+                PostLobbyEvent(() => NewBestSolution?.Invoke(round, player, count, moves));
+            });
+            _connection.On<RoundRecord[]>(HubMethods.MatchHistory,
+                rounds => PostLobbyEvent(() => MatchHistory?.Invoke(rounds ?? Array.Empty<RoundRecord>())));
             _connection.On<string>(HubMethods.SolutionRejected,
                 reason => PostLobbyEvent(() => SolutionRejected?.Invoke(reason)));
             _connection.On<RoundResult>(HubMethods.RoundEnded, result =>

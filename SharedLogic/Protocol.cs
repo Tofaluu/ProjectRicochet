@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 7;
+        public const int ProtocolVersion = 8;
 
         // Client -> server
 
@@ -43,8 +43,17 @@ namespace SharedLogic
         /// <summary>(MatchSettings settings) Host only, between matches. Out-of-range values are clamped.</summary>
         public const string UpdateSettings = "UpdateSettings";
 
-        /// <summary>(int roundNumber, byte[] moves)</summary>
+        /// <summary>
+        /// (int roundNumber, byte[] moves). An attempt at the lead: accepted only if shorter than the current
+        /// best. Either way a valid solution is kept as the player's own best for the match history.
+        /// </summary>
         public const string SubmitSolution = "SubmitSolution";
+
+        /// <summary>
+        /// (int roundNumber, byte[] moves). A valid solution that doesn't beat the current best, kept only as
+        /// the player's own best for the match history (<see cref="RoundRecord.Solutions"/>); no reply.
+        /// </summary>
+        public const string RecordSolution = "RecordSolution";
 
         /// <summary>
         /// (int roundNumber, bool done). Vote to end the round early; toggleable. The current leader
@@ -87,7 +96,10 @@ namespace SharedLogic
         /// </summary>
         public const string RoundTimeLimit = "RoundTimeLimit";
 
-        /// <summary>(int roundNumber, string playerName, int moveCount)</summary>
+        /// <summary>
+        /// (int roundNumber, string playerName, int moveCount, byte[] moves). moves is empty unless the lobby's
+        /// <see cref="MatchSettings.ShowBestSolution"/> is on.
+        /// </summary>
         public const string NewBestSolution = "NewBestSolution";
 
         /// <summary>(string reason). Sent only to the player whose submission was rejected.</summary>
@@ -99,6 +111,38 @@ namespace SharedLogic
         /// (or sooner if everyone but the winner votes to skip).
         /// </summary>
         public const string RoundEnded = "RoundEnded";
+
+        /// <summary>
+        /// (RoundRecord[] rounds). The current (or just finished) match's boards so far, sent to a player who
+        /// joins or rejoins mid-match or on the results; later boards arrive with each <see cref="RoundEnded"/>.
+        /// </summary>
+        public const string MatchHistory = "MatchHistory";
+    }
+
+    /// <summary>One player's best solution for a board (<see cref="MoveCodec"/> bytes).</summary>
+    public class PlayerSolution
+    {
+        public string Name { get; set; }
+        public byte[] Moves { get; set; }
+    }
+
+    /// <summary>A finished board of the match, for the match history: the board and everyone's solutions.</summary>
+    public class RoundRecord
+    {
+        /// <summary>1-based within the match.</summary>
+        public int MatchRound { get; set; }
+
+        /// <summary><see cref="BoardCodec"/> bytes.</summary>
+        public byte[] Board { get; set; }
+
+        /// <summary>Who took the point; null if nobody solved it.</summary>
+        public string WinnerName { get; set; }
+
+        /// <summary>Each player's best solution, shortest first (equal lengths: whoever found it first).</summary>
+        public PlayerSolution[] Solutions { get; set; }
+
+        /// <summary><see cref="MoveCodec"/> bytes of a shortest solution; empty if the solver gave up on this board.</summary>
+        public byte[] ShortestMoves { get; set; }
     }
 
     /// <summary>
@@ -132,6 +176,9 @@ namespace SharedLogic
         /// <see cref="MatchPhase.Finished"/> once the replays are over.
         /// </summary>
         public string MatchWinnerName { get; set; }
+
+        /// <summary>This board for the match history, with everyone's solutions.</summary>
+        public RoundRecord Record { get; set; }
     }
 
     public enum GameMode
@@ -172,6 +219,12 @@ namespace SharedLogic
         /// </summary>
         public int RoundLimitSeconds { get; set; }
 
+        /// <summary>
+        /// When someone takes the lead, everyone gets the moves too (<see cref="HubMethods.NewBestSolution"/>)
+        /// and can watch them on their own board. Only shorter solutions count, so copying gains nothing.
+        /// </summary>
+        public bool ShowBestSolution { get; set; }
+
         public MatchSettings Clamped()
         {
             return new MatchSettings
@@ -181,6 +234,7 @@ namespace SharedLogic
                 FirstTimerSeconds = Clamp(FirstTimerSeconds, MinTimerSeconds, MaxTimerSeconds),
                 ExtensionSeconds = Clamp(ExtensionSeconds, MinTimerSeconds, MaxTimerSeconds),
                 RoundLimitSeconds = RoundLimitSeconds <= 0 ? 0 : Clamp(RoundLimitSeconds, MinRoundLimitSeconds, MaxRoundLimitSeconds),
+                ShowBestSolution = ShowBestSolution,
             };
         }
 

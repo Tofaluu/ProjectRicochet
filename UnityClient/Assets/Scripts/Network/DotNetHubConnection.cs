@@ -41,6 +41,7 @@ namespace Ricochet.Client.Network
         public void On<T1>(string method, Action<T1> handler) => _connection.On(method, handler);
         public void On<T1, T2>(string method, Action<T1, T2> handler) => _connection.On(method, handler);
         public void On<T1, T2, T3>(string method, Action<T1, T2, T3> handler) => _connection.On(method, handler);
+        public void On<T1, T2, T3, T4>(string method, Action<T1, T2, T3, T4> handler) => _connection.On(method, handler);
 
         public Task StartAsync() => _connection.StartAsync();
         public Task InvokeAsync(string method, params object[] args) => _connection.InvokeCoreAsync(method, args);

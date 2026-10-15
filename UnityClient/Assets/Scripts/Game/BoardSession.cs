@@ -187,6 +187,28 @@ namespace Ricochet.Client.Game
             _replayHeld = false;
         }
 
+        /// <summary>
+        /// Puts the player's own attempt back after watching another solution: from the start, then
+        /// <paramref name="moves"/> (their moves before watching), with the same robot selected.
+        /// </summary>
+        public void Restore(IReadOnlyList<Move> moves)
+        {
+            RobotColor selected = Selected;
+            StopReplay();
+            ResetBoard();
+            foreach (Move move in moves)
+            {
+                if (!GameRules.TryMove(Round.Grid, Robots, move, out RobotPositions next))
+                    break;
+                _history.Add(Robots);
+                _moves.Add(move);
+                Robots = next;
+            }
+            IsSolved = _moves.Count > 0
+                && GameRules.ValidateSolution(Round.Grid, Round.Robots, Round.Target, _moves) == SolutionResult.Valid;
+            Selected = selected;
+        }
+
         /// <summary>The round is over without a replay to show: the board stays as it is, locked.</summary>
         public void EndRound() => _roundOver = true;
 

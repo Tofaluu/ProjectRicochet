@@ -98,6 +98,17 @@ namespace BackendServer.Services
         public bool Done { get; set; }
     }
 
+    /// <summary>A player's best solution for the current board, for the match history.</summary>
+    public sealed class OwnBest
+    {
+        public string PlayerId { get; init; } = "";
+        public string Name { get; set; } = "";
+        public byte[] Moves { get; set; } = Array.Empty<byte>();
+        public int Length { get; set; }
+        /// <summary>Order found (lower = earlier), so equal lengths list whoever found theirs first.</summary>
+        public long Found { get; set; }
+    }
+
     /// <summary>A generated board plus its shortest solution, if the solver found one in time.</summary>
     public sealed record PreparedRound(RoundSetup Round, Move[]? Shortest);
 
@@ -132,6 +143,12 @@ namespace BackendServer.Services
         public string? BestPlayerName { get; set; }
         public int BestMoveCount { get; set; }
         public byte[] BestMoves { get; set; } = Array.Empty<byte>();
+
+        /// <summary>Each player's best solution for the current board (lead or not), for the match history.</summary>
+        public List<OwnBest> OwnBests { get; } = new();
+        public long NextFound { get; set; }
+        /// <summary>The current (or just finished) match's boards, kept until the next match starts.</summary>
+        public List<RoundRecord> History { get; } = new();
 
         /// <summary>Cancelled when everyone but the winner votes to skip the replay.</summary>
         public CancellationTokenSource? ReplaySkip { get; set; }
@@ -221,6 +238,8 @@ namespace BackendServer.Services
             double? limitLeft;
             string? bestName;
             int bestMoves;
+            byte[] bestShown;
+            RoundRecord[] history;
             double? countdown;
             lock (_gate)
             {
@@ -277,6 +296,8 @@ namespace BackendServer.Services
                 limitLeft = lobby.Phase == RoundPhase.Solving ? SecondsUntil(lobby.LimitEndUtc) : null;
                 bestName = lobby.BestPlayerName;
                 bestMoves = lobby.BestMoveCount;
+                bestShown = ShownBestLocked(lobby);
+                history = lobby.History.ToArray();
                 countdown = lobby.CountdownEndUtc.HasValue
                     ? Math.Max(0, (lobby.CountdownEndUtc.Value - UtcNow).TotalSeconds)
                     : null;
@@ -287,8 +308,11 @@ namespace BackendServer.Services
             await _hub.Groups.AddToGroupAsync(connectionId, code);
             await _hub.Clients.Group(code).SendAsync(HubMethods.LobbyState, state);
 
-            // Catch the newcomer up on the round in progress and/or the countdown to the next one.
+            // Catch the newcomer up on the match's boards so far, the round in progress and/or the
+            // countdown to the next one.
             IClientProxy caller = _hub.Clients.Client(connectionId);
+            if (history.Length > 0)
+                await caller.SendAsync(HubMethods.MatchHistory, history);
             if (inRound)
             {
                 await caller.SendAsync(HubMethods.RoundStarted, round, board);
@@ -297,7 +321,7 @@ namespace BackendServer.Services
                 if (phase == RoundPhase.TimerRunning)
                 {
                     await caller.SendAsync(HubMethods.TimerUpdated, round, secondsLeft);
-                    await caller.SendAsync(HubMethods.NewBestSolution, round, bestName, bestMoves);
+                    await caller.SendAsync(HubMethods.NewBestSolution, round, bestName, bestMoves, bestShown);
                 }
                 // Again after the board, which resets the client's view of its own lead / vote.
                 await caller.SendAsync(HubMethods.LobbyState, state);
@@ -457,6 +481,8 @@ namespace BackendServer.Services
                 matchId = ++lobby.MatchId;
                 lobby.MatchRound = 0;
                 lobby.MatchWinner = null;
+                lobby.History.Clear();
+                lobby.OwnBests.Clear();
                 // No board yet: solutions and votes are refused until it's dealt.
                 lobby.Round = null;
                 lobby.Phase = RoundPhase.Intermission;
@@ -605,6 +631,7 @@ namespace BackendServer.Services
             int moveCount = 0;
             LobbyState? state = null;
             bool endRound = false;
+            byte[] bestShown = Array.Empty<byte>();
 
             lock (_gate)
             {
@@ -613,6 +640,7 @@ namespace BackendServer.Services
                 if (rejection == null)
                 {
                     state = SnapshotLocked(lobby!);
+                    bestShown = ShownBestLocked(lobby!);
                     // Nobody can beat the shortest possible solution, and everyone else may already have
                     // given up (or there's nobody else): either way, no need to wait for the timer.
                     bool unbeatable = lobby!.Shortest != null && moveCount <= lobby.Shortest.Length;
@@ -634,10 +662,21 @@ namespace BackendServer.Services
                 if (timerStarted)
                     RunInBackground(() => EndRoundAfterTimerAsync(lobby, roundNumber));
             }
-            await group.SendAsync(HubMethods.NewBestSolution, roundNumber, playerName, moveCount);
+            await group.SendAsync(HubMethods.NewBestSolution, roundNumber, playerName, moveCount, bestShown);
             await group.SendAsync(HubMethods.LobbyState, state);
             if (endRound)
                 RunInBackground(() => EndRoundAsync(lobby, roundNumber));
+        }
+
+        /// <summary>
+        /// A valid solution that doesn't beat the best: kept only as the player's own best for the match
+        /// history. Invalid or late ones are ignored (the client only sends solutions it checked).
+        /// </summary>
+        public Task RecordAsync(string connectionId, int roundNumber, byte[] moveData)
+        {
+            lock (_gate)
+                ValidateLocked(connectionId, roundNumber, moveData, out _, out _, out _);
+            return Task.CompletedTask;
         }
 
         /// <returns>Null if the solution was accepted as the new best, else the reason it wasn't.</returns>
@@ -645,36 +684,16 @@ namespace BackendServer.Services
         private string? TryAcceptLocked(string connectionId, int roundNumber, byte[] moveData, out Lobby? lobby,
             out bool timerStarted, out double? secondsLeft, out string playerName, out int moveCount)
         {
-            lobby = null;
             timerStarted = false;
             secondsLeft = null;
             playerName = "";
             moveCount = 0;
 
-            if (!_seatByConnection.TryGetValue(connectionId, out Seat? seat))
-                return "You are not in a lobby.";
-            lobby = seat.Lobby;
-            if (!lobby.InRound || roundNumber != lobby.RoundNumber || lobby.Phase == RoundPhase.Intermission)
-                return "That round is over.";
+            string? invalid = ValidateLocked(connectionId, roundNumber, moveData, out lobby, out Seat? seat, out Move[] moves);
+            if (invalid != null)
+                return invalid;
 
-            Move[] moves;
-            try
-            {
-                moves = MoveCodec.Decode(moveData ?? Array.Empty<byte>());
-            }
-            catch (FormatException)
-            {
-                return "Malformed solution.";
-            }
-            if (moves.Length > _options.MaxSolutionMoves)
-                return $"Solutions are limited to {_options.MaxSolutionMoves} moves.";
-
-            RoundSetup round = lobby.Round!;
-            SolutionResult result = GameRules.ValidateSolution(round.Grid, round.Robots, round.Target, moves);
-            if (result != SolutionResult.Valid)
-                return $"Invalid solution ({result}).";
-
-            if (lobby.Phase == RoundPhase.TimerRunning && moves.Length >= lobby.BestMoveCount)
+            if (lobby!.Phase == RoundPhase.TimerRunning && moves.Length >= lobby.BestMoveCount)
                 return $"Not better than the current best ({lobby.BestMoveCount} moves).";
 
             DateTime now = UtcNow;
@@ -696,7 +715,7 @@ namespace BackendServer.Services
                 }
             }
 
-            Player player = seat.Player;
+            Player player = seat!.Player;
             playerName = player.Name;
             moveCount = moves.Length;
             // The leader isn't part of the vote; drop any "skip" they pressed before solving it.
@@ -707,6 +726,58 @@ namespace BackendServer.Services
             lobby.BestMoves = MoveCodec.Encode(moves);
             return null;
         }
+
+        /// <summary>
+        /// Checks a solution for the current board and keeps it as the player's own best (match history) if it's
+        /// their shortest yet. Returns null if valid, else why not.
+        /// </summary>
+        private string? ValidateLocked(string connectionId, int roundNumber, byte[] moveData, out Lobby? lobby,
+            out Seat? seat, out Move[] moves)
+        {
+            lobby = null;
+            moves = Array.Empty<Move>();
+            if (!_seatByConnection.TryGetValue(connectionId, out seat))
+                return "You are not in a lobby.";
+            lobby = seat.Lobby;
+            if (!lobby.InRound || roundNumber != lobby.RoundNumber || lobby.Phase == RoundPhase.Intermission)
+                return "That round is over.";
+
+            try
+            {
+                moves = MoveCodec.Decode(moveData ?? Array.Empty<byte>());
+            }
+            catch (FormatException)
+            {
+                return "Malformed solution.";
+            }
+            if (moves.Length > _options.MaxSolutionMoves)
+                return $"Solutions are limited to {_options.MaxSolutionMoves} moves.";
+
+            RoundSetup round = lobby.Round!;
+            SolutionResult result = GameRules.ValidateSolution(round.Grid, round.Robots, round.Target, moves);
+            if (result != SolutionResult.Valid)
+                return $"Invalid solution ({result}).";
+
+            RecordOwnBestLocked(lobby, seat.Player, moves);
+            return null;
+        }
+
+        private static void RecordOwnBestLocked(Lobby lobby, Player player, Move[] moves)
+        {
+            OwnBest? own = lobby.OwnBests.Find(b => b.PlayerId == player.Id);
+            if (own != null && own.Length <= moves.Length)
+                return;
+            if (own == null)
+                lobby.OwnBests.Add(own = new OwnBest { PlayerId = player.Id });
+            own.Name = player.Name;
+            own.Moves = MoveCodec.Encode(moves);
+            own.Length = moves.Length;
+            own.Found = lobby.NextFound++;
+        }
+
+        // The best's moves for everyone, if the lobby shows them (MatchSettings.ShowBestSolution).
+        private static byte[] ShownBestLocked(Lobby lobby) =>
+            lobby.Settings.ShowBestSolution ? lobby.BestMoves : Array.Empty<byte>();
 
         private async Task EndRoundAfterTimerAsync(Lobby lobby, int roundNumber)
         {
@@ -791,7 +862,19 @@ namespace BackendServer.Services
                     ReplayPauseSeconds = _options.ReplayPauseSeconds,
                     MatchWinnerName = matchWinner,
                     OutOfTime = outOfTime,
+                    Record = new RoundRecord
+                    {
+                        MatchRound = lobby.MatchRound,
+                        Board = lobby.Board,
+                        WinnerName = lobby.BestPlayerName,
+                        Solutions = lobby.OwnBests
+                            .OrderBy(b => b.Length).ThenBy(b => b.Found)
+                            .Select(b => new PlayerSolution { Name = b.Name, Moves = b.Moves })
+                            .ToArray(),
+                        ShortestMoves = lobby.Shortest != null ? MoveCodec.Encode(lobby.Shortest) : Array.Empty<byte>(),
+                    },
                 };
+                lobby.History.Add(result.Record);
                 skip = new CancellationTokenSource();
                 lobby.ReplaySkip = skip;
                 state = SnapshotLocked(lobby);
@@ -902,6 +985,7 @@ namespace BackendServer.Services
             lobby.LimitEndUtc = limit > 0 ? now.AddSeconds(limit) : null;
             lobby.CountdownEndUtc = null;
             ClearBestLocked(lobby);
+            lobby.OwnBests.Clear();
             foreach (Player player in lobby.Players.Values)
                 player.Done = false;
         }

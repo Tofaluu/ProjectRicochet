@@ -24,6 +24,8 @@ namespace Ricochet.Client.Scratchpad
     {
         // In cells; small so a short flick counts (the move dots are there for precise moves).
         private const float MinDragDistance = 0.25f;
+        // After watching another solution, its final position stays up this long before the player's attempt returns.
+        private const float WatchHoldSeconds = 1f;
 
         [SerializeField] private BoardView _boardView;
         [SerializeField] private Camera _camera;
@@ -128,6 +130,35 @@ namespace Ricochet.Client.Scratchpad
             _replay = null;
             Session.FinishReplays(lockUntilNextBoard);
         }
+
+        /// <summary>
+        /// During a round: plays <paramref name="segment"/> (e.g. the current best) on this board, holds the final
+        /// position a moment, then puts the player's own attempt back. Cut short by anything else taking the
+        /// board (the round ending, a new board).
+        /// </summary>
+        public void WatchSolution(ReplaySegment segment)
+        {
+            if (!Session.AcceptsInput)
+                return;
+            var attempt = new List<Move>(Session.Moves);
+            StopReplay();
+            _replay = StartCoroutine(WatchRoutine(segment, attempt, Session.Round));
+        }
+
+        private IEnumerator WatchRoutine(ReplaySegment segment, List<Move> attempt, RoundSetup round)
+        {
+            yield return ReplayRoutine(new[] { segment }, Mathf.Min(0.5f, segment.StepSeconds), lockUntilNextBoard: true);
+            yield return new WaitForSeconds(WatchHoldSeconds);
+            if (Session.Round == round && Session.CurrentReplay == segment && !Session.IsCountingDown)
+                Apply(() => Session.Restore(attempt));
+        }
+
+        /// <summary>A finished board from the match history, as a practice board to look at and try.</summary>
+        public void ShowHistoryBoard(RoundSetup round) => Show(round, practice: true);
+
+        /// <summary>Plays a solution on the board shown (e.g. from the match history); the player's next move starts afresh.</summary>
+        public void ShowSolution(ReplaySegment segment) =>
+            PlayReplays(new[] { segment }, Mathf.Min(0.5f, segment.StepSeconds), lockUntilNextBoard: false);
 
         private void StopReplay()
         {
