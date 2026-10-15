@@ -35,8 +35,12 @@ namespace Ricochet.Client.Board
 
         private GameTheme Colors => GameTheme.OrDefault(_theme);
 
-        /// <summary>The card's scale, following the side panel's (its canvas scales with the screen from 1920x1080).</summary>
-        public static float UiScale => Mathf.Clamp(Mathf.Sqrt(Screen.width / 1920f * Screen.height / 1080f), 0.7f, 1.3f);
+        /// <summary>
+        /// The card's and banner's scale, following the side panel's (its canvas scales with the screen from
+        /// 1920x1080). No upper limit: on high-DPI screens (e.g. a Retina Mac's browser) Screen counts
+        /// physical pixels, so fixed pixel sizes would come out tiny.
+        /// </summary>
+        public static float UiScale => Mathf.Max(0.7f, Mathf.Sqrt(Screen.width / 1920f * Screen.height / 1080f));
 
         /// <summary>Screen pixels on the left taken by the card; the camera keeps the board right of it.</summary>
         public float LeftInsetPixels => (CardMargin * 2f + CardWidth) * UiScale;
@@ -129,8 +133,9 @@ namespace Ricochet.Client.Board
         // A rounded pill in the frame's colour, just above the board.
         private void DrawBanner(BoardSession session, Rect board)
         {
-            const float height = 38f;
-            var banner = new Rect(board.x + board.width * 0.15f, board.y - height - 8f, board.width * 0.7f, height);
+            float height = 38f * UiScale;
+            var banner = new Rect(board.x + board.width * 0.15f, board.y - height - 8f * UiScale, board.width * 0.7f, height);
+            _bannerStyle.fontSize = Mathf.RoundToInt(20f * UiScale);
             Color previous = GUI.backgroundColor;
             Color frame = Colors.FrameColor(session.Mode, session.Round.Target);
             GUI.backgroundColor = Tint(frame);

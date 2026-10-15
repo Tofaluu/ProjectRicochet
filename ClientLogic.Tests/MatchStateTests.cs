@@ -155,11 +155,13 @@ namespace ClientLogic.Tests
         public void LockIn_OnlyWhenItCanTakeTheLead()
         {
             MatchState match = InRound();
-            Assert.False(match.CanLockIn(boardSolved: false));
-            Assert.True(match.CanLockIn(boardSolved: true));
+            Assert.False(match.CanLockIn(boardSolved: false, 9));
+            Assert.True(match.CanLockIn(boardSolved: true, 9));
             Assert.True(match.TryLockIn(9));
 
             match.OnNewBest(7, "Bob", 6, boardSolution: -1);
+            Assert.False(match.CanLockIn(boardSolved: true, 6));
+            Assert.True(match.CanLockIn(boardSolved: true, 5));
             Assert.False(match.TryLockIn(6));
             Assert.Contains("don't beat Bob's 6", match.Feedback);
             Assert.True(match.TryLockIn(5));
@@ -169,7 +171,7 @@ namespace ClientLogic.Tests
             Assert.Contains("already lead", match.Feedback);
 
             match.OnRoundEnded(Result(7, Me), Moves(5), Moves(5));
-            Assert.False(match.CanLockIn(boardSolved: true));
+            Assert.False(match.CanLockIn(boardSolved: true, 1));
         }
 
         [Fact]
@@ -248,7 +250,7 @@ namespace ClientLogic.Tests
             Assert.Equal(LobbyChange.RoundOver, match.OnLobbyState(Lobby(MatchPhase.Playing, 2, roundOver: true), Me));
             Assert.Equal(MatchStage.RoundOver, match.Stage);
             Assert.Equal(DoneAction.SkipReplay, match.DoneAction);
-            Assert.False(match.CanLockIn(boardSolved: true));
+            Assert.False(match.CanLockIn(boardSolved: true, 1));
             Assert.Equal(LobbyChange.None, match.OnLobbyState(Lobby(MatchPhase.Playing, 2, roundOver: true), Me));
         }
 

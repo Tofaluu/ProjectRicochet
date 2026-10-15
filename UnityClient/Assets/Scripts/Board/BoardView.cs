@@ -439,6 +439,9 @@ namespace Ricochet.Client.Board
         /// <summary>Another player locked in a new best solution.</summary>
         public void PlayOpponentSolved() => Play(BoardSounds.OpponentSolved, 0.8f);
 
+        /// <summary>A skip/done vote, or the board was skipped.</summary>
+        public void PlaySkip() => Play(BoardSounds.Skip, 0.8f);
+
         private void Play(AudioClip clip, float volume)
         {
             if (_audio != null && _volume > 0f && !SoundSettings.Muted)
