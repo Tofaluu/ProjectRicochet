@@ -19,6 +19,8 @@ namespace Ricochet.Client.Board
         private const float CardWidth = 340f;
         private const float HeaderHeight = 22f;
         private const float CardMargin = 16f;
+        private const float ToggleWidth = 160f;
+        private const float ToggleHeight = 30f;
 
         [SerializeField] private GameTheme _theme;
 
@@ -31,7 +33,7 @@ namespace Ricochet.Client.Board
         private GUIStyle _bodyStyle;
         private GUIStyle _headerStyle;
         private GUIStyle _keyStyle;
-        private GUIStyle _soundStyle;
+        private GUIStyle _toggleStyle;
 
         private GameTheme Colors => GameTheme.OrDefault(_theme);
 
@@ -59,24 +61,33 @@ namespace Ricochet.Client.Board
             DrawBanner(session, board);
             if (session.IsCountingDown)
                 DrawCountdown(session, board);
-            // The card and sound toggle scale with the screen like the side panel does.
+            // The card and the toggles scale with the screen like the side panel does.
             Matrix4x4 matrix = GUI.matrix;
             GUI.matrix = Matrix4x4.Scale(new Vector3(UiScale, UiScale, 1f));
             Rect card = DrawCard(session);
-            DrawSoundToggle(new Rect(card.x, card.yMax + 10f, 150f, 30f));
+            float y = card.yMax + 10f;
+            if (DrawToggle(new Rect(card.x, y, ToggleWidth, ToggleHeight), "Sound", !PlayerSettings.Muted, "M"))
+                PlayerSettings.Muted = !PlayerSettings.Muted;
+            y += ToggleHeight + 6f;
+            if (DrawToggle(new Rect(card.x, y, ToggleWidth, ToggleHeight), "Move dots", PlayerSettings.MovePreview))
+                PlayerSettings.MovePreview = !PlayerSettings.MovePreview;
+            y += ToggleHeight + 6f;
+            if (DrawToggle(new Rect(card.x, y, ToggleWidth, ToggleHeight), "Big burst", PlayerSettings.BigBurst))
+                PlayerSettings.BigBurst = !PlayerSettings.BigBurst;
             GUI.matrix = matrix;
         }
 
-        // A pill under the card: click it or press M.
-        private void DrawSoundToggle(Rect rect)
+        // A pill under the card ("Sound on  ·  M"); true when clicked.
+        private bool DrawToggle(Rect rect, string label, bool on, string key = null)
         {
             Color previous = GUI.backgroundColor;
-            GUI.backgroundColor = Tint(SoundSettings.Muted ? Colors.Input : Colors.Panel);
-            _soundStyle.normal.textColor = SoundSettings.Muted ? Colors.MutedText : Colors.PanelText;
-            _soundStyle.hover.textColor = Colors.PanelText;
-            if (GUI.Button(rect, SoundSettings.Muted ? "Sound off  ·  M" : "Sound on  ·  M", _soundStyle))
-                SoundSettings.ToggleMute();
+            GUI.backgroundColor = Tint(on ? Colors.Panel : Colors.Input);
+            _toggleStyle.normal.textColor = on ? Colors.PanelText : Colors.MutedText;
+            _toggleStyle.hover.textColor = Colors.PanelText;
+            string text = $"{label} {(on ? "on" : "off")}" + (key != null ? $"  ·  {key}" : "");
+            bool clicked = GUI.Button(rect, text, _toggleStyle);
             GUI.backgroundColor = previous;
+            return clicked;
         }
 
         private void CreateStyles()
@@ -113,7 +124,7 @@ namespace Ricochet.Client.Board
                 normal = { background = ShapeSprites.RoundedTexture(6), textColor = Colors.PanelText },
                 border = new RectOffset(6, 6, 6, 6), padding = new RectOffset(9, 9, 0, 0),
             };
-            _soundStyle = new GUIStyle(GUI.skin.button)
+            _toggleStyle = new GUIStyle(GUI.skin.button)
             {
                 alignment = TextAnchor.MiddleCenter, font = Colors.BoldFont, fontSize = 13,
                 normal = { background = rounded }, hover = { background = rounded }, active = { background = rounded },
@@ -166,7 +177,8 @@ namespace Ricochet.Client.Board
             }
         }
 
-        // Dims the board under a big number, then "Go!" until the board arrives.
+        // Dims the board under a big number; at zero it stays dimmed (empty) until the board arrives, which
+        // plays the start tone (ScratchpadController.LoadRound).
         private void DrawCountdown(BoardSession session, Rect board)
         {
             Color previous = GUI.backgroundColor;
@@ -174,6 +186,9 @@ namespace Ricochet.Client.Board
             GUI.Box(board, GUIContent.none, _cardStyle);
             GUI.backgroundColor = previous;
 
+            float left = session.CountdownLeft(Time.time);
+            if (left <= 0f)
+                return;
             _numberStyle.normal.textColor = Colors.CountdownText;
             _numberStyle.fontSize = Mathf.RoundToInt(board.height * 0.3f);
             _captionStyle.normal.textColor = Colors.CountdownText;
@@ -182,8 +197,7 @@ namespace Ricochet.Client.Board
             float captionHeight = board.height * 0.12f;
             GUI.Label(new Rect(board.x, board.center.y - board.height * 0.28f, board.width, captionHeight),
                 session.CountdownCaption, _captionStyle);
-            float left = session.CountdownLeft(Time.time);
-            GUI.Label(board, left > 0f ? Mathf.CeilToInt(left).ToString() : "Go!", _numberStyle);
+            GUI.Label(board, Mathf.CeilToInt(left).ToString(), _numberStyle);
         }
 
         // Top-left card: the goal (with the target's symbol), the move count, then the controls as

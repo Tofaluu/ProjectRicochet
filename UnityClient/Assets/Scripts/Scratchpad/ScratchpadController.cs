@@ -22,7 +22,8 @@ namespace Ricochet.Client.Scratchpad
     /// </remarks>
     public class ScratchpadController : MonoBehaviour
     {
-        private const float MinDragDistance = 0.4f;
+        // In cells; small so a short flick counts (the move dots are there for precise moves).
+        private const float MinDragDistance = 0.25f;
 
         [SerializeField] private BoardView _boardView;
         [SerializeField] private Camera _camera;
@@ -33,6 +34,10 @@ namespace Ricochet.Client.Scratchpad
         private Vector3 _dragStart;
         private Coroutine _replay;
         private BoardOverlay _overlay;
+        private int _lastTick;
+        // Where the selected robot would stop in each direction (indexed by Direction), for the move dots.
+        private readonly GridPos?[] _previewStops = new GridPos?[4];
+        private bool _previewShown;
 
         /// <summary>What's on the board; views read it.</summary>
         public BoardSession Session { get; } = new BoardSession();
@@ -54,7 +59,14 @@ namespace Ricochet.Client.Scratchpad
         }
 
         /// <summary>Shows the server's board for an online round.</summary>
-        public void LoadRound(RoundSetup round) => Show(round, practice: false);
+        public void LoadRound(RoundSetup round)
+        {
+            // The board arriving is the "go" after a countdown.
+            bool afterCountdown = Session.IsCountingDown;
+            Show(round, practice: false);
+            if (afterCountdown)
+                _boardView.PlayStart();
+        }
 
         /// <summary>Back to offline practice (e.g. between matches): a fresh random board, N / H enabled.</summary>
         public void PlayOffline() => NewBoard();
@@ -266,15 +278,65 @@ namespace Ricochet.Client.Scratchpad
             _boardView.ShowMode(Session.Mode);
             Keyboard keys = Keyboard.current;
             if (keys != null && keys.mKey.wasPressedThisFrame && !IsTypingInUI())
-                SoundSettings.ToggleMute();
+                PlayerSettings.Muted = !PlayerSettings.Muted;
+            TickCountdown();
             if (!Session.AcceptsInput)
             {
                 _dragging = false;
                 HandleHintShortcuts();
+                UpdateMovePreview();
                 return;
             }
             HandleKeyboard();
             HandlePointer();
+            UpdateMovePreview();
+        }
+
+        // A beep on each countdown second (3, 2, 1).
+        private void TickCountdown()
+        {
+            int second = Session.IsCountingDown ? Mathf.CeilToInt(Session.CountdownLeft(Time.time)) : 0;
+            if (second != _lastTick && second > 0)
+                _boardView.PlayTick();
+            _lastTick = second;
+        }
+
+        // The move dots (PlayerSettings.MovePreview): where the selected robot would stop, while the player can move it.
+        private void UpdateMovePreview()
+        {
+            bool show = PlayerSettings.MovePreview && Session.AcceptsInput && !Session.IsHoldingReplay && !Session.IsSolved;
+            if (show)
+            {
+                RobotColor robot = Session.Selected;
+                GridPos from = Session.Robots[robot];
+                for (int i = 0; i < _previewStops.Length; i++)
+                {
+                    GridPos stop = GameRules.ComputeStop(Session.Round.Grid, Session.Robots, robot, (Direction)i);
+                    _previewStops[i] = stop == from ? (GridPos?)null : stop;
+                }
+                _boardView.ShowMovePreview(robot, _previewStops);
+            }
+            else if (_previewShown)
+            {
+                _boardView.ShowMovePreview(Session.Selected, null);
+            }
+            _previewShown = show;
+        }
+
+        // A click on one of the selected robot's move dots makes that move.
+        private bool TryMoveToDot(GridPos cell)
+        {
+            if (!_previewShown)
+                return false;
+            for (int i = 0; i < _previewStops.Length; i++)
+            {
+                if (_previewStops[i] == cell)
+                {
+                    TryMove((Direction)i);
+                    return true;
+                }
+            }
+            return false;
         }
 
         // The practice hint's replay can be cut short (online replays can't): R back to the start, N a new board.
@@ -333,7 +395,7 @@ namespace Ricochet.Client.Scratchpad
         }
 
         // Press on a robot to select it; release after dragging to move it in the drag's main direction.
-        // Pointer covers both mouse and touch.
+        // Pressing one of the move dots moves there. Pointer covers both mouse and touch.
         private void HandlePointer()
         {
             Pointer pointer = Pointer.current;
@@ -345,6 +407,8 @@ namespace Ricochet.Client.Scratchpad
             if (pointer.press.wasPressedThisFrame)
             {
                 GridPos cell = BoardView.WorldToCell(world);
+                if (TryMoveToDot(cell))
+                    return;
                 foreach (RobotColor robot in new[] { RobotColor.Red, RobotColor.Blue, RobotColor.Green, RobotColor.Yellow })
                 {
                     if (Session.Robots[robot] == cell)

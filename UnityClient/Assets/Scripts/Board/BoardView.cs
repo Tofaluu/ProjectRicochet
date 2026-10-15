@@ -39,6 +39,8 @@ namespace Ricochet.Client.Board
         private const int PupilOrder = 13;
         private const int EffectOrder = 14;
 
+        private const float ShakeSeconds = 0.3f;
+
         private static readonly RobotColor[] AllRobots = { RobotColor.Red, RobotColor.Blue, RobotColor.Green, RobotColor.Yellow };
 
         [Tooltip("Cells per second. 50 crosses the whole board in about 0.3 s.")]
@@ -60,6 +62,8 @@ namespace Ricochet.Client.Board
         private bool _hasSelection;
         private AudioSource _audio;
         private bool _notShorter;
+        private float _shakeUntil = -1f;
+        private readonly SpriteRenderer[] _moveDots = new SpriteRenderer[4];
 
         public static Vector3 CellCenter(GridPos pos) => new Vector3(pos.X + 0.5f, pos.Y + 0.5f, 0f);
 
@@ -160,6 +164,11 @@ namespace Ricochet.Client.Board
                 }
             }
 
+            for (int i = 0; i < _moveDots.Length; i++)
+            {
+                _moveDots[i] = CreateSprite("Move Dot", ShapeSprites.Circle, Color.white, Vector3.zero, new Vector2(0.34f, 0.34f), GhostOrder);
+                _moveDots[i].enabled = false;
+            }
             _selectionRing = CreateSprite("Selection", ShapeSprites.Ring(0.16f), Colors.Selection, Vector3.zero, new Vector2(1f, 1f), SelectionOrder);
 
             foreach (RobotColor color in AllRobots)
@@ -201,6 +210,28 @@ namespace Ricochet.Client.Board
             _hasSelection = true;
         }
 
+        /// <summary>
+        /// Dots where <paramref name="robot"/> would stop moving in each direction (indexed by <see cref="Direction"/>;
+        /// null = no dot), or none if <paramref name="stops"/> is null.
+        /// </summary>
+        public void ShowMovePreview(RobotColor robot, GridPos?[] stops)
+        {
+            // Neutral and dark (like chess.com's): a robot-coloured dot would look like a target (blue = circle).
+            Color color = Colors.Wall;
+            color.a = 0.3f;
+            for (int i = 0; i < _moveDots.Length; i++)
+            {
+                SpriteRenderer dot = _moveDots[i];
+                if (dot == null)
+                    continue;
+                dot.enabled = stops != null && stops[i].HasValue;
+                if (!dot.enabled)
+                    continue;
+                dot.transform.localPosition = CellCenter(stops[i].Value);
+                dot.color = color;
+            }
+        }
+
         /// <summary>Colours the frame for what the board is showing (see <see cref="GameTheme.FrameColor"/>).</summary>
         public void ShowMode(BoardMode mode)
         {
@@ -230,6 +261,12 @@ namespace Ricochet.Client.Board
                 _targetGlow.transform.localScale = new Vector3(1.5f * pulse, 1.5f * pulse, 1f);
             }
             UpdateParticles(time);
+
+            // The big burst shakes the board for a moment.
+            if (_content != null)
+                _content.localPosition = time < _shakeUntil
+                    ? (Vector3)(Random.insideUnitCircle * 0.14f * ((_shakeUntil - time) / ShakeSeconds))
+                    : Vector3.zero;
         }
 
         // ---- Robots ----
@@ -383,6 +420,12 @@ namespace Ricochet.Client.Board
                 Play(BoardSounds.NotShorter, 0.8f);
                 return;
             }
+            bool ownSolve = _mode == BoardMode.Practice || _mode == BoardMode.Round;
+            if (ownSolve && PlayerSettings.BigBurst)
+            {
+                Explode(at, color);
+                return;
+            }
             // An expanding ring, then stars and sparks flying out from the robot's edge.
             Spawn(ShapeSprites.Ring(0.12f), color, at, Vector3.zero, 0.9f, 2.8f, 0.5f, EffectOrder);
             Color light = Color.Lerp(color, Color.white, 0.35f);
@@ -399,6 +442,43 @@ namespace Ricochet.Client.Board
             if (_mode == BoardMode.Practice || _mode == BoardMode.Round)
                 Play(BoardSounds.Success, 0.7f);
         }
+
+        // The player's own solve, unless turned off (PlayerSettings.BigBurst): a flash, two shockwaves, a shower
+        // of stars, sparks and confetti in the robots' colours, smoke, a boom and a short shake of the board.
+        private void Explode(Vector3 at, Color color)
+        {
+            Color light = Color.Lerp(color, Color.white, 0.35f);
+            Spawn(ShapeSprites.SoftCircle, new Color(1f, 1f, 1f, 0.9f), at, Vector3.zero, 0.8f, 4.5f, 0.35f, EffectOrder);
+            Spawn(ShapeSprites.Ring(0.1f), color, at, Vector3.zero, 0.9f, 6f, 0.6f, EffectOrder);
+            Spawn(ShapeSprites.Ring(0.06f), light, at, Vector3.zero, 0.6f, 9f, 0.85f, EffectOrder);
+
+            Sprite star = ShapeSprites.TargetSymbol(RobotColor.Yellow);
+            for (int i = 0; i < 44; i++)
+            {
+                float angle = Random.Range(0f, Mathf.PI * 2f);
+                var direction = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle));
+                int kind = i % 4;
+                Sprite sprite = kind == 0 ? ShapeSprites.Circle : star;
+                Color piece = kind == 0 ? Color.white : kind == 1 ? color : kind == 2 ? light : Colors.RobotColor(AllRobots[i / 4 % 4]);
+                float size = kind == 0 ? 0.16f : Random.Range(0.28f, 0.5f);
+                Spawn(sprite, piece, at + direction * 0.3f, direction * Random.Range(6f, 15f), size, 0.04f,
+                    Random.Range(0.6f, 1.1f), EffectOrder);
+            }
+            for (int i = 0; i < 10; i++)
+            {
+                Vector3 drift = Random.insideUnitCircle * 2.2f;
+                Spawn(ShapeSprites.SoftCircle, Colors.Dust, at + drift * 0.15f, drift, 0.6f, 1.8f, Random.Range(0.7f, 1f), EffectOrder);
+            }
+            _shakeUntil = Time.time + ShakeSeconds;
+            Play(BoardSounds.Success, 0.7f);
+            Play(BoardSounds.Boom, 0.8f);
+        }
+
+        /// <summary>A countdown second (3, 2, 1).</summary>
+        public void PlayTick() => Play(BoardSounds.Tick, 0.8f);
+
+        /// <summary>The board arrived after a countdown.</summary>
+        public void PlayStart() => Play(BoardSounds.Start, 0.8f);
 
         // ---- Short-lived effect sprites ----
 
@@ -456,7 +536,7 @@ namespace Ricochet.Client.Board
 
         private void Play(AudioClip clip, float volume)
         {
-            if (_audio != null && _volume > 0f && !SoundSettings.Muted)
+            if (_audio != null && _volume > 0f && !PlayerSettings.Muted)
                 _audio.PlayOneShot(clip, volume * _volume);
         }
 
