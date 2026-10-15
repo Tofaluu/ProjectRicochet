@@ -11,6 +11,7 @@ namespace Ricochet.Client.Board
         private static AudioClip _select;
         private static AudioClip _success;
         private static AudioClip _opponent;
+        private static AudioClip _skip;
 
         /// <summary>A robot stopping against a wall or another robot: a soft, low knock.</summary>
         public static AudioClip Thud => _thud != null ? _thud : (_thud = Create("Thud", 0.16f, t =>
@@ -32,6 +33,16 @@ namespace Ricochet.Client.Board
         /// <summary>An opponent locked in a new best: a gentle two-note "ding-dong", distinct from Success.</summary>
         public static AudioClip OpponentSolved => _opponent != null ? _opponent : (_opponent = Create("OpponentSolved", 1.3f, t =>
             Notes(t, 0.16f, 5f, 880f, 659.25f) * 0.24f));
+
+        /// <summary>Skipping (a skip/done vote, or the board being skipped): a soft downward swoosh, unlike the notes.</summary>
+        public static AudioClip Skip => _skip != null ? _skip : (_skip = Create("Skip", 0.32f, t =>
+        {
+            // Phase of a sine whose pitch glides from 620 Hz down to 260 Hz.
+            float glide = 0.3f;
+            float phase = 2f * Mathf.PI * (620f * t - (620f - 260f) * Mathf.Min(t, glide) * Mathf.Min(t, glide) / (2f * glide));
+            float air = (Random.value * 2f - 1f) * 0.12f;
+            return (Mathf.Sin(phase) + air) * Mathf.Exp(-t * 9f) * 0.35f;
+        }));
 
         // Sine notes starting <paramref name="gap"/> apart, each fading out at <paramref name="decay"/>.
         private static float Notes(float t, float gap, float decay, params float[] frequencies)

@@ -122,8 +122,9 @@ namespace Ricochet.Client.Game
             }
         }
 
-        /// <summary>Lock In is offered for any solution during the round (see <see cref="TryLockIn"/>).</summary>
-        public bool CanLockIn(bool boardSolved) => boardSolved && Stage == MatchStage.Solving;
+        /// <summary>Lock In is only offered for a solution that can take the lead: shorter than the current best.</summary>
+        public bool CanLockIn(bool boardSolved, int moveCount) =>
+            boardSolved && Stage == MatchStage.Solving && (BestPlayer == null || moveCount < BestMoves);
 
         // ---- Server messages ----
 

@@ -238,7 +238,10 @@ namespace Ricochet.Client.UI
         private void OnDoneClicked()
         {
             ClearButtonFocus();
-            _network.SetDone(_match.ToggleDone());
+            bool done = _match.ToggleDone();
+            if (done)
+                _scratchpad.View.PlaySkip();
+            _network.SetDone(done);
         }
 
         // Sends all the settings when the host finishes editing any of them. The server clamps them
@@ -349,6 +352,8 @@ namespace Ricochet.Client.UI
             IReadOnlyList<ReplaySegment> replays = _match.OnRoundEnded(result, winnerMoves, shortest);
             if (replays == null)
                 return;
+            if (result.WinnerName == null && !result.OutOfTime)
+                _scratchpad.View.PlaySkip(); // everyone skipped the board
             if (replays.Count > 0)
                 _scratchpad.PlayReplays(replays, (float)result.ReplayPauseSeconds);
             else
@@ -386,9 +391,12 @@ namespace Ricochet.Client.UI
             _roundText.text = RoundText(stage);
             _doneLabel.text = DoneLabel();
 
-            // Enabled for any solution; MatchState.TryLockIn explains when it doesn't beat the best.
-            _lockInButton.interactable = _match.CanLockIn(Board.IsSolved);
-            _lockInLabel.text = _lockInButton.interactable ? $"Lock In ({Board.Moves.Count} moves) [Enter]" : "Lock In";
+            // Only enabled for a solution that beats the best; a solved board that doesn't says what to beat.
+            int moves = Board.Moves.Count;
+            _lockInButton.interactable = _match.CanLockIn(Board.IsSolved, moves);
+            _lockInLabel.text = _lockInButton.interactable ? $"Lock In ({moves} moves) [Enter]"
+                : Board.IsSolved && stage == MatchStage.Solving && _match.BestPlayer != null ? $"Beat {_match.BestMoves} moves to Lock In"
+                : "Lock In";
             Keyboard keyboard = Keyboard.current;
             if (_lockInButton.interactable && keyboard != null
                 && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame))
