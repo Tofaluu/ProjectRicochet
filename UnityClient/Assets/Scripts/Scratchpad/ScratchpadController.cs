@@ -38,6 +38,9 @@ namespace Ricochet.Client.Scratchpad
         public BoardSession Session { get; } = new BoardSession();
         public Camera Camera => _camera;
         public BoardView View => _boardView;
+
+        /// <summary>The player's own move just solved the board (raised before the slide plays), with the move count.</summary>
+        public event System.Action<int> Solved;
         /// <summary>The UI panel on the right; the camera keeps the board clear of it.</summary>
         public RectTransform SidePanel { get; set; }
 
@@ -218,7 +221,24 @@ namespace Ricochet.Client.Scratchpad
         {
             ClearShownSolution();
             if (Session.TryMove(direction))
+            {
                 _boardView.ShowRobots(Session.Robots, instant: false);
+                if (Session.IsSolved)
+                    Solved?.Invoke(Session.Moves.Count);
+            }
+        }
+
+        /// <summary>
+        /// Puts the solved board back to the start after <paramref name="seconds"/> (time to see the robot land),
+        /// unless it changed meanwhile (new board, replays, the player undid).
+        /// </summary>
+        public void ResetAfter(float seconds) => StartCoroutine(ResetSolvedBoard(Session.Round, seconds));
+
+        private IEnumerator ResetSolvedBoard(RoundSetup round, float seconds)
+        {
+            yield return new WaitForSeconds(seconds);
+            if (Session.Round == round && Session.IsSolved && !Session.IsReplaying)
+                ResetToStart();
         }
 
         private void Undo()

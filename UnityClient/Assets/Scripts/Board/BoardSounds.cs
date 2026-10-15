@@ -12,6 +12,7 @@ namespace Ricochet.Client.Board
         private static AudioClip _success;
         private static AudioClip _opponent;
         private static AudioClip _skip;
+        private static AudioClip _notShorter;
 
         /// <summary>A robot stopping against a wall or another robot: a soft, low knock.</summary>
         public static AudioClip Thud => _thud != null ? _thud : (_thud = Create("Thud", 0.16f, t =>
@@ -42,6 +43,15 @@ namespace Ricochet.Client.Board
             float phase = 2f * Mathf.PI * (620f * t - (620f - 260f) * Mathf.Min(t, glide) * Mathf.Min(t, glide) / (2f * glide));
             float air = (Random.value * 2f - 1f) * 0.12f;
             return (Mathf.Sin(phase) + air) * Mathf.Exp(-t * 9f) * 0.35f;
+        }));
+
+        /// <summary>Reached the target, but not in fewer moves than the best: a low, falling "uh-uh".</summary>
+        public static AudioClip NotShorter => _notShorter != null ? _notShorter : (_notShorter = Create("NotShorter", 0.45f, t =>
+        {
+            float first = Mathf.Sin(2f * Mathf.PI * 311f * t) * Mathf.Exp(-t * 12f) * Mathf.Clamp01((0.15f - t) / 0.03f);
+            float local = t - 0.13f;
+            float second = local >= 0f ? Mathf.Sin(2f * Mathf.PI * 233f * local) * Mathf.Exp(-local * 9f) : 0f;
+            return (first + second) * 0.3f;
         }));
 
         // Sine notes starting <paramref name="gap"/> apart, each fading out at <paramref name="decay"/>.

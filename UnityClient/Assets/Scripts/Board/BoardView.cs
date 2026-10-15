@@ -59,6 +59,7 @@ namespace Ricochet.Client.Board
         private RobotColor _selected;
         private bool _hasSelection;
         private AudioSource _audio;
+        private bool _notShorter;
 
         public static Vector3 CellCenter(GridPos pos) => new Vector3(pos.X + 0.5f, pos.Y + 0.5f, 0f);
 
@@ -81,6 +82,7 @@ namespace Ricochet.Client.Board
 
         public void Build(RoundSetup round, RobotPositions robots)
         {
+            _notShorter = false;
             if (_content != null)
                 Destroy(_content.gameObject);
             _content = new GameObject("Board").transform;
@@ -374,6 +376,13 @@ namespace Ricochet.Client.Board
 
         private void Celebrate(Vector3 at, Color color)
         {
+            if (_notShorter)
+            {
+                _notShorter = false;
+                Spawn(ShapeSprites.Ring(0.12f), Colors.MutedText, at, Vector3.zero, 0.9f, 1.6f, 0.35f, EffectOrder);
+                Play(BoardSounds.NotShorter, 0.8f);
+                return;
+            }
             // An expanding ring, then stars and sparks flying out from the robot's edge.
             Spawn(ShapeSprites.Ring(0.12f), color, at, Vector3.zero, 0.9f, 2.8f, 0.5f, EffectOrder);
             Color light = Color.Lerp(color, Color.white, 0.35f);
@@ -441,6 +450,9 @@ namespace Ricochet.Client.Board
 
         /// <summary>A skip/done vote, or the board was skipped.</summary>
         public void PlaySkip() => Play(BoardSounds.Skip, 0.8f);
+
+        /// <summary>The solve that's sliding in doesn't beat the best: no celebration when it lands, just a "nope".</summary>
+        public void MarkNotShorter() => _notShorter = true;
 
         private void Play(AudioClip clip, float volume)
         {
