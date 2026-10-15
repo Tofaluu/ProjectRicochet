@@ -13,6 +13,9 @@ namespace Ricochet.Client.Board
         private static AudioClip _opponent;
         private static AudioClip _skip;
         private static AudioClip _notShorter;
+        private static AudioClip _tick;
+        private static AudioClip _start;
+        private static AudioClip _boom;
 
         /// <summary>A robot stopping against a wall or another robot: a soft, low knock.</summary>
         public static AudioClip Thud => _thud != null ? _thud : (_thud = Create("Thud", 0.16f, t =>
@@ -43,6 +46,23 @@ namespace Ricochet.Client.Board
             float phase = 2f * Mathf.PI * (620f * t - (620f - 260f) * Mathf.Min(t, glide) * Mathf.Min(t, glide) / (2f * glide));
             float air = (Random.value * 2f - 1f) * 0.12f;
             return (Mathf.Sin(phase) + air) * Mathf.Exp(-t * 9f) * 0.35f;
+        }));
+
+        /// <summary>Countdown 3, 2, 1: a short, soft beep.</summary>
+        public static AudioClip Tick => _tick != null ? _tick : (_tick = Create("Tick", 0.16f, t =>
+            Mathf.Sin(2f * Mathf.PI * 660f * t) * Mathf.Exp(-t * 22f) * 0.3f));
+
+        /// <summary>The board arrives after a countdown: the same beep an octave up, held a little longer.</summary>
+        public static AudioClip Start => _start != null ? _start : (_start = Create("Start", 0.5f, t =>
+            (Mathf.Sin(2f * Mathf.PI * 1320f * t) + 0.3f * Mathf.Sin(2f * Mathf.PI * 660f * t)) * Mathf.Exp(-t * 7f) * 0.25f));
+
+        /// <summary>Under the big burst: a soft low boom (falling sine plus a puff of noise).</summary>
+        public static AudioClip Boom => _boom != null ? _boom : (_boom = Create("Boom", 0.7f, t =>
+        {
+            float pitch = Mathf.Lerp(110f, 45f, Mathf.Clamp01(t / 0.35f));
+            float body = Mathf.Sin(2f * Mathf.PI * pitch * t) * Mathf.Exp(-t * 6f);
+            float puff = (Random.value * 2f - 1f) * Mathf.Exp(-t * 18f) * 0.35f;
+            return (body + puff) * 0.6f;
         }));
 
         /// <summary>Reached the target, but not in fewer moves than the best: a low, falling "uh-uh".</summary>
