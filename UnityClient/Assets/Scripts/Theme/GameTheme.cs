@@ -57,7 +57,7 @@ namespace Ricochet.Client.Theme
         [SerializeField] private Color _panelText = new Color(0.92f, 0.93f, 0.97f);
         [SerializeField] private Color _mutedText = new Color(0.60f, 0.63f, 0.74f);
         [SerializeField] private Color _input = new Color(0.16f, 0.18f, 0.26f);
-        [Tooltip("Main actions: Join, Lock In, Start.")]
+        [Tooltip("Main actions: Join, Start.")]
         [SerializeField] private Color _primaryButton = new Color(0.47f, 0.42f, 0.82f);
         [Tooltip("Votes: Skip board / I'm done / Skip replay.")]
         [SerializeField] private Color _secondaryButton = new Color(0.27f, 0.29f, 0.40f);

@@ -152,26 +152,19 @@ namespace ClientLogic.Tests
         }
 
         [Fact]
-        public void LockIn_OnlyWhenItCanTakeTheLead()
+        public void Solved_SentOnlyWhenItCanTakeTheLead()
         {
             MatchState match = InRound();
-            Assert.False(match.CanLockIn(boardSolved: false, 9));
-            Assert.True(match.CanLockIn(boardSolved: true, 9));
-            Assert.True(match.TryLockIn(9));
+            Assert.True(match.OnSolved(9));
 
             match.OnNewBest(7, "Bob", 6, boardSolution: -1);
-            Assert.False(match.CanLockIn(boardSolved: true, 6));
-            Assert.True(match.CanLockIn(boardSolved: true, 5));
-            Assert.False(match.TryLockIn(6));
-            Assert.Contains("don't beat Bob's 6", match.Feedback);
-            Assert.True(match.TryLockIn(5));
+            Assert.False(match.OnSolved(6));
+            Assert.Contains("doesn't beat Bob's 6", match.Feedback);
+            Assert.True(match.OnSolved(5));
 
-            match.OnNewBest(7, Me, 5, boardSolution: 5);
-            Assert.False(match.TryLockIn(5));
-            Assert.Contains("already lead", match.Feedback);
-
-            match.OnRoundEnded(Result(7, Me), Moves(5), Moves(5));
-            Assert.False(match.CanLockIn(boardSolved: true, 1));
+            match.OnNewBest(7, Me, 5, boardSolution: -1);
+            Assert.False(match.OnSolved(5));
+            Assert.Contains("your own 5", match.Feedback);
         }
 
         [Fact]
@@ -187,11 +180,12 @@ namespace ClientLogic.Tests
         }
 
         [Fact]
-        public void MyOwnAcceptedLockIn_ResetsTheBoard()
+        public void MyOwnAcceptedSolution_TakesTheLead_WithoutAnotherReset()
         {
             MatchState match = InRound();
-            Assert.True(match.OnNewBest(7, Me, 6, boardSolution: 6));
-            Assert.Contains("Board reset", match.Feedback);
+            // The board went back to the start when the solution was sent.
+            Assert.False(match.OnNewBest(7, Me, 6, boardSolution: -1));
+            Assert.Contains("You lead with 6", match.Feedback);
             Assert.Equal(6, match.BestMoves);
         }
 
@@ -250,7 +244,6 @@ namespace ClientLogic.Tests
             Assert.Equal(LobbyChange.RoundOver, match.OnLobbyState(Lobby(MatchPhase.Playing, 2, roundOver: true), Me));
             Assert.Equal(MatchStage.RoundOver, match.Stage);
             Assert.Equal(DoneAction.SkipReplay, match.DoneAction);
-            Assert.False(match.CanLockIn(boardSolved: true, 1));
             Assert.Equal(LobbyChange.None, match.OnLobbyState(Lobby(MatchPhase.Playing, 2, roundOver: true), Me));
         }
 

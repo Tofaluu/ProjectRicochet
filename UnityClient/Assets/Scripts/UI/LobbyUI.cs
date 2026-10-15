@@ -7,14 +7,14 @@ using Ricochet.Client.Theme;
 using SharedLogic;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace Ricochet.Client.UI
 {
     /// <summary>
     /// Join panel (name, lobby code) and in-game panel: players, then either the match setup / results
-    /// (host settings + Start) between matches, or the round (timer, best solution, Lock In) during one.
+    /// (host settings + Start) between matches, or the round (timer, best solution) during one.
+    /// Reaching the target during a round sends the solution if it beats the best (no button).
     /// Feeds the <see cref="NetworkManager"/>'s messages into <see cref="MatchState"/> (which decides
     /// what's going on), keeps the <see cref="ScratchpadController"/> board in step, and shows the state
     /// with placeholder uGUI widgets.
@@ -42,8 +42,8 @@ namespace Ricochet.Client.UI
         [SerializeField] private Text _playersText;
         [SerializeField] private Text _roundText;
         [SerializeField] private Text _feedbackText;
+        [Tooltip("Unused since solutions are sent on reaching the target; hidden at startup.")]
         [SerializeField] private Button _lockInButton;
-        [SerializeField] private Text _lockInLabel;
         [SerializeField] private Button _doneButton;
         [SerializeField] private Text _doneLabel;
         [SerializeField] private Button _leaveButton;
@@ -59,6 +59,9 @@ namespace Ricochet.Client.UI
         [SerializeField] private Button _startButton;
         [SerializeField] private Text _startLabel;
 
+        // Time to see the robot land before a solved board goes back to the start.
+        private const float SolvedResetDelay = 0.9f;
+
         private const string NamePrefKey = "Ricochet.PlayerName";
         // Renamed when the cloud server came in, so tunnel addresses saved by playtest builds are dropped.
         private const string ServerPrefKey = "Ricochet.ServerAddress";
@@ -71,6 +74,7 @@ namespace Ricochet.Client.UI
         {
             UiSkin.Apply(transform, GameTheme.OrDefault(_theme));
             _joinPanel.SetActive(true);
+            _lockInButton.gameObject.SetActive(false);
             _gamePanel.SetActive(false);
             _statusText.text = "";
             _nameInput.text = PlayerPrefs.GetString(NamePrefKey, "");
@@ -95,7 +99,6 @@ namespace Ricochet.Client.UI
             _scratchpad.SidePanel = _joinPanel.transform.parent as RectTransform;
 
             _joinButton.onClick.AddListener(OnJoinClicked);
-            _lockInButton.onClick.AddListener(OnLockInClicked);
             _doneButton.onClick.AddListener(OnDoneClicked);
             _leaveButton.onClick.AddListener(OnLeaveClicked);
             _startButton.onClick.AddListener(OnStartClicked);
@@ -173,6 +176,7 @@ namespace Ricochet.Client.UI
             _network.SolutionRejected += OnRejected;
             _network.RoundEnded += OnRoundEnded;
             _network.RequestFailed += OnRequestFailed;
+            _scratchpad.Solved += OnBoardSolved;
         }
 
         private void OnDisable()
@@ -188,6 +192,7 @@ namespace Ricochet.Client.UI
             _network.SolutionRejected -= OnRejected;
             _network.RoundEnded -= OnRoundEnded;
             _network.RequestFailed -= OnRequestFailed;
+            _scratchpad.Solved -= OnBoardSolved;
         }
 
         // ---- Player actions ----
@@ -213,11 +218,17 @@ namespace Ricochet.Client.UI
             _network.JoinLobby(_nameInput.text, code);
         }
 
-        private void OnLockInClicked()
+        // Reaching the target sends the solution if it can take the lead; either way the board then goes
+        // back to the start (a longer solution is a dead end: any continuation of it is longer still).
+        private void OnBoardSolved(int moves)
         {
-            ClearButtonFocus();
-            if (_match.TryLockIn(Board.Moves.Count))
+            if (!_match.InLobby || _match.Stage != MatchStage.Solving)
+                return; // practice: just "Solved in N"
+            if (_match.OnSolved(moves))
                 _network.SubmitSolution(new List<Move>(Board.Moves).ToArray());
+            else
+                _scratchpad.View.MarkNotShorter();
+            _scratchpad.ResetAfter(SolvedResetDelay);
         }
 
         private void OnLeaveClicked()
@@ -273,7 +284,7 @@ namespace Ricochet.Client.UI
         private static int ParseOr(string text, int fallback) => int.TryParse(text, out int value) ? value : fallback;
 
         // A clicked button stays selected, and the UI treats Enter as "press the selected button".
-        // Deselect so Enter only ever means Lock In (see Update), never a second click.
+        // Deselect so Enter never clicks a button again by accident.
         private static void ClearButtonFocus()
         {
             if (EventSystem.current != null)
@@ -380,7 +391,6 @@ namespace Ricochet.Client.UI
             _settingsGroup.SetActive(!playing && _match.IAmHost);
             _startButton.gameObject.SetActive(!playing && _match.IAmHost);
             _roundText.gameObject.SetActive(playing);
-            _lockInButton.gameObject.SetActive(playing);
             _doneButton.gameObject.SetActive(_match.DoneAction != DoneAction.None);
 
             if (!playing)
@@ -390,17 +400,6 @@ namespace Ricochet.Client.UI
             }
             _roundText.text = RoundText(stage);
             _doneLabel.text = DoneLabel();
-
-            // Only enabled for a solution that beats the best; a solved board that doesn't says what to beat.
-            int moves = Board.Moves.Count;
-            _lockInButton.interactable = _match.CanLockIn(Board.IsSolved, moves);
-            _lockInLabel.text = _lockInButton.interactable ? $"Lock In ({moves} moves) [Enter]"
-                : Board.IsSolved && stage == MatchStage.Solving && _match.BestPlayer != null ? $"Beat {_match.BestMoves} moves to Lock In"
-                : "Lock In";
-            Keyboard keyboard = Keyboard.current;
-            if (_lockInButton.interactable && keyboard != null
-                && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame))
-                OnLockInClicked();
         }
 
         private void ShowPlayers()
@@ -463,7 +462,9 @@ namespace Ricochet.Client.UI
                     text.Append("  (+time!)");
             }
             if (_match.BestPlayer != null && stage == MatchStage.Solving)
-                text.Append($"\nBest: {_match.BestPlayer} ({_match.BestMoves} moves)");
+                text.Append(_match.BestPlayer == _match.MyName
+                    ? $"\nBest: you, {_match.BestMoves} moves"
+                    : $"\nBest: {_match.BestPlayer}, {_match.BestMoves} moves. Beat it!");
             return text.ToString();
         }
 

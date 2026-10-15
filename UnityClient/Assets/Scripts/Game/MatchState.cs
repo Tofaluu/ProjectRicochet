@@ -45,7 +45,7 @@ namespace Ricochet.Client.Game
 
     /// <summary>
     /// This player's view of the lobby, match and round, built from the server's messages, plus the
-    /// decisions that follow from it (what the vote means, whether Lock In can be sent, the messages to
+    /// decisions that follow from it (what the vote means, whether a solution is sent, the messages to
     /// show). Plain C#: views (<c>LobbyUI</c>) read it and decide how it looks. Times are passed in
     /// (seconds on any steady clock), so this has no Unity dependency and is unit-tested.
     /// </summary>
@@ -122,9 +122,6 @@ namespace Ricochet.Client.Game
             }
         }
 
-        /// <summary>Lock In is only offered for a solution that can take the lead: shorter than the current best.</summary>
-        public bool CanLockIn(bool boardSolved, int moveCount) =>
-            boardSolved && Stage == MatchStage.Solving && (BestPlayer == null || moveCount < BestMoves);
 
         // ---- Server messages ----
 
@@ -195,7 +192,7 @@ namespace Ricochet.Client.Game
         {
             ClearRound();
             Round = round;
-            Feedback = "Find the shortest solution, then Lock In!";
+            Feedback = "Find the shortest solution: reaching the target sends it!";
         }
 
         /// <returns>False if it's for another round.</returns>
@@ -233,11 +230,11 @@ namespace Ricochet.Client.Game
                 return false;
             BestPlayer = player;
             BestMoves = moves;
-            // Our own lock-in was accepted: back to the start to hunt for a shorter one.
+            // Our own solution was accepted; the board already went back to the start when it was sent.
             if (player == MyName)
             {
-                Feedback = $"Accepted! You lead with {moves} moves. Board reset: try for a shorter one!";
-                return true;
+                Feedback = $"You lead with {moves} moves! Can you find a shorter one?";
+                return false;
             }
             if (boardSolution < 0 || boardSolution < moves)
                 return false;
@@ -325,20 +322,21 @@ namespace Ricochet.Client.Game
         // ---- This player's actions ----
 
         /// <summary>
-        /// Lock In with a solution of <paramref name="moveCount"/> moves. Only strictly shorter solutions
-        /// can take the lead, so a sure rejection isn't sent; the message says why instead.
+        /// The player's board reached the target with <paramref name="moveCount"/> moves during the round
+        /// (<see cref="MatchStage.Solving"/>); either way the board then goes back to the start. Only strictly
+        /// shorter solutions can take the lead, so a sure rejection isn't sent; the message says why instead.
         /// </summary>
         /// <returns>True if the solution should be sent.</returns>
-        public bool TryLockIn(int moveCount)
+        public bool OnSolved(int moveCount)
         {
             if (BestPlayer != null && moveCount >= BestMoves)
             {
                 Feedback = BestPlayer == MyName
-                    ? $"You already lead with {BestMoves} moves."
-                    : $"Your {moveCount} moves don't beat {BestPlayer}'s {BestMoves}. Find a shorter one!";
+                    ? $"{moveCount} moves doesn't beat your own {BestMoves}. Try for fewer!"
+                    : $"{moveCount} moves doesn't beat {BestPlayer}'s {BestMoves}. Try for fewer!";
                 return false;
             }
-            Feedback = $"Submitted {moveCount} moves...";
+            Feedback = $"Sent {moveCount} moves...";
             return true;
         }
 
