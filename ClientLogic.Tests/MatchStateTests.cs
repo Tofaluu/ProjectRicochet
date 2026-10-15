@@ -180,9 +180,17 @@ namespace ClientLogic.Tests
             Assert.True(match.OnNewBest(7, "Bob", 5, boardSolution: 8));
             Assert.False(match.OnNewBest(7, "Bob", 4, boardSolution: -1)); // mid-attempt
             Assert.False(match.OnNewBest(7, "Bob", 4, boardSolution: 3)); // already shorter
-            Assert.False(match.OnNewBest(7, Me, 3, boardSolution: 3)); // their own
             Assert.False(match.OnNewBest(6, "Bob", 2, boardSolution: 3)); // an old round's
-            Assert.Equal(3, match.BestMoves);
+            Assert.Equal(4, match.BestMoves);
+        }
+
+        [Fact]
+        public void MyOwnAcceptedLockIn_ResetsTheBoard()
+        {
+            MatchState match = InRound();
+            Assert.True(match.OnNewBest(7, Me, 6, boardSolution: 6));
+            Assert.Contains("Board reset", match.Feedback);
+            Assert.Equal(6, match.BestMoves);
         }
 
         [Fact]

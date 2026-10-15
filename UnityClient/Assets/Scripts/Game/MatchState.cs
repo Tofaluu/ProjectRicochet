@@ -232,10 +232,11 @@ namespace Ricochet.Client.Game
                 return false;
             BestPlayer = player;
             BestMoves = moves;
+            // Our own lock-in was accepted: back to the start to hunt for a shorter one.
             if (player == MyName)
             {
-                Feedback = $"Accepted! You lead with {moves} moves.";
-                return false;
+                Feedback = $"Accepted! You lead with {moves} moves. Board reset: try for a shorter one!";
+                return true;
             }
             if (boardSolution < 0 || boardSolution < moves)
                 return false;
