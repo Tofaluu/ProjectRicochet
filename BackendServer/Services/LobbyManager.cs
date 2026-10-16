@@ -59,6 +59,9 @@ namespace BackendServer.Services
         /// </summary>
         public double BoardSearchSeconds { get; set; } = 10;
 
+        /// <summary>Highest <see cref="MatchSettings.MinMoves"/> a host may pick. Raise it only on a dev server (with a longer search).</summary>
+        public int MaxMinMoves { get; set; } = MatchSettings.MaxMinMoves;
+
         /// <summary>Time the solver gets per board. If it gives up, the board is kept with no known shortest solution.</summary>
         public double SolverTimeLimitSeconds { get; set; } = 5;
 
@@ -264,7 +267,7 @@ namespace BackendServer.Services
                             ExtensionSeconds = _options.ExtensionSeconds,
                             RoundLimitSeconds = _options.RoundLimitSeconds,
                             MinMoves = _options.MinBoardMoves,
-                        }.Clamped(),
+                        }.Clamped(_options.MaxMinMoves),
                     };
                     _lobbies[code] = lobby;
                     _log.LogInformation("Lobby {Code} created", code);
@@ -561,7 +564,7 @@ namespace BackendServer.Services
                 lobby = HostLobbyLocked(connectionId, "change the settings");
                 if (lobby.Match == MatchPhase.Playing)
                     throw new HubException("Settings can't change during a match.");
-                lobby.Settings = (settings ?? lobby.Settings).Clamped();
+                lobby.Settings = (settings ?? lobby.Settings).Clamped(_options.MaxMinMoves);
                 state = SnapshotLocked(lobby);
             }
             await _hub.Clients.Group(lobby.Code).SendAsync(HubMethods.LobbyState, state);
