@@ -182,6 +182,7 @@ namespace Ricochet.Client.Board
             foreach (KeyValuePair<RobotColor, RobotVisual> pair in _robots)
             {
                 RobotVisual robot = pair.Value;
+                robot.ExplodedAt = -10f; // a reset or new move brings a blown-up robot straight back
                 // A robot still sliding from the previous move finishes it instantly first; otherwise
                 // it would cut diagonally from mid-slide to the new destination.
                 robot.Root.localPosition = robot.Destination;
@@ -251,7 +252,7 @@ namespace Ricochet.Client.Board
                 // A slightly darker shade of the selected robot's own colour, gently pulsing.
                 Transform ring = _selectionRing.transform;
                 ring.localPosition = selected.Root.localPosition;
-                float pulse = 1f + 0.05f * Mathf.Sin(time * 6f);
+                float pulse = (1f + 0.05f * Mathf.Sin(time * 6f)) * BurstScale(selected, time);
                 ring.localScale = new Vector3(pulse, pulse, 1f);
                 _selectionRing.color = Color.Lerp(selected.Color, Colors.Selection, 0.2f);
             }
@@ -286,6 +287,25 @@ namespace Ricochet.Client.Board
             public float GhostDistance;
             public float ImpactTime = -10f;
             public float NextBlink;
+            // The big burst blows the robot up: it swells, vanishes in the flash and pops back a moment later.
+            public float ExplodedAt = -10f;
+        }
+
+        private const float SwellSeconds = 0.1f, GoneSeconds = 0.9f, PopInSeconds = 0.3f;
+
+        // The robot's overall size during and after the big burst (1 = normal).
+        private static float BurstScale(RobotVisual robot, float time)
+        {
+            float t = time - robot.ExplodedAt;
+            if (t < 0f || t >= SwellSeconds + GoneSeconds + PopInSeconds)
+                return 1f;
+            if (t < SwellSeconds)
+                return 1f + 0.3f * t / SwellSeconds;
+            if (t < SwellSeconds + GoneSeconds)
+                return 0f;
+            // Back in with a little overshoot (ease-out-back).
+            float p = (t - SwellSeconds - GoneSeconds) / PopInSeconds - 1f;
+            return 1f + 2.70158f * p * p * p + 1.70158f * p * p;
         }
 
         private static readonly Vector3[] EyeOffsets = { new Vector3(-0.13f, 0.03f), new Vector3(0.13f, 0.03f) };
@@ -355,6 +375,8 @@ namespace Ricochet.Client.Board
                 if (t < 1f)
                     stretch = -0.3f * Mathf.Sin(t * Mathf.PI * 1.5f) * (1f - t);
             }
+            float burst = BurstScale(robot, time);
+            robot.Root.localScale = new Vector3(burst, burst, 1f);
             float alongScale = 1f + stretch, acrossScale = 1f - stretch * 0.7f;
             robot.Body.localScale = Mathf.Abs(along.x) > 0.5f
                 ? new Vector3(alongScale, acrossScale, 1f)
@@ -408,11 +430,12 @@ namespace Ricochet.Client.Board
             Play(BoardSounds.Thud, 0.8f);
 
             if (WorldToCell(robot.Destination) == _target.Position && _target.AcceptsRobot(color))
-                Celebrate(robot.Destination, Colors.TargetColor(_target));
+                Celebrate(robot, Colors.TargetColor(_target));
         }
 
-        private void Celebrate(Vector3 at, Color color)
+        private void Celebrate(RobotVisual robot, Color color)
         {
+            Vector3 at = robot.Destination;
             if (_notShorter)
             {
                 _notShorter = false;
@@ -424,6 +447,7 @@ namespace Ricochet.Client.Board
             if (ownSolve && PlayerSettings.BigBurst)
             {
                 Explode(at, color);
+                robot.ExplodedAt = Time.time;
                 return;
             }
             // An expanding ring, then stars and sparks flying out from the robot's edge.

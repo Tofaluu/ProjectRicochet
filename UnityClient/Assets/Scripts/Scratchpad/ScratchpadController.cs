@@ -360,14 +360,15 @@ namespace Ricochet.Client.Scratchpad
 
         /// <summary>
         /// Puts the solved board back to the start after <paramref name="seconds"/> (time to see the robot land),
-        /// unless it changed meanwhile (new board, replays, the player undid).
+        /// unless it changed meanwhile (new board, replays, the player undid) or <paramref name="stillWanted"/> says no.
         /// </summary>
-        public void ResetAfter(float seconds) => StartCoroutine(ResetSolvedBoard(Session.Round, seconds));
+        public void ResetAfter(float seconds, System.Func<bool> stillWanted = null) =>
+            StartCoroutine(ResetSolvedBoard(Session.Round, seconds, stillWanted));
 
-        private IEnumerator ResetSolvedBoard(RoundSetup round, float seconds)
+        private IEnumerator ResetSolvedBoard(RoundSetup round, float seconds, System.Func<bool> stillWanted)
         {
             yield return new WaitForSeconds(seconds);
-            if (Session.Round == round && Session.IsSolved && !Session.IsReplaying)
+            if (Session.Round == round && Session.IsSolved && !Session.IsReplaying && (stillWanted == null || stillWanted()))
                 ResetToStart();
         }
 

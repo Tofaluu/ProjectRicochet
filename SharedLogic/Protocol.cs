@@ -168,6 +168,12 @@ namespace SharedLogic
         /// <summary>Pause on the starting position before each replay.</summary>
         public double ReplayPauseSeconds { get; set; }
 
+        /// <summary>
+        /// Pause before the replays when the round ended the moment a solution came in (the shortest possible, or
+        /// the last player still in), so the solver's robot finishes its slide and burst first; 0 otherwise.
+        /// </summary>
+        public double SolvedPauseSeconds { get; set; }
+
         /// <summary>Nobody solved the board before the round's time limit ran out.</summary>
         public bool OutOfTime { get; set; }
 
