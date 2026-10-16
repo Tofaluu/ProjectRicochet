@@ -30,6 +30,35 @@ public class MinMovesTests
     }
 
     [Fact]
+    public void TheMaximum_DefaultsWhenUnset_AndNeverGoesBelowTheMinimum()
+    {
+        Assert.Equal(MatchSettings.DefaultMaxMoves, new MatchSettings { MinMoves = 3 }.Clamped().MaxMoves);
+        Assert.Equal(8, new MatchSettings { MinMoves = 8, MaxMoves = 5 }.Clamped().MaxMoves);
+        Assert.Equal(MatchSettings.MaxMinMoves, new MatchSettings { MinMoves = 3, MaxMoves = 99 }.Clamped().MaxMoves);
+    }
+
+    [Fact]
+    public async Task DealtBoards_StayWithinTheRange()
+    {
+        var h = new LobbyHarness();
+        TestClient alice = await h.JoinAsync("Alice");
+        await h.JoinAsync("Bob");
+        Assert.Equal(MatchSettings.DefaultMaxMoves, alice.State.Settings.MaxMoves);
+        MatchSettings settings = alice.State.Settings;
+        settings.MinMoves = 4;
+        settings.MaxMoves = 5;
+        await h.Manager.UpdateSettingsAsync(alice.ConnectionId, settings);
+        await h.StartMatchAsync(alice);
+
+        for (int board = 1; board <= 3; board++)
+        {
+            Assert.InRange(Solver.Solve(alice.Board).Moves.Length, 4, 5);
+            await alice.SubmitShortestAsync();
+            await h.AdvanceUntil(() => alice.Count(HubMethods.RoundStarted) == board + 1, "the next board");
+        }
+    }
+
+    [Fact]
     public async Task DealtBoards_NeedAtLeastTheMinimum()
     {
         var (h, alice) = await MatchWithMinimum(12);

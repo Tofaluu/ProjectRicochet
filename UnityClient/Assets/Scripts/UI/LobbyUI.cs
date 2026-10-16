@@ -72,6 +72,7 @@ namespace Ricochet.Client.UI
         private Button _showBestButton;
         private Text _showBestLabel;
         private InputField _minMovesInput;
+        private InputField _maxMovesInput;
 
         private BoardSession Board => _scratchpad.Session;
 
@@ -80,7 +81,7 @@ namespace Ricochet.Client.UI
             // Widgets the scene doesn't have yet, made before the skin styles everything.
             _lockInButton.gameObject.name = "Watch Button";
             _watchLabel = _lockInButton.GetComponentInChildren<Text>(true);
-            CreateMinMovesRow();
+            CreateBoardMovesRow();
             CreateShowBestRow();
             UiSkin.Apply(transform, GameTheme.OrDefault(_theme));
             gameObject.AddComponent<MatchHistoryOverlay>().Init(_match, _scratchpad, _theme);
@@ -120,6 +121,7 @@ namespace Ricochet.Client.UI
             _extensionInput.onEndEdit.AddListener(_ => OnSettingsEdited());
             _roundLimitInput.onEndEdit.AddListener(_ => OnSettingsEdited());
             _minMovesInput.onEndEdit.AddListener(_ => OnSettingsEdited());
+            _maxMovesInput.onEndEdit.AddListener(_ => OnSettingsEdited());
         }
 
         // A copy of the round limit row (label + number), placed after it; made at runtime so the scene
@@ -138,13 +140,51 @@ namespace Ricochet.Client.UI
             return row;
         }
 
-        private void CreateMinMovesRow()
+        // "Board moves  [3] to [15]": the range of the dealt boards' shortest solution. Two narrower boxes so the
+        // pair takes about the room of one.
+        private void CreateBoardMovesRow()
         {
+            const float boxWidth = 52f;
             int after = _roundLimitInput.transform.parent.GetSiblingIndex();
-            GameObject row = CopyRoundLimitRow("Min Moves Row", $"Min moves ({MatchSettings.MinMinMoves}-{MatchSettings.MaxMinMoves})", after);
+            GameObject row = CopyRoundLimitRow("Board Moves Row", "Board moves", after);
             _minMovesInput = row.GetComponentInChildren<InputField>(true);
             _minMovesInput.name = "Min Moves Input";
             _minMovesInput.onEndEdit = new InputField.EndEditEvent(); // no copied listeners
+            SetPreferredWidth(_minMovesInput.gameObject, boxWidth);
+
+            Text label = null;
+            foreach (Text text in row.GetComponentsInChildren<Text>(true))
+            {
+                if (text.GetComponentInParent<InputField>(true) == null)
+                    label = text;
+            }
+            GameObject to = Instantiate(label.gameObject, row.transform);
+            to.name = "To";
+            to.GetComponent<Text>().text = "to";
+            to.GetComponent<Text>().alignment = TextAnchor.MiddleCenter;
+            LayoutElement toLayout = to.GetComponent<LayoutElement>();
+            if (toLayout != null)
+            {
+                toLayout.flexibleWidth = 0f;
+                toLayout.preferredWidth = -1f;
+                toLayout.minWidth = -1f;
+            }
+            to.transform.SetSiblingIndex(_minMovesInput.transform.GetSiblingIndex() + 1);
+
+            _maxMovesInput = Instantiate(_minMovesInput.gameObject, row.transform).GetComponent<InputField>();
+            _maxMovesInput.name = "Max Moves Input";
+            _maxMovesInput.onEndEdit = new InputField.EndEditEvent();
+            _maxMovesInput.transform.SetSiblingIndex(to.transform.GetSiblingIndex() + 1);
+        }
+
+        private static void SetPreferredWidth(GameObject widget, float width)
+        {
+            // Not ??: Unity's "missing component" objects only compare equal to null with ==.
+            LayoutElement layout = widget.GetComponent<LayoutElement>();
+            if (layout == null)
+                layout = widget.AddComponent<LayoutElement>();
+            layout.preferredWidth = width;
+            layout.minWidth = width;
         }
 
         // A host setting row like the others, with an On/Off button instead of a number: a copy of the round
@@ -350,6 +390,7 @@ namespace Ricochet.Client.UI
             RoundLimitSeconds = settings.RoundLimitSeconds,
             ShowBestSolution = settings.ShowBestSolution,
             MinMoves = settings.MinMoves,
+            MaxMoves = settings.MaxMoves,
         };
 
         private void OnDoneClicked()
@@ -376,9 +417,18 @@ namespace Ricochet.Client.UI
             // Entered in minutes; 0 = no limit.
             edited.RoundLimitSeconds = ParseOr(_roundLimitInput.text, settings.RoundLimitSeconds / 60) * 60;
             edited.MinMoves = ParseOr(_minMovesInput.text, settings.MinMoves);
+            edited.MaxMoves = ParseOr(_maxMovesInput.text, settings.MaxMoves);
+            // A minimum above the maximum pulls the maximum up with it, and a maximum below the minimum the other way.
+            if (edited.MinMoves > edited.MaxMoves)
+            {
+                if (edited.MinMoves != settings.MinMoves)
+                    edited.MaxMoves = edited.MinMoves;
+                else
+                    edited.MinMoves = edited.MaxMoves;
+            }
             if (edited.PointsToWin == settings.PointsToWin && edited.FirstTimerSeconds == settings.FirstTimerSeconds
                 && edited.ExtensionSeconds == settings.ExtensionSeconds && edited.RoundLimitSeconds == settings.RoundLimitSeconds
-                && edited.MinMoves == settings.MinMoves)
+                && edited.MinMoves == settings.MinMoves && edited.MaxMoves == settings.MaxMoves)
             {
                 ShowSettings(settings); // undo anything unparseable
                 return;
@@ -539,6 +589,7 @@ namespace Ricochet.Client.UI
             if (!_extensionInput.isFocused) _extensionInput.text = settings.ExtensionSeconds.ToString();
             if (!_roundLimitInput.isFocused) _roundLimitInput.text = (settings.RoundLimitSeconds / 60).ToString();
             if (!_minMovesInput.isFocused) _minMovesInput.text = settings.MinMoves.ToString();
+            if (!_maxMovesInput.isFocused) _maxMovesInput.text = settings.MaxMoves.ToString();
             _showBestLabel.text = settings.ShowBestSolution ? "On" : "Off";
         }
 
@@ -622,7 +673,9 @@ namespace Ricochet.Client.UI
                 // Kept to about three lines: the feedback text sits right under it.
                 text.Append($"First to {settings.PointsToWin}, {settings.FirstTimerSeconds}s timer (+{settings.ExtensionSeconds}s), "
                     + (settings.RoundLimitSeconds > 0 ? $"{settings.RoundLimitSeconds / 60} min limit" : "no limit")
-                    + (settings.MinMoves != MatchSettings.DefaultMinMoves ? $", boards {settings.MinMoves}+ moves" : "")
+                    + (settings.MinMoves == settings.MaxMoves ? $", {settings.MinMoves}-move boards"
+                        : settings.MinMoves != MatchSettings.DefaultMinMoves || settings.MaxMoves != MatchSettings.DefaultMaxMoves
+                            ? $", boards {settings.MinMoves}-{settings.MaxMoves} moves" : "")
                     + (settings.ShowBestSolution ? ", best solution shown" : ""));
             }
             _matchText.text = text.ToString();

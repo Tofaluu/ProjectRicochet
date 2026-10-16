@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 9;
+        public const int ProtocolVersion = 10;
 
         // Client -> server
 
@@ -203,8 +203,9 @@ namespace SharedLogic
         public const int MinPointsToWin = 1, MaxPointsToWin = 50;
         public const int MinTimerSeconds = 10, MaxTimerSeconds = 600;
         public const int MinRoundLimitSeconds = 60, MaxRoundLimitSeconds = 3600;
-        // Boards of 16+ moves are too rare to find while players wait (about 1 in 2400 random boards).
-        public const int MinMinMoves = 2, MaxMinMoves = 15, DefaultMinMoves = 3;
+        // The range for both ends of the board length (MinMoves..MaxMoves). Boards of 16+ moves are too rare to
+        // find while players wait (about 1 in 2400 random boards).
+        public const int MinMinMoves = 2, MaxMinMoves = 15, DefaultMinMoves = 3, DefaultMaxMoves = MaxMinMoves;
 
         public GameMode Mode { get; set; }
         public int PointsToWin { get; set; }
@@ -228,12 +229,15 @@ namespace SharedLogic
         public bool ShowBestSolution { get; set; }
 
         /// <summary>
-        /// Boards are dealt with a shortest solution of at least this many moves. If the server can't find
-        /// one in time it deals the longest it found.
+        /// Boards are dealt with a shortest solution of <see cref="MinMoves"/> to <see cref="MaxMoves"/> moves. If
+        /// the server can't find one in time it deals the longest it found that isn't past the maximum.
         /// </summary>
         public int MinMoves { get; set; }
 
-        /// <param name="maxMinMoves">The server can allow longer boards (a dev server testing them); defaults to <see cref="MaxMinMoves"/>.</param>
+        /// <summary>See <see cref="MinMoves"/>; 0 (unset) = <see cref="DefaultMaxMoves"/>; never below the minimum.</summary>
+        public int MaxMoves { get; set; }
+
+        /// <param name="maxMinMoves">The highest board length allowed (a dev server can allow longer boards); defaults to <see cref="MaxMinMoves"/>.</param>
         public MatchSettings Clamped(int maxMinMoves = MaxMinMoves)
         {
             return new MatchSettings
@@ -245,6 +249,7 @@ namespace SharedLogic
                 RoundLimitSeconds = RoundLimitSeconds <= 0 ? 0 : Clamp(RoundLimitSeconds, MinRoundLimitSeconds, MaxRoundLimitSeconds),
                 ShowBestSolution = ShowBestSolution,
                 MinMoves = Clamp(MinMoves, MinMinMoves, maxMinMoves),
+                MaxMoves = Clamp(MaxMoves <= 0 ? DefaultMaxMoves : MaxMoves, Clamp(MinMoves, MinMinMoves, maxMinMoves), maxMinMoves),
             };
         }
 

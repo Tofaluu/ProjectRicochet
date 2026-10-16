@@ -59,7 +59,7 @@ namespace BackendServer.Services
         /// </summary>
         public double BoardSearchSeconds { get; set; } = 20;
 
-        /// <summary>Highest <see cref="MatchSettings.MinMoves"/> a host may pick. Raise it only on a dev server (with a longer search).</summary>
+        /// <summary>Highest <see cref="MatchSettings.MinMoves"/> / <see cref="MatchSettings.MaxMoves"/> a host may pick. Raise it only on a dev server (with a longer search).</summary>
         public int MaxMinMoves { get; set; } = MatchSettings.MaxMinMoves;
 
         /// <summary>Time the solver gets per board. If it gives up, the board is kept with no known shortest solution.</summary>
@@ -265,6 +265,7 @@ namespace BackendServer.Services
                             ExtensionSeconds = _options.ExtensionSeconds,
                             RoundLimitSeconds = _options.RoundLimitSeconds,
                             MinMoves = _options.MinBoardMoves,
+                            MaxMoves = MatchSettings.DefaultMaxMoves,
                         }.Clamped(_options.MaxMinMoves),
                     };
                     _lobbies[code] = lobby;
@@ -512,8 +513,8 @@ namespace BackendServer.Services
 
             // The board is generated during the countdown (a slow solve just stretches the wait). Not
             // awaited, so the host's StartMatch call returns straight away.
-            int minMoves = lobby.Settings.MinMoves;
-            Task<PreparedRound> prepare = Task.Run(() => PrepareRound(minMoves));
+            MatchSettings settings = lobby.Settings;
+            Task<PreparedRound> prepare = Task.Run(() => PrepareRound(settings.MinMoves, settings.MaxMoves));
             RunInBackground(async () =>
             {
                 await Task.Delay(TimeSpan.FromSeconds(_options.CountdownSeconds), _time);
@@ -891,8 +892,8 @@ namespace BackendServer.Services
             }
 
             // Prepare the next board while everyone watches the replays (unless the match is over).
-            int minMoves = lobby.Settings.MinMoves; // locked during a match
-            Task<PreparedRound>? next = matchWinner == null ? Task.Run(() => PrepareRound(minMoves)) : null;
+            MatchSettings settings = lobby.Settings; // locked during a match
+            Task<PreparedRound>? next = matchWinner == null ? Task.Run(() => PrepareRound(settings.MinMoves, settings.MaxMoves)) : null;
 
             IClientProxy group = _hub.Clients.Group(lobby.Code);
             await group.SendAsync(HubMethods.RoundEnded, result);
@@ -957,17 +958,17 @@ namespace BackendServer.Services
         }
 
         /// <summary>
-        /// A board whose shortest solution has at least <paramref name="minMoves"/> moves (<see cref="BoardSearch"/>,
-        /// shared with practice boards). Once <see cref="GameOptions.BoardSearchSeconds"/> is up, the longest board
-        /// found is dealt (if none was solved in time yet, the solver's time limit is dropped), so every dealt
+        /// A board whose shortest solution has <paramref name="minMoves"/> to <paramref name="maxMoves"/> moves
+        /// (<see cref="BoardSearch"/>, shared with practice boards). Once <see cref="GameOptions.BoardSearchSeconds"/> is
+        /// up, the longest board found that isn't past the maximum is dealt (if none was solved in time yet, the solver's time limit is dropped), so every dealt
         /// board has a known shortest solution (instant end on it, its replay, the history). Runs outside the lock.
         /// </summary>
-        private PreparedRound PrepareRound(int minMoves)
+        private PreparedRound PrepareRound(int minMoves, int maxMoves)
         {
             int seed;
             lock (_gate)
                 seed = _random.Next();
-            var search = new BoardSearch(minMoves, new Random(seed), TimeSpan.FromSeconds(_options.SolverTimeLimitSeconds));
+            var search = new BoardSearch(minMoves, new Random(seed), TimeSpan.FromSeconds(_options.SolverTimeLimitSeconds), maxMoves);
             var budget = TimeSpan.FromSeconds(_options.BoardSearchSeconds);
 
             var clock = Stopwatch.StartNew();
@@ -975,8 +976,8 @@ namespace BackendServer.Services
             {
                 if (clock.Elapsed >= budget && search.Longest != null)
                 {
-                    _log.LogInformation("Board ready: shortest {Moves} moves, wanted {Min} (out of time; {Solves} solves, {Ms} ms)",
-                        search.LongestMoves.Length, minMoves, search.Solves, clock.ElapsedMilliseconds);
+                    _log.LogInformation("Board ready: shortest {Moves} moves, wanted {Min}-{Max} (out of time; {Solves} solves, {Ms} ms)",
+                        search.LongestMoves.Length, minMoves, maxMoves, search.Solves, clock.ElapsedMilliseconds);
                     return new PreparedRound(search.Longest, search.LongestMoves);
                 }
             }
