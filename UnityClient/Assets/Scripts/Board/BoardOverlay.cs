@@ -82,13 +82,13 @@ namespace Ricochet.Client.Board
             if (session.IsPractice)
             {
                 y += ToggleHeight + 6f;
-                if (DrawToggle(new Rect(card.x, y, ToggleWidth, ToggleHeight), "Exact moves", PlayerSettings.PracticeExact))
+                if (DrawToggle(new Rect(card.x, y, ToggleWidth, ToggleHeight), "Puzzle mode", PlayerSettings.PracticeExact))
                     _controller.SetPracticeExact(!PlayerSettings.PracticeExact);
                 if (PlayerSettings.PracticeExact)
                 {
                     y += ToggleHeight + 6f;
                     int moves = PlayerSettings.PracticeMoves;
-                    int change = DrawStepper(new Rect(card.x, y, ToggleWidth, ToggleHeight), $"Board  {moves} moves",
+                    int change = DrawStepper(new Rect(card.x, y, ToggleWidth, ToggleHeight), $"Solve in {moves}",
                         moves > MatchSettings.MinMinMoves, moves < MatchSettings.MaxMinMoves);
                     if (change != 0)
                         _controller.SetPracticeMoves(moves + change);
@@ -111,7 +111,7 @@ namespace Ricochet.Client.Board
             return clicked;
         }
 
-        // A pill with − and + at its ends ("−  Board 6 moves  +"); -1 / +1 when one is clicked, else 0.
+        // A pill with − and + at its ends ("−  Solve in 6  +"); -1 / +1 when one is clicked, else 0.
         // A button that can't be used (at the range's end) is greyed out.
         private int DrawStepper(Rect rect, string label, bool canDecrease, bool canIncrease)
         {
