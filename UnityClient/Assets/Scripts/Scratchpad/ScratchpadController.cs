@@ -281,6 +281,12 @@ namespace Ricochet.Client.Scratchpad
                 Show(BoardCodec.Decode(BoardCodec.Encode(generated)), practice: true, _searchSeed);
                 return;
             }
+            if (Session.Round == null)
+            {
+                // Nothing on screen yet (the game just started): a random board to dim while searching.
+                RoundSetup placeholder = BoardGenerator.GenerateRound(new System.Random(_searchSeed));
+                Show(BoardCodec.Decode(BoardCodec.Encode(placeholder)), practice: true, _searchSeed);
+            }
             int moves = PlayerSettings.PracticeMoves;
             _search = new BoardSearch(moves, new System.Random(_searchSeed), PracticeSolverLimit, maxMoves: moves);
             _searchStarted = Time.realtimeSinceStartup;
