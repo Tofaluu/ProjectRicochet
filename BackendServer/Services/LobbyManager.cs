@@ -962,9 +962,10 @@ namespace BackendServer.Services
         /// Generates and solves boards until one's shortest solution has at least <paramref name="minMoves"/>
         /// moves. Long boards are rare (1 in ~350 random boards reaches 14), so a board that falls short is
         /// nudged (<see cref="BoardGenerator.Nudge"/>), keeping any change that isn't shorter, which climbs to
-        /// long boards much faster than rerolling; after <see cref="ClimbSteps"/> nudges it starts over. Hard
-        /// boards the solver gives up on are kept (no known shortest). Once <see cref="GameOptions.BoardSearchSeconds"/>
-        /// is up, the longest board found is dealt. Runs outside the lock.
+        /// long boards much faster than rerolling; after <see cref="ClimbSteps"/> nudges it starts over. Boards
+        /// the solver gives up on are skipped, so every dealt board has a known shortest solution (instant end on
+        /// it, its replay, the history). Once <see cref="GameOptions.BoardSearchSeconds"/> is up, the longest board
+        /// found is dealt (if none solved in time yet, the solver's time limit is dropped). Runs outside the lock.
         /// </summary>
         private PreparedRound PrepareRound(int minMoves)
         {
@@ -985,10 +986,11 @@ namespace BackendServer.Services
                 for (int step = 0; step <= ClimbSteps; step++)
                 {
                     RoundSetup candidate = step == 0 ? current : BoardGenerator.Nudge(current, random);
-                    SolverResult solved = Solver.Solve(candidate, timeLimit: timeLimit);
+                    bool outOfTime = clock.Elapsed >= budget;
+                    SolverResult solved = Solver.Solve(candidate, timeLimit: outOfTime && longest == null ? null : timeLimit);
                     solves++;
                     if (!solved.Solved && step == 0)
-                        return Ready(new PreparedRound(candidate, null), "unknown");
+                        break; // too hard to solve in time: a fresh board
                     if (solved.Solved && solved.Moves.Length >= currentLength)
                     {
                         current = candidate;
