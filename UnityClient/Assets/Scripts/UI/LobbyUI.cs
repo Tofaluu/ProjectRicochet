@@ -132,7 +132,7 @@ namespace Ricochet.Client.UI
             row.transform.SetSiblingIndex(after + 1);
             foreach (Text text in row.GetComponentsInChildren<Text>(true))
             {
-                if (text.GetComponentInParent<InputField>() == null)
+                if (text.GetComponentInParent<InputField>(true) == null)
                     text.text = label;
             }
             return row;

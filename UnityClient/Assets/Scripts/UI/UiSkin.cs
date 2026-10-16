@@ -29,7 +29,7 @@ namespace Ricochet.Client.UI
 
             foreach (Text text in root.GetComponentsInChildren<Text>(true))
             {
-                if (text.GetComponentInParent<Button>() != null || text.GetComponentInParent<InputField>() != null)
+                if (text.GetComponentInParent<Button>(true) != null || text.GetComponentInParent<InputField>(true) != null)
                     continue; // styled with their widget
                 string name = text.gameObject.name;
                 if (name == "Title" || name == "Lobby")
