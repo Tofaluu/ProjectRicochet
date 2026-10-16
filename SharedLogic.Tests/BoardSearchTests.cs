@@ -27,6 +27,28 @@ public class BoardSearchTests
             search.Longest.Grid, search.Longest.Robots, search.Longest.Target, search.LongestMoves));
     }
 
+    [Theory]
+    [InlineData(2, 1)]
+    [InlineData(6, 2)]
+    [InlineData(11, 3)]
+    public void FindsABoardOfAnExactLength(int moves, int seed)
+    {
+        var search = new BoardSearch(moves, new Random(seed), null, maxMoves: moves);
+        for (int i = 0; i < 20000 && !search.Step(); i++) { }
+
+        Assert.True(search.Found);
+        Assert.Equal(moves, search.LongestMoves.Length);
+        Assert.Equal(moves, Solver.Solve(search.Longest).Moves.Length);
+    }
+
+    [Fact]
+    public void NeverKeepsABoardPastTheMaximum()
+    {
+        var search = new BoardSearch(14, new Random(7), TimeSpan.FromSeconds(0.2), maxMoves: 14);
+        for (int i = 0; i < 60 && !search.Step(); i++)
+            Assert.True(search.Longest == null || search.LongestMoves.Length <= 14);
+    }
+
     [Fact]
     public void KeepsTheLongestBoardWhileSearching()
     {

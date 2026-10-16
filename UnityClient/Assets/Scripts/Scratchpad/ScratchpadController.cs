@@ -240,26 +240,29 @@ namespace Ricochet.Client.Scratchpad
         // The shown practice board's shortest solution length when a search found it, else 0 (unknown).
         private int _shownShortest;
 
+        /// <summary>The practice board's shortest solution length if known (a board from the search), else 0.</summary>
+        public int PracticeShortest => Session.IsPractice ? _shownShortest : 0;
+
         /// <summary>"Finding a board..." while a practice board is being searched for, else null.</summary>
         public string SearchStatus => _search == null ? null
             : _search.Longest == null ? $"Finding a {_search.MinMoves}-move board..."
-            : $"Finding a {_search.MinMoves}-move board...\nlongest so far: {_search.LongestMoves.Length}";
+            : $"Finding a {_search.MinMoves}-move board...\nclosest so far: {_search.LongestMoves.Length}";
 
         /// <summary>
-        /// Saves the practice boards' minimum. The board shown stays if it still qualifies (its shortest solution
-        /// is at least that long); otherwise a new one is dealt.
+        /// Saves the practice boards' length and deals a board of that length (unless the one shown already is).
         /// </summary>
-        public void SetPracticeMinMoves(int minMoves)
+        public void SetPracticeMoves(int moves)
         {
-            PlayerSettings.PracticeMinMoves = minMoves;
-            if (_search != null || (Session.IsPractice && _shownShortest < minMoves))
+            PlayerSettings.PracticeMoves = moves;
+            if (_search != null || (Session.IsPractice && _shownShortest != moves))
                 NewBoard();
         }
 
         private void NewBoard()
         {
             _searchSeed = _seed != 0 ? _seed : Random.Range(1, int.MaxValue);
-            _search = new BoardSearch(PlayerSettings.PracticeMinMoves, new System.Random(_searchSeed), PracticeSolverLimit);
+            int moves = PlayerSettings.PracticeMoves;
+            _search = new BoardSearch(moves, new System.Random(_searchSeed), PracticeSolverLimit, maxMoves: moves);
             _searchStarted = Time.realtimeSinceStartup;
             _dragging = false;
             StepSearch(); // usually done at once: no dimmed frame

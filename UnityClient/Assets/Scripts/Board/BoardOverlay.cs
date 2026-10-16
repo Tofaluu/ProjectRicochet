@@ -82,10 +82,10 @@ namespace Ricochet.Client.Board
             if (session.IsPractice)
             {
                 y += ToggleHeight + 6f;
-                int change = DrawStepper(new Rect(card.x, y, ToggleWidth, ToggleHeight), $"Min moves  {PlayerSettings.PracticeMinMoves}");
-                int minMoves = Mathf.Clamp(PlayerSettings.PracticeMinMoves + change, MatchSettings.MinMinMoves, MatchSettings.MaxMinMoves);
-                if (minMoves != PlayerSettings.PracticeMinMoves)
-                    _controller.SetPracticeMinMoves(minMoves);
+                int change = DrawStepper(new Rect(card.x, y, ToggleWidth, ToggleHeight), $"Board  {PlayerSettings.PracticeMoves} moves");
+                int moves = Mathf.Clamp(PlayerSettings.PracticeMoves + change, MatchSettings.MinMinMoves, MatchSettings.MaxMinMoves);
+                if (moves != PlayerSettings.PracticeMoves)
+                    _controller.SetPracticeMoves(moves);
             }
             LeftColumnBottom = y + ToggleHeight;
             GUI.matrix = matrix;
@@ -104,7 +104,7 @@ namespace Ricochet.Client.Board
             return clicked;
         }
 
-        // A pill with − and + at its ends ("−  Min moves 3  +"); -1 / +1 when one is clicked, else 0.
+        // A pill with − and + at its ends ("−  Board 6 moves  +"); -1 / +1 when one is clicked, else 0.
         private int DrawStepper(Rect rect, string label)
         {
             Color previous = GUI.backgroundColor;
@@ -255,11 +255,16 @@ namespace Ricochet.Client.Board
             Target target = session.Round.Target;
             Color targetColor = Colors.TargetColor(target);
             string robot = target.Robot.HasValue ? $"the {target.Robot.Value} robot" : "any robot";
-            string goal = $"Get {Colorize(robot, targetColor)} to its target";
+            // A practice board of a known length says it ("solve in N", like a chess puzzle's "mate in N").
+            int best = _controller.PracticeShortest;
+            string goal = $"Get {Colorize(robot, targetColor)} to its target" + (best > 0 ? $" in {best} moves" : "");
 
             int moves = session.Moves.Count;
             string status = session.IsReplaying ? $"Replaying a solution ({moves} moves)"
-                : session.IsSolved ? $"<b>Solved in {moves} moves!</b>" : $"Moves: {moves}";
+                : session.IsSolved && best > 0 && moves <= best ? $"<b>Solved in {moves} moves: optimal!</b>"
+                : session.IsSolved && best > 0 ? $"<b>Solved in {moves} moves</b> (best is {best})"
+                : session.IsSolved ? $"<b>Solved in {moves} moves!</b>"
+                : best > 0 ? $"Moves: {moves} of {best}" : $"Moves: {moves}";
             if (session.IsPractice && session.HintText != null)
                 status += "\n" + session.HintText;
 
