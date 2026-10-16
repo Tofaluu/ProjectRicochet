@@ -3,7 +3,7 @@
 **Play it in your browser: [ricochet.thomasliu.dev](https://ricochet.thomasliu.dev)** (desktop browsers; share a
 lobby code with friends to play together)
 
-![A practice board](docs/screenshot.png)
+![A 5-move solve: the yellow robot is moved into place as a blocker so the green robot can stop on its target](docs/solve.gif)
 
 A competitive multiplayer puzzle game. Every player gets the same board: robots slide in a straight
 line until they hit a wall or another robot, and the goal is to get the target robot onto the target
