@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using Ricochet.Client.Game;
@@ -344,7 +345,8 @@ namespace Ricochet.Client.UI
                 _network.RecordSolution(solution); // still the player's own best for the match history
                 _scratchpad.View.MarkNotShorter();
             }
-            _scratchpad.ResetAfter(SolvedResetDelay);
+            // Not once the round is over (this solve may have ended it): the solved board stays until the replays.
+            _scratchpad.ResetAfter(SolvedResetDelay, () => _match.InLobby && _match.Stage == MatchStage.Solving);
         }
 
         private void OnLeaveClicked()
@@ -523,9 +525,22 @@ namespace Ricochet.Client.UI
             if (result.WinnerName == null && !result.OutOfTime)
                 _scratchpad.View.PlaySkip(); // everyone skipped the board
             if (replays.Count > 0)
-                _scratchpad.PlayReplays(replays, (float)result.ReplayPauseSeconds);
+                StartCoroutine(PlayReplaysAfter((float)result.SolvedPauseSeconds, replays, (float)result.ReplayPauseSeconds));
             else
                 _scratchpad.EndRound();
+        }
+
+        // A solution that ended the round at once gets a moment for its slide and burst before the replays.
+        private IEnumerator PlayReplaysAfter(float delay, IReadOnlyList<ReplaySegment> replays, float pause)
+        {
+            if (delay > 0f)
+            {
+                int round = _match.Round;
+                yield return new WaitForSeconds(delay);
+                if (!_match.InLobby || _match.Round != round || _match.Stage != MatchStage.RoundOver)
+                    yield break; // left, or moved on meanwhile
+            }
+            _scratchpad.PlayReplays(replays, pause);
         }
 
         // ---- Showing the state ----

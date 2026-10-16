@@ -41,6 +41,9 @@ namespace BackendServer.Services
         /// <summary>Pause on the starting position before each replay.</summary>
         public double ReplayPauseSeconds { get; set; } = 1;
 
+        /// <summary>Pause before the replays when a solution ends the round at once (<see cref="RoundResult.SolvedPauseSeconds"/>).</summary>
+        public double SolvedPauseSeconds { get; set; } = 1.5;
+
         /// <summary>Pause on the replay's final position before the next countdown (not after a skipped replay).</summary>
         public double AfterReplaySeconds { get; set; } = 1;
 
@@ -676,7 +679,7 @@ namespace BackendServer.Services
             await group.SendAsync(HubMethods.NewBestSolution, roundNumber, playerName, moveCount, bestShown);
             await group.SendAsync(HubMethods.LobbyState, state);
             if (endRound)
-                RunInBackground(() => EndRoundAsync(lobby, roundNumber));
+                RunInBackground(() => EndRoundAsync(lobby, roundNumber, endedBySolution: true));
         }
 
         /// <summary>
@@ -832,7 +835,7 @@ namespace BackendServer.Services
         /// once; only the first call does anything.
         /// </summary>
         /// <param name="outOfTime">The time limit ran out: only ends the round if it's still unsolved.</param>
-        private async Task EndRoundAsync(Lobby lobby, int roundNumber, bool outOfTime = false)
+        private async Task EndRoundAsync(Lobby lobby, int roundNumber, bool outOfTime = false, bool endedBySolution = false)
         {
             RoundResult result;
             LobbyState state;
@@ -871,6 +874,7 @@ namespace BackendServer.Services
                         ? _options.ShortestReplayStepSeconds
                         : _options.ReplayStepSeconds,
                     ReplayPauseSeconds = _options.ReplayPauseSeconds,
+                    SolvedPauseSeconds = endedBySolution ? _options.SolvedPauseSeconds : 0,
                     MatchWinnerName = matchWinner,
                     OutOfTime = outOfTime,
                     Record = new RoundRecord
@@ -949,7 +953,7 @@ namespace BackendServer.Services
         {
             int winner = result.WinnerMoves.Length;
             int shortest = result.ShortestMoves.Length;
-            double seconds = 0;
+            double seconds = result.SolvedPauseSeconds;
             if (winner > 0)
                 seconds += result.ReplayPauseSeconds + winner * result.ReplayStepSeconds;
             if (shortest > 0 && (winner == 0 || winner > shortest))

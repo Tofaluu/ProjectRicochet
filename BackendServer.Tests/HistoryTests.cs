@@ -42,6 +42,7 @@ public class HistoryTests
         await RecordAsync(h, bob, longer);      // no longer shorter than Bob's own best: no change
         await h.AdvanceUntil(() => bob.Count(HubMethods.RoundEnded) == 1, "the timer to run out");
 
+        Assert.Equal(0, bob.LastResult.SolvedPauseSeconds); // ended by the timer: no pause before the replays
         RoundRecord record = bob.LastResult.Record;
         Assert.Equal(1, record.MatchRound);
         Assert.Equal(alice.BoardBytes, record.Board);
