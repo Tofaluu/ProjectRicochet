@@ -233,7 +233,8 @@ namespace SharedLogic
         /// </summary>
         public int MinMoves { get; set; }
 
-        public MatchSettings Clamped()
+        /// <param name="maxMinMoves">The server can allow longer boards (a dev server testing them); defaults to <see cref="MaxMinMoves"/>.</param>
+        public MatchSettings Clamped(int maxMinMoves = MaxMinMoves)
         {
             return new MatchSettings
             {
@@ -243,7 +244,7 @@ namespace SharedLogic
                 ExtensionSeconds = Clamp(ExtensionSeconds, MinTimerSeconds, MaxTimerSeconds),
                 RoundLimitSeconds = RoundLimitSeconds <= 0 ? 0 : Clamp(RoundLimitSeconds, MinRoundLimitSeconds, MaxRoundLimitSeconds),
                 ShowBestSolution = ShowBestSolution,
-                MinMoves = Clamp(MinMoves, MinMinMoves, MaxMinMoves),
+                MinMoves = Clamp(MinMoves, MinMinMoves, maxMinMoves),
             };
         }
 
