@@ -100,6 +100,41 @@ namespace SharedLogic
             return new RoundSetup(grid, robots, random.Next(grid.Targets.Count));
         }
 
+        /// <summary>
+        /// The same board with one change: a robot moved to another free cell (4 in 5) or another active
+        /// target. For searching boards near a given one, e.g. ones with longer solutions.
+        /// </summary>
+        public static RoundSetup Nudge(RoundSetup round, Random random)
+        {
+            GridState grid = round.Grid;
+            if (random.Next(5) == 0)
+                return new RoundSetup(grid, round.Robots, random.Next(grid.Targets.Count));
+
+            var robot = (RobotColor)random.Next(Robot.Count);
+            GridPos pos;
+            do
+            {
+                pos = new GridPos(random.Next(grid.Width), random.Next(grid.Height));
+            } while (grid.IsEnclosed(pos) || IsTarget(grid, pos) || IsRobot(round.Robots, pos));
+            return new RoundSetup(grid, round.Robots.With(robot, pos), round.TargetIndex);
+        }
+
+        private static bool IsTarget(GridState grid, GridPos pos)
+        {
+            foreach (Target target in grid.Targets)
+                if (target.Position == pos)
+                    return true;
+            return false;
+        }
+
+        private static bool IsRobot(RobotPositions robots, GridPos pos)
+        {
+            for (int i = 0; i < Robot.Count; i++)
+                if (robots[(RobotColor)i] == pos)
+                    return true;
+            return false;
+        }
+
         // A quarter turn clockwise about the board centre maps bottom-left -> top-left -> top-right -> bottom-right.
         private static GridPos Rotate(GridPos pos, int quarterTurns)
         {

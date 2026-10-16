@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 8;
+        public const int ProtocolVersion = 9;
 
         // Client -> server
 
@@ -203,6 +203,8 @@ namespace SharedLogic
         public const int MinPointsToWin = 1, MaxPointsToWin = 50;
         public const int MinTimerSeconds = 10, MaxTimerSeconds = 600;
         public const int MinRoundLimitSeconds = 60, MaxRoundLimitSeconds = 3600;
+        // Boards of 16+ moves are too rare to find while players wait (about 1 in 2400 random boards).
+        public const int MinMinMoves = 2, MaxMinMoves = 15, DefaultMinMoves = 3;
 
         public GameMode Mode { get; set; }
         public int PointsToWin { get; set; }
@@ -225,6 +227,12 @@ namespace SharedLogic
         /// </summary>
         public bool ShowBestSolution { get; set; }
 
+        /// <summary>
+        /// Boards are dealt with a shortest solution of at least this many moves. If the server can't find
+        /// one in time it deals the longest it found.
+        /// </summary>
+        public int MinMoves { get; set; }
+
         public MatchSettings Clamped()
         {
             return new MatchSettings
@@ -235,6 +243,7 @@ namespace SharedLogic
                 ExtensionSeconds = Clamp(ExtensionSeconds, MinTimerSeconds, MaxTimerSeconds),
                 RoundLimitSeconds = RoundLimitSeconds <= 0 ? 0 : Clamp(RoundLimitSeconds, MinRoundLimitSeconds, MaxRoundLimitSeconds),
                 ShowBestSolution = ShowBestSolution,
+                MinMoves = Clamp(MinMoves, MinMinMoves, MaxMinMoves),
             };
         }
 

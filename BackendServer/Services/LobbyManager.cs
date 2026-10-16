@@ -50,8 +50,14 @@ namespace BackendServer.Services
         /// </summary>
         public double ReconnectGraceSeconds { get; set; } = 60;
 
-        /// <summary>Boards whose shortest solution is shorter than this are thrown away. Hard boards are always kept.</summary>
-        public int MinBoardMoves { get; set; } = 3;
+        /// <summary>New lobbies' <see cref="MatchSettings.MinMoves"/>: boards whose shortest solution is shorter are thrown away.</summary>
+        public int MinBoardMoves { get; set; } = MatchSettings.DefaultMinMoves;
+
+        /// <summary>
+        /// Time to find a board meeting the lobby's minimum (it runs during the countdown/replays); after
+        /// that the longest board found so far is dealt.
+        /// </summary>
+        public double BoardSearchSeconds { get; set; } = 10;
 
         /// <summary>Time the solver gets per board. If it gives up, the board is kept with no known shortest solution.</summary>
         public double SolverTimeLimitSeconds { get; set; } = 5;
@@ -175,7 +181,8 @@ namespace BackendServer.Services
         private static readonly Regex LobbyCodePattern = new("^[A-Z0-9]{1,8}$");
         private const int MaxNameLength = 20;
         private const int MaxPlayerIdLength = 64;
-        private const int MaxBoardAttempts = 50;
+        // A board search nudges the robots this many times (keeping any change that isn't shorter) before a fresh board.
+        private const int ClimbSteps = 40;
 
         private sealed record Seat(Lobby Lobby, Player Player);
 
@@ -256,6 +263,7 @@ namespace BackendServer.Services
                             FirstTimerSeconds = _options.FirstTimerSeconds,
                             ExtensionSeconds = _options.ExtensionSeconds,
                             RoundLimitSeconds = _options.RoundLimitSeconds,
+                            MinMoves = _options.MinBoardMoves,
                         }.Clamped(),
                     };
                     _lobbies[code] = lobby;
@@ -503,7 +511,8 @@ namespace BackendServer.Services
 
             // The board is generated during the countdown (a slow solve just stretches the wait). Not
             // awaited, so the host's StartMatch call returns straight away.
-            Task<PreparedRound> prepare = Task.Run(PrepareRound);
+            int minMoves = lobby.Settings.MinMoves;
+            Task<PreparedRound> prepare = Task.Run(() => PrepareRound(minMoves));
             RunInBackground(async () =>
             {
                 await Task.Delay(TimeSpan.FromSeconds(_options.CountdownSeconds), _time);
@@ -881,7 +890,8 @@ namespace BackendServer.Services
             }
 
             // Prepare the next board while everyone watches the replays (unless the match is over).
-            Task<PreparedRound>? next = matchWinner == null ? Task.Run(PrepareRound) : null;
+            int minMoves = lobby.Settings.MinMoves; // locked during a match
+            Task<PreparedRound>? next = matchWinner == null ? Task.Run(() => PrepareRound(minMoves)) : null;
 
             IClientProxy group = _hub.Clients.Group(lobby.Code);
             await group.SendAsync(HubMethods.RoundEnded, result);
@@ -946,30 +956,55 @@ namespace BackendServer.Services
         }
 
         /// <summary>
-        /// Generates a board and solves it, discarding trivial ones (shortest solution below
-        /// <see cref="GameOptions.MinBoardMoves"/>). Hard boards are kept even if the solver gives up.
-        /// Runs outside the lock.
+        /// Generates and solves boards until one's shortest solution has at least <paramref name="minMoves"/>
+        /// moves. Long boards are rare (1 in ~350 random boards reaches 14), so a board that falls short is
+        /// nudged (<see cref="BoardGenerator.Nudge"/>), keeping any change that isn't shorter, which climbs to
+        /// long boards much faster than rerolling; after <see cref="ClimbSteps"/> nudges it starts over. Hard
+        /// boards the solver gives up on are kept (no known shortest). Once <see cref="GameOptions.BoardSearchSeconds"/>
+        /// is up, the longest board found is dealt. Runs outside the lock.
         /// </summary>
-        private PreparedRound PrepareRound()
+        private PreparedRound PrepareRound(int minMoves)
         {
             int seed;
             lock (_gate)
                 seed = _random.Next();
             var random = new Random(seed);
             var timeLimit = TimeSpan.FromSeconds(_options.SolverTimeLimitSeconds);
+            var budget = TimeSpan.FromSeconds(_options.BoardSearchSeconds);
 
             var clock = Stopwatch.StartNew();
-            for (int attempt = 1; ; attempt++)
+            PreparedRound? longest = null;
+            int solves = 0;
+            while (true)
             {
-                RoundSetup round = BoardGenerator.GenerateRound(random);
-                SolverResult solved = Solver.Solve(round, timeLimit: timeLimit);
-                bool trivial = solved.Solved && solved.Moves.Length < _options.MinBoardMoves;
-                if (!trivial || attempt >= MaxBoardAttempts)
+                RoundSetup current = BoardGenerator.GenerateRound(random);
+                int currentLength = -1;
+                for (int step = 0; step <= ClimbSteps; step++)
                 {
-                    _log.LogInformation("Board ready: shortest {Moves} moves (attempt {Attempt}, {Ms} ms)",
-                        solved.Solved ? solved.Moves.Length.ToString() : "unknown", attempt, clock.ElapsedMilliseconds);
-                    return new PreparedRound(round, solved.Moves);
+                    RoundSetup candidate = step == 0 ? current : BoardGenerator.Nudge(current, random);
+                    SolverResult solved = Solver.Solve(candidate, timeLimit: timeLimit);
+                    solves++;
+                    if (!solved.Solved && step == 0)
+                        return Ready(new PreparedRound(candidate, null), "unknown");
+                    if (solved.Solved && solved.Moves.Length >= currentLength)
+                    {
+                        current = candidate;
+                        currentLength = solved.Moves.Length;
+                        if (longest == null || currentLength > longest.Shortest!.Length)
+                            longest = new PreparedRound(candidate, solved.Moves);
+                        if (currentLength >= minMoves)
+                            return Ready(longest, currentLength.ToString());
+                    }
+                    if (clock.Elapsed >= budget && longest != null)
+                        return Ready(longest, $"{longest.Shortest!.Length} (wanted {minMoves}, out of time)");
                 }
+            }
+
+            PreparedRound Ready(PreparedRound prepared, string moves)
+            {
+                _log.LogInformation("Board ready: shortest {Moves} moves ({Solves} solves, {Ms} ms)",
+                    moves, solves, clock.ElapsedMilliseconds);
+                return prepared;
             }
         }
 

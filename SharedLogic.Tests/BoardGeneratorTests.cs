@@ -194,4 +194,30 @@ public class BoardGeneratorTests
         byte[] b = BoardCodec.Encode(BoardGenerator.GenerateRound(new Random(7)));
         Assert.Equal(a, b);
     }
+
+    [Theory]
+    [MemberData(nameof(Seeds))]
+    public void NudgeChangesOneRobotOrTheTarget(int seed)
+    {
+        var random = new Random(seed);
+        RoundSetup round = BoardGenerator.GenerateRound(random);
+        for (int i = 0; i < 100; i++)
+        {
+            RoundSetup nudged = BoardGenerator.Nudge(round, random);
+            var before = Enum.GetValues<RobotColor>().Select(c => round.Robots[c]).ToList();
+            var after = Enum.GetValues<RobotColor>().Select(c => nudged.Robots[c]).ToList();
+            int moved = before.Zip(after).Count(p => p.First != p.Second);
+            bool retargeted = nudged.TargetIndex != round.TargetIndex;
+
+            Assert.Same(round.Grid, nudged.Grid);
+            Assert.True(moved + (retargeted ? 1 : 0) <= 1, $"moved {moved}, retargeted {retargeted}");
+            Assert.Equal(4, after.Distinct().Count());
+            foreach (GridPos pos in after)
+            {
+                Assert.DoesNotContain(nudged.Grid.Targets, t => t.Position == pos);
+                Assert.False(nudged.Grid.IsEnclosed(pos));
+            }
+            round = nudged;
+        }
+    }
 }
