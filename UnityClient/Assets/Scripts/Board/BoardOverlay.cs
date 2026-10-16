@@ -221,6 +221,34 @@ namespace Ricochet.Client.Board
             _bannerStyle.normal.textColor = Colors.TextOn(frame);
             GUI.Label(banner, BannerText(session), _bannerStyle);
             GUI.backgroundColor = previous;
+            if (session.CanControlReplay)
+                DrawReplayControls(session, banner);
+        }
+
+        // Practice replays: [Pause][<] left of the banner, [>] right of it (also Space, comma, period).
+        private void DrawReplayControls(BoardSession session, Rect banner)
+        {
+            float gap = 6f * UiScale, size = banner.height, wide = 74f * UiScale;
+            int fontSize = _toggleStyle.fontSize;
+            _toggleStyle.fontSize = Mathf.RoundToInt(15f * UiScale);
+            Color previous = GUI.backgroundColor;
+            GUI.backgroundColor = Tint(Colors.Panel);
+            _toggleStyle.normal.textColor = Colors.PanelText;
+            _toggleStyle.hover.textColor = Colors.PanelText;
+
+            bool playing = !session.ReplayPaused && !session.ReplayFinished;
+            var back = new Rect(banner.x - gap - size, banner.y, size, size);
+            var pause = new Rect(back.x - gap - wide, banner.y, wide, size);
+            var forward = new Rect(banner.xMax + gap, banner.y, size, size);
+            if (GUI.Button(pause, playing ? "Pause" : session.ReplayFinished ? "Again" : "Play", _toggleStyle))
+                _controller.ToggleReplayPause();
+            if (GUI.Button(back, "<", _toggleStyle))
+                _controller.StepReplay(-1);
+            if (GUI.Button(forward, ">", _toggleStyle))
+                _controller.StepReplay(1);
+
+            GUI.backgroundColor = previous;
+            _toggleStyle.fontSize = fontSize;
         }
 
         private static string BannerText(BoardSession session)
@@ -234,9 +262,10 @@ namespace Ricochet.Client.Board
                     string who = replay.IsShortest ? "Shortest possible" : "Replay: " + replay.Label;
                     if (session.ReplayFinished)
                         return $"{who}  ·  {replay.Moves.Count} moves";
+                    string paused = session.ReplayPaused ? "  ·  paused" : "";
                     return session.ReplayStep == 0
-                        ? $"{who}  ·  {replay.Moves.Count} moves"
-                        : $"{who}  ·  move {session.ReplayStep} of {replay.Moves.Count}";
+                        ? $"{who}  ·  {replay.Moves.Count} moves{paused}"
+                        : $"{who}  ·  move {session.ReplayStep} of {replay.Moves.Count}{paused}";
                 case BoardMode.RoundOver:
                     return "Round over";
                 default:
@@ -301,6 +330,8 @@ namespace Ricochet.Client.Board
                 controls.Add(("New board", new[] { "N" }));
                 controls.Add(("Shortest", new[] { "H" }));
             }
+            if (session.CanControlReplay)
+                controls.Add(("Replay", new[] { "Space", ",", "." }));
 
             float goalHeight = Mathf.Max(28f, _goalStyle.CalcHeight(new GUIContent(goal), inner - 36f));
             float statusHeight = _bodyStyle.CalcHeight(new GUIContent(status), inner);

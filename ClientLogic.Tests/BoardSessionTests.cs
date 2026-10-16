@@ -119,6 +119,55 @@ namespace ClientLogic.Tests
         }
 
         [Fact]
+        public void ControllableReplay_StepsBackAndForth()
+        {
+            BoardSession board = Loaded(practice: true);
+            board.BeginReplay(new ReplaySegment("Shortest solution", Shortest, 0.6f, isShortest: true), controllable: true);
+            Assert.True(board.CanControlReplay);
+            Assert.False(board.ReplayStepBack()); // nothing before the start
+
+            board.SetReplayPaused(true);
+            Assert.True(board.ReplayPaused);
+            Assert.True(board.ReplayStepForward());
+            Assert.True(board.ReplayStepForward());
+            RobotPositions afterTwo = board.Robots;
+            Assert.True(board.ReplayStepForward());
+            Assert.True(board.ReplayStepBack());
+            Assert.Equal(2, board.ReplayStep);
+            Assert.Equal(afterTwo, board.Robots);
+            Assert.Equal(2, board.Moves.Count);
+            Assert.Equal(Shortest[1].Robot, board.Selected);
+
+            // To the end: finished and held like a replay that played out, so a move starts the player's own try.
+            while (board.ReplayStepForward()) { }
+            Assert.True(board.ReplayFinished);
+            Assert.True(board.IsHoldingReplay);
+            Assert.Equal(Shortest, board.Moves);
+
+            // Back from the end: into the replay again (not held, no input until it's finished).
+            Assert.True(board.ReplayStepBack());
+            Assert.False(board.ReplayFinished);
+            Assert.False(board.AcceptsInput);
+            while (board.ReplayStepBack()) { }
+            Assert.Equal(Round.Robots, board.Robots);
+            Assert.Empty(board.Moves);
+        }
+
+        [Fact]
+        public void LockedReplay_CantBeControlled()
+        {
+            BoardSession board = Loaded();
+            board.BeginReplay(new ReplaySegment("Bob's solution", Shortest, 1f));
+            Assert.False(board.CanControlReplay);
+            board.SetReplayPaused(true);
+            Assert.False(board.ReplayPaused);
+            Assert.False(board.ReplayStepForward());
+            board.ReplayNextMove();
+            Assert.False(board.ReplayStepBack());
+            Assert.Equal(1, board.ReplayStep);
+        }
+
+        [Fact]
         public void Countdown_BlocksInputUntilTheNextBoard()
         {
             BoardSession board = Loaded();

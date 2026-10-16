@@ -112,26 +112,104 @@ namespace Ricochet.Client.Scratchpad
         {
             CancelSearch();
             StopReplay();
-            _replay = StartCoroutine(ReplayRoutine(segments, pauseSeconds, lockUntilNextBoard));
+            // Practice replays (the hint, the match history) can be paused and stepped; a round's never.
+            bool controllable = !lockUntilNextBoard && Session.IsPractice;
+            _replayPause = pauseSeconds;
+            _replay = StartCoroutine(ReplayRoutine(segments, pauseSeconds, lockUntilNextBoard, controllable));
         }
 
-        private IEnumerator ReplayRoutine(IReadOnlyList<ReplaySegment> segments, float pauseSeconds, bool lockUntilNextBoard)
+        private IEnumerator ReplayRoutine(IReadOnlyList<ReplaySegment> segments, float pauseSeconds, bool lockUntilNextBoard,
+            bool controllable)
         {
             _dragging = false;
             foreach (ReplaySegment segment in segments)
             {
-                Apply(() => Session.BeginReplay(segment));
-                yield return new WaitForSeconds(pauseSeconds);
-                while (Session.ReplayStep < segment.Moves.Count)
-                {
-                    Session.ReplayNextMove();
-                    _boardView.ShowSelection(Session.Selected);
-                    _boardView.ShowRobots(Session.Robots, instant: false);
-                    yield return new WaitForSeconds(segment.StepSeconds);
-                }
+                Apply(() => Session.BeginReplay(segment, controllable));
+                yield return Wait(pauseSeconds);
+                yield return PlaySteps(segment);
             }
             _replay = null;
             Session.FinishReplays(lockUntilNextBoard);
+        }
+
+        // Steps the replay on from wherever it is (the player may have stepped it while paused).
+        private IEnumerator PlaySteps(ReplaySegment segment)
+        {
+            while (Session.ReplayStep < segment.Moves.Count)
+            {
+                if (Session.ReplayPaused)
+                {
+                    yield return null;
+                    continue;
+                }
+                Session.ReplayNextMove();
+                _boardView.ShowSelection(Session.Selected);
+                _boardView.ShowRobots(Session.Robots, instant: false);
+                yield return Wait(segment.StepSeconds);
+            }
+        }
+
+        // Like WaitForSeconds, but the clock stops while the replay is paused.
+        private IEnumerator Wait(float seconds)
+        {
+            float waited = 0f;
+            while (waited < seconds)
+            {
+                yield return null;
+                if (!Session.ReplayPaused)
+                    waited += Time.deltaTime;
+            }
+        }
+
+        // ---- Practice replay controls: pause/play and one move back or forward ----
+
+        private float _replayPause;
+
+        /// <summary>Pauses or resumes a practice replay; at its end, plays it again from the start.</summary>
+        public void ToggleReplayPause()
+        {
+            if (!Session.CanControlReplay)
+                return;
+            ReplaySegment segment = Session.CurrentReplay;
+            if (Session.ReplayFinished)
+            {
+                PlayReplays(new[] { segment }, _replayPause, lockUntilNextBoard: false);
+                return;
+            }
+            Session.SetReplayPaused(!Session.ReplayPaused);
+            if (!Session.ReplayPaused && _replay == null)
+                _replay = StartCoroutine(ContinueReplay(segment)); // stepped back after it had finished
+        }
+
+        private IEnumerator ContinueReplay(ReplaySegment segment)
+        {
+            yield return PlaySteps(segment);
+            _replay = null;
+            Session.FinishReplays(lockUntilNextBoard: false);
+        }
+
+        /// <summary>One move forward (+1) or back (-1) in a practice replay; pauses it.</summary>
+        public void StepReplay(int direction)
+        {
+            if (!Session.CanControlReplay)
+                return;
+            Session.SetReplayPaused(true);
+            if (direction > 0 ? Session.ReplayStepForward() : Session.ReplayStepBack())
+            {
+                _boardView.ShowSelection(Session.Selected);
+                // Forward slides like the replay; back jumps.
+                _boardView.ShowRobots(Session.Robots, instant: direction < 0);
+            }
+        }
+
+        // Space pauses/plays, comma and period step (like a video player's frame keys).
+        private void HandleReplayKeys(Keyboard keyboard)
+        {
+            if (!Session.CanControlReplay)
+                return;
+            if (keyboard.spaceKey.wasPressedThisFrame) ToggleReplayPause();
+            if (keyboard.commaKey.wasPressedThisFrame) StepReplay(-1);
+            if (keyboard.periodKey.wasPressedThisFrame) StepReplay(1);
         }
 
         /// <summary>
@@ -150,7 +228,8 @@ namespace Ricochet.Client.Scratchpad
 
         private IEnumerator WatchRoutine(ReplaySegment segment, List<Move> attempt, RoundSetup round)
         {
-            yield return ReplayRoutine(new[] { segment }, Mathf.Min(0.5f, segment.StepSeconds), lockUntilNextBoard: true);
+            yield return ReplayRoutine(new[] { segment }, Mathf.Min(0.5f, segment.StepSeconds), lockUntilNextBoard: true,
+                controllable: false);
             yield return new WaitForSeconds(WatchHoldSeconds);
             if (Session.Round == round && Session.CurrentReplay == segment && !Session.IsCountingDown)
                 Apply(() => Session.Restore(attempt));
@@ -476,6 +555,7 @@ namespace Ricochet.Client.Scratchpad
             Keyboard keyboard = Keyboard.current;
             if (!Session.IsPractice || !Session.IsReplaying || keyboard == null || IsTypingInUI())
                 return;
+            HandleReplayKeys(keyboard);
             if (keyboard.rKey.wasPressedThisFrame)
             {
                 StopReplay();
@@ -493,6 +573,7 @@ namespace Ricochet.Client.Scratchpad
             if (keyboard == null || IsTypingInUI())
                 return;
 
+            HandleReplayKeys(keyboard); // a finished practice replay still on the board
             if (keyboard.digit1Key.wasPressedThisFrame) Select(RobotColor.Red);
             if (keyboard.digit2Key.wasPressedThisFrame) Select(RobotColor.Blue);
             if (keyboard.digit3Key.wasPressedThisFrame) Select(RobotColor.Green);

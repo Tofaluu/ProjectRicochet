@@ -33,6 +33,8 @@ namespace Ricochet.Client.Game
         private bool _roundOver;
         // A finished unlocked replay still on the board (see FinishReplays).
         private bool _replayHeld;
+        // The replay can be paused and stepped through (practice only, never in a round).
+        private bool _replayControllable;
 
         public RoundSetup Round { get; private set; }
         public RobotPositions Robots { get; private set; }
@@ -58,6 +60,10 @@ namespace Ricochet.Client.Game
         public bool IsReplaying => CurrentReplay != null;
         /// <summary>A finished practice solution is still shown; the player's next action starts from the start.</summary>
         public bool IsHoldingReplay => _replayHeld;
+        /// <summary>The replay shown can be paused and stepped back and forth (practice replays only).</summary>
+        public bool CanControlReplay => IsReplaying && _replayControllable;
+        /// <summary>A controllable replay is paused (the controller stops stepping it).</summary>
+        public bool ReplayPaused { get; private set; }
 
         public bool IsCountingDown => _countdownEnd >= 0f;
         public string CountdownCaption { get; private set; }
@@ -146,13 +152,18 @@ namespace Ricochet.Client.Game
 
         // ---- Replays: driven step by step by the controller, which owns the timing ----
 
-        /// <summary>Starts showing <paramref name="segment"/> from the round's start.</summary>
-        public void BeginReplay(ReplaySegment segment)
+        /// <summary>
+        /// Starts showing <paramref name="segment"/> from the round's start. <paramref name="controllable"/>: the player
+        /// may pause it and step through it (<see cref="CanControlReplay"/>; practice only).
+        /// </summary>
+        public void BeginReplay(ReplaySegment segment, bool controllable = false)
         {
             CurrentReplay = segment;
             ReplayStep = 0;
             ReplayFinished = false;
             _replayHeld = false;
+            _replayControllable = controllable;
+            ReplayPaused = false;
             ResetBoard();
         }
 
@@ -161,12 +172,50 @@ namespace Ricochet.Client.Game
         {
             Move move = CurrentReplay.Moves[ReplayStep];
             Selected = move.Robot;
+            _history.Add(Robots);
             if (GameRules.TryMove(Round.Grid, Robots, move, out RobotPositions next))
             {
                 _moves.Add(move);
                 Robots = next;
             }
             ReplayStep++;
+        }
+
+        /// <summary>Pauses or resumes a controllable replay.</summary>
+        public void SetReplayPaused(bool paused)
+        {
+            if (CanControlReplay)
+                ReplayPaused = paused;
+        }
+
+        /// <summary>
+        /// One move forward in a controllable replay; the last one leaves it finished and held like a replay that
+        /// played to the end. False if there's nothing to step.
+        /// </summary>
+        public bool ReplayStepForward()
+        {
+            if (!CanControlReplay || ReplayStep >= CurrentReplay.Moves.Count)
+                return false;
+            ReplayNextMove();
+            if (ReplayStep == CurrentReplay.Moves.Count)
+                FinishReplays(lockUntilNextBoard: false);
+            return true;
+        }
+
+        /// <summary>One move back in a controllable replay (back into it if it had finished). False at its start.</summary>
+        public bool ReplayStepBack()
+        {
+            if (!CanControlReplay || ReplayStep == 0)
+                return false;
+            Robots = _history[_history.Count - 1];
+            _history.RemoveAt(_history.Count - 1);
+            if (_moves.Count > _history.Count)
+                _moves.RemoveAt(_moves.Count - 1);
+            ReplayStep--;
+            Selected = CurrentReplay.Moves[ReplayStep].Robot;
+            ReplayFinished = false;
+            _replayHeld = false;
+            return true;
         }
 
         /// <summary>
@@ -185,6 +234,8 @@ namespace Ricochet.Client.Game
             ReplayStep = 0;
             ReplayFinished = false;
             _replayHeld = false;
+            _replayControllable = false;
+            ReplayPaused = false;
         }
 
         /// <summary>
