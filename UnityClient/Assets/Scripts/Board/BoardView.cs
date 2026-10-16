@@ -182,7 +182,12 @@ namespace Ricochet.Client.Board
             foreach (KeyValuePair<RobotColor, RobotVisual> pair in _robots)
             {
                 RobotVisual robot = pair.Value;
-                robot.ExplodedAt = -10f; // a reset or new move brings a blown-up robot straight back
+                if (robot.Exploded)
+                {
+                    // A reset, undo or replay brings a blown-up robot back, popping in where it now stands.
+                    robot.Exploded = false;
+                    robot.PoppedInAt = Time.time;
+                }
                 // A robot still sliding from the previous move finishes it instantly first; otherwise
                 // it would cut diagonally from mid-slide to the new destination.
                 robot.Root.localPosition = robot.Destination;
@@ -287,24 +292,28 @@ namespace Ricochet.Client.Board
             public float GhostDistance;
             public float ImpactTime = -10f;
             public float NextBlink;
-            // The big burst blows the robot up: it swells, vanishes in the flash and pops back a moment later.
+            // The big burst blows the robot up: it swells and vanishes in the flash, and stays gone until the
+            // board moves it again (undo, reset, the next replay), when it pops back in.
+            public bool Exploded;
             public float ExplodedAt = -10f;
+            public float PoppedInAt = -10f;
         }
 
-        private const float SwellSeconds = 0.1f, GoneSeconds = 0.9f, PopInSeconds = 0.3f;
+        private const float SwellSeconds = 0.1f, PopInSeconds = 0.3f;
 
-        // The robot's overall size during and after the big burst (1 = normal).
+        // The robot's overall size around the big burst (1 = normal).
         private static float BurstScale(RobotVisual robot, float time)
         {
-            float t = time - robot.ExplodedAt;
-            if (t < 0f || t >= SwellSeconds + GoneSeconds + PopInSeconds)
+            if (robot.Exploded)
+            {
+                float t = time - robot.ExplodedAt;
+                return t < SwellSeconds ? 1f + 0.3f * t / SwellSeconds : 0f;
+            }
+            float p = (time - robot.PoppedInAt) / PopInSeconds;
+            if (p >= 1f)
                 return 1f;
-            if (t < SwellSeconds)
-                return 1f + 0.3f * t / SwellSeconds;
-            if (t < SwellSeconds + GoneSeconds)
-                return 0f;
             // Back in with a little overshoot (ease-out-back).
-            float p = (t - SwellSeconds - GoneSeconds) / PopInSeconds - 1f;
+            p -= 1f;
             return 1f + 2.70158f * p * p * p + 1.70158f * p * p;
         }
 
@@ -444,9 +453,11 @@ namespace Ricochet.Client.Board
                 return;
             }
             bool ownSolve = _mode == BoardMode.Practice || _mode == BoardMode.Round;
-            if (ownSolve && PlayerSettings.BigBurst)
+            if (PlayerSettings.BigBurst)
             {
-                Explode(at, color);
+                // Replays too (with the boom); the success chime is only for the player's own solve.
+                Explode(at, color, ownSolve);
+                robot.Exploded = true;
                 robot.ExplodedAt = Time.time;
                 return;
             }
@@ -467,9 +478,9 @@ namespace Ricochet.Client.Board
                 Play(BoardSounds.Success, 0.7f);
         }
 
-        // The player's own solve, unless turned off (PlayerSettings.BigBurst): a flash, two shockwaves, a shower
-        // of stars, sparks and confetti in the robots' colours, smoke, a boom and a short shake of the board.
-        private void Explode(Vector3 at, Color color)
+        // Unless turned off (PlayerSettings.BigBurst), reaching the target (own solve or a replay): a flash, two
+        // shockwaves, a shower of stars, sparks and confetti in the robots' colours, smoke, a boom and a short shake.
+        private void Explode(Vector3 at, Color color, bool ownSolve)
         {
             Color light = Color.Lerp(color, Color.white, 0.35f);
             Spawn(ShapeSprites.SoftCircle, new Color(1f, 1f, 1f, 0.9f), at, Vector3.zero, 0.8f, 4.5f, 0.35f, EffectOrder);
@@ -494,7 +505,8 @@ namespace Ricochet.Client.Board
                 Spawn(ShapeSprites.SoftCircle, Colors.Dust, at + drift * 0.15f, drift, 0.6f, 1.8f, Random.Range(0.7f, 1f), EffectOrder);
             }
             _shakeUntil = Time.time + ShakeSeconds;
-            Play(BoardSounds.Success, 0.7f);
+            if (ownSolve)
+                Play(BoardSounds.Success, 0.7f);
             Play(BoardSounds.Boom, 0.8f);
         }
 
