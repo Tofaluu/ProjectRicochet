@@ -64,6 +64,8 @@ namespace Ricochet.Client.Board
             DrawBanner(session, board);
             if (session.IsCountingDown)
                 DrawCountdown(session, board);
+            else if (_controller.SearchStatus != null)
+                DrawSearching(_controller.SearchStatus, board);
             // The card and the toggles scale with the screen like the side panel does.
             Matrix4x4 matrix = GUI.matrix;
             GUI.matrix = Matrix4x4.Scale(new Vector3(UiScale, UiScale, 1f));
@@ -77,6 +79,14 @@ namespace Ricochet.Client.Board
             y += ToggleHeight + 6f;
             if (DrawToggle(new Rect(card.x, y, ToggleWidth, ToggleHeight), "Big burst", PlayerSettings.BigBurst))
                 PlayerSettings.BigBurst = !PlayerSettings.BigBurst;
+            if (session.IsPractice)
+            {
+                y += ToggleHeight + 6f;
+                int change = DrawStepper(new Rect(card.x, y, ToggleWidth, ToggleHeight), $"Min moves  {PlayerSettings.PracticeMinMoves}");
+                int minMoves = Mathf.Clamp(PlayerSettings.PracticeMinMoves + change, MatchSettings.MinMinMoves, MatchSettings.MaxMinMoves);
+                if (minMoves != PlayerSettings.PracticeMinMoves)
+                    _controller.SetPracticeMinMoves(minMoves);
+            }
             LeftColumnBottom = y + ToggleHeight;
             GUI.matrix = matrix;
         }
@@ -94,6 +104,38 @@ namespace Ricochet.Client.Board
             return clicked;
         }
 
+        // A pill with − and + at its ends ("−  Min moves 3  +"); -1 / +1 when one is clicked, else 0.
+        private int DrawStepper(Rect rect, string label)
+        {
+            Color previous = GUI.backgroundColor;
+            GUI.backgroundColor = Tint(Colors.Panel);
+            _toggleStyle.normal.textColor = Colors.PanelText;
+            _toggleStyle.hover.textColor = Colors.PanelText;
+            GUI.Box(rect, label, _toggleStyle);
+            GUI.backgroundColor = Tint(Colors.Input);
+            float button = rect.height - 6f;
+            int change = 0;
+            if (GUI.Button(new Rect(rect.x + 3f, rect.y + 3f, button, button), "\u2212", _toggleStyle))
+                change = -1;
+            if (GUI.Button(new Rect(rect.xMax - 3f - button, rect.y + 3f, button, button), "+", _toggleStyle))
+                change = 1;
+            GUI.backgroundColor = previous;
+            return change;
+        }
+
+        // Dims the board while a practice board is being searched for, with what it's looking for.
+        private void DrawSearching(string status, Rect board)
+        {
+            Color previous = GUI.backgroundColor;
+            GUI.backgroundColor = Tint(Colors.CountdownDim);
+            GUI.Box(board, GUIContent.none, _cardStyle);
+            GUI.backgroundColor = previous;
+
+            _captionStyle.normal.textColor = Colors.CountdownText;
+            _captionStyle.fontSize = Mathf.RoundToInt(board.height * 0.045f);
+            GUI.Label(board, status + "\n<size=" + Mathf.RoundToInt(board.height * 0.03f) + ">N or Esc to stop</size>", _captionStyle);
+        }
+
         private void CreateStyles()
         {
             if (_bannerStyle != null)
@@ -108,7 +150,7 @@ namespace Ricochet.Client.Board
                 border = new RectOffset(CardRadius, CardRadius, CardRadius, CardRadius),
             };
             _numberStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, font = Colors.TitleFont };
-            _captionStyle = new GUIStyle(_numberStyle) { font = Colors.BoldFont };
+            _captionStyle = new GUIStyle(_numberStyle) { font = Colors.BoldFont, richText = true };
             _cardStyle = new GUIStyle(GUI.skin.box)
             {
                 normal = { background = rounded },

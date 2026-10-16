@@ -184,8 +184,6 @@ namespace BackendServer.Services
         private static readonly Regex LobbyCodePattern = new("^[A-Z0-9]{1,8}$");
         private const int MaxNameLength = 20;
         private const int MaxPlayerIdLength = 64;
-        // A board search nudges the robots this many times (keeping any change that isn't shorter) before a fresh board.
-        private const int ClimbSteps = 40;
 
         private sealed record Seat(Lobby Lobby, Player Player);
 
@@ -959,58 +957,32 @@ namespace BackendServer.Services
         }
 
         /// <summary>
-        /// Generates and solves boards until one's shortest solution has at least <paramref name="minMoves"/>
-        /// moves. Long boards are rare (1 in ~350 random boards reaches 14), so a board that falls short is
-        /// nudged (<see cref="BoardGenerator.Nudge"/>), keeping any change that isn't shorter, which climbs to
-        /// long boards much faster than rerolling; after <see cref="ClimbSteps"/> nudges it starts over. Boards
-        /// the solver gives up on are skipped, so every dealt board has a known shortest solution (instant end on
-        /// it, its replay, the history). Once <see cref="GameOptions.BoardSearchSeconds"/> is up, the longest board
-        /// found is dealt (if none solved in time yet, the solver's time limit is dropped). Runs outside the lock.
+        /// A board whose shortest solution has at least <paramref name="minMoves"/> moves (<see cref="BoardSearch"/>,
+        /// shared with practice boards). Once <see cref="GameOptions.BoardSearchSeconds"/> is up, the longest board
+        /// found is dealt (if none was solved in time yet, the solver's time limit is dropped), so every dealt
+        /// board has a known shortest solution (instant end on it, its replay, the history). Runs outside the lock.
         /// </summary>
         private PreparedRound PrepareRound(int minMoves)
         {
             int seed;
             lock (_gate)
                 seed = _random.Next();
-            var random = new Random(seed);
-            var timeLimit = TimeSpan.FromSeconds(_options.SolverTimeLimitSeconds);
+            var search = new BoardSearch(minMoves, new Random(seed), TimeSpan.FromSeconds(_options.SolverTimeLimitSeconds));
             var budget = TimeSpan.FromSeconds(_options.BoardSearchSeconds);
 
             var clock = Stopwatch.StartNew();
-            PreparedRound? longest = null;
-            int solves = 0;
-            while (true)
+            while (!search.Step(noTimeLimit: clock.Elapsed >= budget && search.Longest == null))
             {
-                RoundSetup current = BoardGenerator.GenerateRound(random);
-                int currentLength = -1;
-                for (int step = 0; step <= ClimbSteps; step++)
+                if (clock.Elapsed >= budget && search.Longest != null)
                 {
-                    RoundSetup candidate = step == 0 ? current : BoardGenerator.Nudge(current, random);
-                    bool outOfTime = clock.Elapsed >= budget;
-                    SolverResult solved = Solver.Solve(candidate, timeLimit: outOfTime && longest == null ? null : timeLimit);
-                    solves++;
-                    if (!solved.Solved && step == 0)
-                        break; // too hard to solve in time: a fresh board
-                    if (solved.Solved && solved.Moves.Length >= currentLength)
-                    {
-                        current = candidate;
-                        currentLength = solved.Moves.Length;
-                        if (longest == null || currentLength > longest.Shortest!.Length)
-                            longest = new PreparedRound(candidate, solved.Moves);
-                        if (currentLength >= minMoves)
-                            return Ready(longest, currentLength.ToString());
-                    }
-                    if (clock.Elapsed >= budget && longest != null)
-                        return Ready(longest, $"{longest.Shortest!.Length} (wanted {minMoves}, out of time)");
+                    _log.LogInformation("Board ready: shortest {Moves} moves, wanted {Min} (out of time; {Solves} solves, {Ms} ms)",
+                        search.LongestMoves.Length, minMoves, search.Solves, clock.ElapsedMilliseconds);
+                    return new PreparedRound(search.Longest, search.LongestMoves);
                 }
             }
-
-            PreparedRound Ready(PreparedRound prepared, string moves)
-            {
-                _log.LogInformation("Board ready: shortest {Moves} moves ({Solves} solves, {Ms} ms)",
-                    moves, solves, clock.ElapsedMilliseconds);
-                return prepared;
-            }
+            _log.LogInformation("Board ready: shortest {Moves} moves ({Solves} solves, {Ms} ms)",
+                search.LongestMoves.Length, search.Solves, clock.ElapsedMilliseconds);
+            return new PreparedRound(search.Longest, search.LongestMoves);
         }
 
         private static void StartNewRoundLocked(Lobby lobby, PreparedRound prepared, DateTime now)
