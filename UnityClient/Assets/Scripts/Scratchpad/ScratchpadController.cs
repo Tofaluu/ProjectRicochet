@@ -237,17 +237,22 @@ namespace Ricochet.Client.Scratchpad
         private BoardSearch _search;
         private int _searchSeed;
         private float _searchStarted;
+        // The shown practice board's shortest solution length when a search found it, else 0 (unknown).
+        private int _shownShortest;
 
         /// <summary>"Finding a board..." while a practice board is being searched for, else null.</summary>
         public string SearchStatus => _search == null ? null
             : _search.Longest == null ? $"Finding a {_search.MinMoves}-move board..."
             : $"Finding a {_search.MinMoves}-move board...\nlongest so far: {_search.LongestMoves.Length}";
 
-        /// <summary>Saves the practice boards' minimum and deals a practice board with it.</summary>
+        /// <summary>
+        /// Saves the practice boards' minimum. The board shown stays if it still qualifies (its shortest solution
+        /// is at least that long); otherwise a new one is dealt.
+        /// </summary>
         public void SetPracticeMinMoves(int minMoves)
         {
             PlayerSettings.PracticeMinMoves = minMoves;
-            if (Session.IsPractice)
+            if (_search != null || (Session.IsPractice && _shownShortest < minMoves))
                 NewBoard();
         }
 
@@ -269,9 +274,11 @@ namespace Ricochet.Client.Scratchpad
                 if (_search.Step(noTimeLimit: outOfTime && _search.Longest == null) || (outOfTime && _search.Longest != null))
                 {
                     RoundSetup found = _search.Longest;
+                    int shortest = _search.LongestMoves.Length;
                     _search = null;
                     // Go through the wire format so the scratchpad sees exactly what a networked client would.
                     Show(BoardCodec.Decode(BoardCodec.Encode(found)), practice: true, _searchSeed);
+                    _shownShortest = shortest;
                     return;
                 }
             } while (Time.realtimeSinceStartup - sliceStart < SearchSliceSeconds);
@@ -282,6 +289,7 @@ namespace Ricochet.Client.Scratchpad
         private void Show(RoundSetup round, bool practice, int seed = 0)
         {
             CancelSearch();
+            _shownShortest = 0;
             StopReplay();
             Session.Load(round, practice, seed);
             _boardView.Build(round, Session.Robots);
