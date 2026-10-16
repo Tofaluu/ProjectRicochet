@@ -72,3 +72,6 @@ SharedLogic/obj~/
 # Unity scene-recovery backups (created after an editor restart)
 /UnityClient/Assets/_Recovery/
 /UnityClient/Assets/_Recovery.meta
+
+# Project notes and roadmap for Claude Code: kept local, not published
+CLAUDE.md
