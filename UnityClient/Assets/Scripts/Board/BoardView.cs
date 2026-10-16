@@ -176,8 +176,12 @@ namespace Ricochet.Client.Board
             ShowRobots(robots, instant: true);
         }
 
-        /// <summary>Slides robots towards their new cells (or jumps there if <paramref name="instant"/>).</summary>
-        public void ShowRobots(RobotPositions robots, bool instant)
+        /// <summary>
+        /// Slides robots towards their new cells (or jumps there if <paramref name="instant"/>). A
+        /// <paramref name="quiet"/> slide (undo, a replay stepped back) ends without the bump: no thud, dust,
+        /// squash or target burst.
+        /// </summary>
+        public void ShowRobots(RobotPositions robots, bool instant, bool quiet = false)
         {
             foreach (KeyValuePair<RobotColor, RobotVisual> pair in _robots)
             {
@@ -202,6 +206,7 @@ namespace Ricochet.Client.Board
                     continue;
                 }
                 robot.Moving = true;
+                robot.Quiet = quiet;
                 robot.Heading = delta.normalized;
                 robot.GhostDistance = 0f;
             }
@@ -289,6 +294,8 @@ namespace Ricochet.Client.Board
             public Vector3 Heading;
             public Vector2 Look;
             public bool Moving;
+            // The current slide is a step back (undo): no bump when it stops.
+            public bool Quiet;
             public float GhostDistance;
             public float ImpactTime = -10f;
             public float NextBlink;
@@ -373,8 +380,11 @@ namespace Ricochet.Client.Board
                 if (to == robot.Destination)
                 {
                     robot.Moving = false;
-                    robot.ImpactTime = time;
-                    Impact(color, robot);
+                    if (!robot.Quiet)
+                    {
+                        robot.ImpactTime = time;
+                        Impact(color, robot);
+                    }
                 }
             }
             else

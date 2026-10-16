@@ -197,8 +197,8 @@ namespace Ricochet.Client.Scratchpad
             if (direction > 0 ? Session.ReplayStepForward() : Session.ReplayStepBack())
             {
                 _boardView.ShowSelection(Session.Selected);
-                // Forward slides like the replay; back jumps.
-                _boardView.ShowRobots(Session.Robots, instant: direction < 0);
+                // Forward slides like the replay; back slides back along the same path, without the bump.
+                _boardView.ShowRobots(Session.Robots, instant: false, quiet: direction < 0);
             }
         }
 
@@ -459,7 +459,7 @@ namespace Ricochet.Client.Scratchpad
                 return;
             }
             if (Session.Undo())
-                _boardView.ShowRobots(Session.Robots, instant: false);
+                _boardView.ShowRobots(Session.Robots, instant: false, quiet: true); // slides back along its path
         }
 
         // The practice hint's solution is still on the board: snap back to the start (no diagonal slides)
