@@ -249,6 +249,19 @@ namespace Ricochet.Client.Scratchpad
             : $"Finding a {_search.MinMoves}-move board...\nclosest so far: {_search.LongestMoves.Length}";
 
         /// <summary>
+        /// Turns exact-length practice boards on (deals one, unless the board shown already has the length) or
+        /// off (the board stays; N deals plain random boards again).
+        /// </summary>
+        public void SetPracticeExact(bool on)
+        {
+            PlayerSettings.PracticeExact = on;
+            if (!on)
+                CancelSearch();
+            else if (Session.IsPractice && _shownShortest != PlayerSettings.PracticeMoves)
+                NewBoard();
+        }
+
+        /// <summary>
         /// Saves the practice boards' length and deals a board of that length (unless the one shown already is).
         /// </summary>
         public void SetPracticeMoves(int moves)
@@ -261,6 +274,13 @@ namespace Ricochet.Client.Scratchpad
         private void NewBoard()
         {
             _searchSeed = _seed != 0 ? _seed : Random.Range(1, int.MaxValue);
+            if (!PlayerSettings.PracticeExact)
+            {
+                // Any random board, its length unknown.
+                RoundSetup generated = BoardGenerator.GenerateRound(new System.Random(_searchSeed));
+                Show(BoardCodec.Decode(BoardCodec.Encode(generated)), practice: true, _searchSeed);
+                return;
+            }
             int moves = PlayerSettings.PracticeMoves;
             _search = new BoardSearch(moves, new System.Random(_searchSeed), PracticeSolverLimit, maxMoves: moves);
             _searchStarted = Time.realtimeSinceStartup;

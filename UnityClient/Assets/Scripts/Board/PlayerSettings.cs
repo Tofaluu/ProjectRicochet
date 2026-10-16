@@ -13,6 +13,7 @@ namespace Ricochet.Client.Board
         private const string MutedPrefKey = "Ricochet.Muted";
         private const string BigBurstPrefKey = "Ricochet.BigBurst";
         private const string MovePreviewPrefKey = "Ricochet.MovePreview";
+        private const string PracticeExactPrefKey = "Ricochet.PracticeExact";
         private const string PracticeMovesPrefKey = "Ricochet.PracticeMoves";
         // A typical board's length (the median of random boards).
         public const int DefaultPracticeMoves = 6;
@@ -36,8 +37,15 @@ namespace Ricochet.Client.Board
             set => Set(MovePreviewPrefKey, value);
         }
 
+        /// <summary>Practice boards of an exact length (<see cref="PracticeMoves"/>); off = plain random boards.</summary>
+        public static bool PracticeExact
+        {
+            get => Get(PracticeExactPrefKey, false);
+            set => Set(PracticeExactPrefKey, value);
+        }
+
         /// <summary>
-        /// Practice boards' shortest solution is exactly this long ("solve in N"; lobbies use a minimum instead, so
+        /// With <see cref="PracticeExact"/>, practice boards' shortest solution is exactly this long ("solve in N"; lobbies use a minimum instead, so
         /// players don't know the best length). Same range as a lobby's min moves.
         /// </summary>
         public static int PracticeMoves

@@ -82,10 +82,17 @@ namespace Ricochet.Client.Board
             if (session.IsPractice)
             {
                 y += ToggleHeight + 6f;
-                int change = DrawStepper(new Rect(card.x, y, ToggleWidth, ToggleHeight), $"Board  {PlayerSettings.PracticeMoves} moves");
-                int moves = Mathf.Clamp(PlayerSettings.PracticeMoves + change, MatchSettings.MinMinMoves, MatchSettings.MaxMinMoves);
-                if (moves != PlayerSettings.PracticeMoves)
-                    _controller.SetPracticeMoves(moves);
+                if (DrawToggle(new Rect(card.x, y, ToggleWidth, ToggleHeight), "Exact moves", PlayerSettings.PracticeExact))
+                    _controller.SetPracticeExact(!PlayerSettings.PracticeExact);
+                if (PlayerSettings.PracticeExact)
+                {
+                    y += ToggleHeight + 6f;
+                    int moves = PlayerSettings.PracticeMoves;
+                    int change = DrawStepper(new Rect(card.x, y, ToggleWidth, ToggleHeight), $"Board  {moves} moves",
+                        moves > MatchSettings.MinMinMoves, moves < MatchSettings.MaxMinMoves);
+                    if (change != 0)
+                        _controller.SetPracticeMoves(moves + change);
+                }
             }
             LeftColumnBottom = y + ToggleHeight;
             GUI.matrix = matrix;
@@ -105,7 +112,8 @@ namespace Ricochet.Client.Board
         }
 
         // A pill with − and + at its ends ("−  Board 6 moves  +"); -1 / +1 when one is clicked, else 0.
-        private int DrawStepper(Rect rect, string label)
+        // A button that can't be used (at the range's end) is greyed out.
+        private int DrawStepper(Rect rect, string label, bool canDecrease, bool canIncrease)
         {
             Color previous = GUI.backgroundColor;
             GUI.backgroundColor = Tint(Colors.Panel);
@@ -115,12 +123,26 @@ namespace Ricochet.Client.Board
             GUI.backgroundColor = Tint(Colors.Input);
             float button = rect.height - 6f;
             int change = 0;
-            if (GUI.Button(new Rect(rect.x + 3f, rect.y + 3f, button, button), "\u2212", _toggleStyle))
+            if (StepButton(new Rect(rect.x + 3f, rect.y + 3f, button, button), "\u2212", canDecrease))
                 change = -1;
-            if (GUI.Button(new Rect(rect.xMax - 3f - button, rect.y + 3f, button, button), "+", _toggleStyle))
+            if (StepButton(new Rect(rect.xMax - 3f - button, rect.y + 3f, button, button), "+", canIncrease))
                 change = 1;
             GUI.backgroundColor = previous;
             return change;
+        }
+
+        private bool StepButton(Rect rect, string text, bool enabled)
+        {
+            bool wasEnabled = GUI.enabled;
+            Color previousColor = GUI.color;
+            GUI.enabled = enabled;
+            if (!enabled)
+                GUI.color = new Color(1f, 1f, 1f, 0.35f);
+            _toggleStyle.normal.textColor = enabled ? Colors.PanelText : Colors.MutedText;
+            bool clicked = GUI.Button(rect, text, _toggleStyle);
+            GUI.enabled = wasEnabled;
+            GUI.color = previousColor;
+            return clicked && enabled;
         }
 
         // Dims the board while a practice board is being searched for, with what it's looking for.
