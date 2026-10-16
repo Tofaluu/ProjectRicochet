@@ -57,7 +57,7 @@ namespace BackendServer.Services
         /// Time to find a board meeting the lobby's minimum (it runs during the countdown/replays); after
         /// that the longest board found so far is dealt.
         /// </summary>
-        public double BoardSearchSeconds { get; set; } = 10;
+        public double BoardSearchSeconds { get; set; } = 20;
 
         /// <summary>Highest <see cref="MatchSettings.MinMoves"/> a host may pick. Raise it only on a dev server (with a longer search).</summary>
         public int MaxMinMoves { get; set; } = MatchSettings.MaxMinMoves;
