@@ -49,39 +49,103 @@ namespace SharedLogic
         }
 
         /// <summary>
-        /// The quadrant set. Each has one target per colour; one also has the wildcard
-        /// target. These are original layouts, not copies of the board game's.
+        /// The four slots, each with interchangeable variants; a board deals one variant per slot. Every
+        /// variant has one target per colour (L-shaped walls, never touching another target) and two edge
+        /// stubs; only the third slot's variants carry the wildcard target, so every board has exactly one.
+        /// These are original layouts, not copies of the board game's.
         /// </summary>
-        public static readonly IReadOnlyList<Quadrant> All = new[]
+        public static readonly IReadOnlyList<IReadOnlyList<Quadrant>> Slots = new IReadOnlyList<Quadrant>[]
         {
-            new Quadrant("Alpha")
-                .EdgeWalls(bottomX: 4, leftY: 5)
-                .Target(1, 2, RobotColor.Red, Direction.Up, Direction.Right)
-                .Target(5, 1, RobotColor.Green, Direction.Up, Direction.Left)
-                .Target(6, 5, RobotColor.Blue, Direction.Down, Direction.Left)
-                .Target(3, 6, RobotColor.Yellow, Direction.Down, Direction.Right),
-
-            new Quadrant("Beta")
-                .EdgeWalls(bottomX: 2, leftY: 3)
-                .Target(6, 2, RobotColor.Red, Direction.Down, Direction.Right)
-                .Target(2, 4, RobotColor.Blue, Direction.Up, Direction.Left)
-                .Target(4, 6, RobotColor.Green, Direction.Up, Direction.Right)
-                .Target(1, 1, RobotColor.Yellow, Direction.Down, Direction.Left),
-
-            new Quadrant("Gamma")
-                .EdgeWalls(bottomX: 5, leftY: 2)
-                .Target(3, 1, RobotColor.Red, Direction.Up, Direction.Left)
-                .Target(5, 3, RobotColor.Blue, Direction.Up, Direction.Right)
-                .Target(1, 5, RobotColor.Green, Direction.Down, Direction.Right)
-                .Target(6, 6, RobotColor.Yellow, Direction.Down, Direction.Left)
-                .Target(2, 3, null, Direction.Down, Direction.Right),
-
-            new Quadrant("Delta")
-                .EdgeWalls(bottomX: 3, leftY: 6)
-                .Target(5, 5, RobotColor.Red, Direction.Up, Direction.Left)
-                .Target(1, 3, RobotColor.Blue, Direction.Down, Direction.Right)
-                .Target(6, 1, RobotColor.Green, Direction.Down, Direction.Left)
-                .Target(2, 6, RobotColor.Yellow, Direction.Up, Direction.Right),
+            new[]
+            {
+                new Quadrant("Alpha")
+                    .EdgeWalls(bottomX: 4, leftY: 5)
+                    .Target(1, 2, RobotColor.Red, Direction.Up, Direction.Right)
+                    .Target(5, 1, RobotColor.Green, Direction.Up, Direction.Left)
+                    .Target(6, 5, RobotColor.Blue, Direction.Down, Direction.Left)
+                    .Target(3, 6, RobotColor.Yellow, Direction.Down, Direction.Right),
+                new Quadrant("Alpha II")
+                    .EdgeWalls(bottomX: 3, leftY: 4)
+                    .Target(5, 2, RobotColor.Red, Direction.Up, Direction.Left)
+                    .Target(2, 5, RobotColor.Green, Direction.Down, Direction.Right)
+                    .Target(4, 4, RobotColor.Blue, Direction.Up, Direction.Right)
+                    .Target(6, 6, RobotColor.Yellow, Direction.Down, Direction.Left),
+                new Quadrant("Alpha III")
+                    .EdgeWalls(bottomX: 5, leftY: 6)
+                    .Target(2, 1, RobotColor.Red, Direction.Up, Direction.Right)
+                    .Target(6, 3, RobotColor.Green, Direction.Down, Direction.Left)
+                    .Target(1, 4, RobotColor.Blue, Direction.Up, Direction.Left)
+                    .Target(4, 6, RobotColor.Yellow, Direction.Down, Direction.Right),
+            },
+            new[]
+            {
+                new Quadrant("Beta")
+                    .EdgeWalls(bottomX: 2, leftY: 3)
+                    .Target(6, 2, RobotColor.Red, Direction.Down, Direction.Right)
+                    .Target(2, 4, RobotColor.Blue, Direction.Up, Direction.Left)
+                    .Target(4, 6, RobotColor.Green, Direction.Up, Direction.Right)
+                    .Target(1, 1, RobotColor.Yellow, Direction.Down, Direction.Left),
+                new Quadrant("Beta II")
+                    .EdgeWalls(bottomX: 6, leftY: 2)
+                    .Target(3, 3, RobotColor.Red, Direction.Down, Direction.Left)
+                    .Target(6, 4, RobotColor.Blue, Direction.Up, Direction.Left)
+                    .Target(1, 6, RobotColor.Green, Direction.Down, Direction.Right)
+                    .Target(4, 1, RobotColor.Yellow, Direction.Up, Direction.Right),
+                new Quadrant("Beta III")
+                    .EdgeWalls(bottomX: 1, leftY: 6)
+                    .Target(5, 5, RobotColor.Red, Direction.Down, Direction.Right)
+                    .Target(2, 2, RobotColor.Blue, Direction.Up, Direction.Left)
+                    .Target(6, 1, RobotColor.Green, Direction.Up, Direction.Left)
+                    .Target(2, 5, RobotColor.Yellow, Direction.Up, Direction.Right),
+            },
+            new[]
+            {
+                new Quadrant("Gamma")
+                    .EdgeWalls(bottomX: 5, leftY: 2)
+                    .Target(3, 1, RobotColor.Red, Direction.Up, Direction.Left)
+                    .Target(5, 3, RobotColor.Blue, Direction.Up, Direction.Right)
+                    .Target(1, 5, RobotColor.Green, Direction.Down, Direction.Right)
+                    .Target(6, 6, RobotColor.Yellow, Direction.Down, Direction.Left)
+                    .Target(2, 3, null, Direction.Down, Direction.Right),
+                new Quadrant("Gamma II")
+                    .EdgeWalls(bottomX: 2, leftY: 5)
+                    .Target(5, 1, RobotColor.Red, Direction.Down, Direction.Right)
+                    .Target(1, 3, RobotColor.Blue, Direction.Up, Direction.Right)
+                    .Target(4, 4, RobotColor.Green, Direction.Down, Direction.Left)
+                    .Target(2, 6, RobotColor.Yellow, Direction.Down, Direction.Left)
+                    .Target(6, 3, null, Direction.Up, Direction.Left),
+                new Quadrant("Gamma III")
+                    .EdgeWalls(bottomX: 4, leftY: 3)
+                    .Target(6, 5, RobotColor.Red, Direction.Up, Direction.Right)
+                    .Target(3, 2, RobotColor.Blue, Direction.Down, Direction.Left)
+                    .Target(6, 1, RobotColor.Green, Direction.Up, Direction.Left)
+                    .Target(2, 5, RobotColor.Yellow, Direction.Down, Direction.Right)
+                    .Target(4, 4, null, Direction.Up, Direction.Left),
+            },
+            new[]
+            {
+                new Quadrant("Delta")
+                    .EdgeWalls(bottomX: 3, leftY: 6)
+                    .Target(5, 5, RobotColor.Red, Direction.Up, Direction.Left)
+                    .Target(1, 3, RobotColor.Blue, Direction.Down, Direction.Right)
+                    .Target(6, 1, RobotColor.Green, Direction.Down, Direction.Left)
+                    .Target(2, 6, RobotColor.Yellow, Direction.Up, Direction.Right),
+                new Quadrant("Delta II")
+                    .EdgeWalls(bottomX: 5, leftY: 4)
+                    .Target(2, 2, RobotColor.Red, Direction.Down, Direction.Right)
+                    .Target(5, 6, RobotColor.Blue, Direction.Down, Direction.Left)
+                    .Target(6, 3, RobotColor.Green, Direction.Up, Direction.Right)
+                    .Target(2, 5, RobotColor.Yellow, Direction.Up, Direction.Left),
+                new Quadrant("Delta III")
+                    .EdgeWalls(bottomX: 2, leftY: 2)
+                    .Target(4, 2, RobotColor.Red, Direction.Up, Direction.Right)
+                    .Target(6, 5, RobotColor.Blue, Direction.Down, Direction.Left)
+                    .Target(1, 4, RobotColor.Green, Direction.Down, Direction.Right)
+                    .Target(3, 6, RobotColor.Yellow, Direction.Up, Direction.Left),
+            },
         };
+
+        /// <summary>The original variant of each slot (one full board's worth).</summary>
+        public static readonly IReadOnlyList<Quadrant> All = new[] { Slots[0][0], Slots[1][0], Slots[2][0], Slots[3][0] };
     }
 }

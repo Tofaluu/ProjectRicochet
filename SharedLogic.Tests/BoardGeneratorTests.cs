@@ -11,10 +11,12 @@ public class BoardGeneratorTests
 
     public static TheoryData<int> Seeds() => new() { 1, 2, 3, 42, 1234 };
 
+    private static IEnumerable<Quadrant> AllVariants => Quadrant.Slots.SelectMany(slot => slot);
+
     [Fact]
     public void QuadrantTargetsStayClearOfEdgesSeamsAndEachOther()
     {
-        foreach (Quadrant quadrant in Quadrant.All)
+        foreach (Quadrant quadrant in AllVariants)
         {
             foreach (Target target in quadrant.Targets)
             {
@@ -25,11 +27,84 @@ public class BoardGeneratorTests
                 foreach (Target other in quadrant.Targets)
                 {
                     if (other.Position == p) continue;
-                    int distance = Math.Abs(other.Position.X - p.X) + Math.Abs(other.Position.Y - p.Y);
+                    int distance = Math.Max(Math.Abs(other.Position.X - p.X), Math.Abs(other.Position.Y - p.Y));
                     Assert.True(distance > 1, $"{quadrant.Name}: {target} touches {other}");
                 }
             }
         }
+    }
+
+    [Fact]
+    public void EveryVariantFollowsTheSlotRules()
+    {
+        Assert.Equal(4, Quadrant.Slots.Count);
+        Assert.Equal(AllVariants.Count(), AllVariants.Select(q => q.Name).Distinct().Count());
+        for (int slot = 0; slot < Quadrant.Slots.Count; slot++)
+        {
+            Assert.InRange(Quadrant.Slots[slot].Count, 2, 3);
+            foreach (Quadrant quadrant in Quadrant.Slots[slot])
+            {
+                foreach (RobotColor color in Enum.GetValues<RobotColor>())
+                    Assert.Single(quadrant.Targets, t => t.Robot == color);
+                // Only the third slot has the wildcard, so every board gets exactly one.
+                Assert.Equal(slot == 2 ? 1 : 0, quadrant.Targets.Count(t => t.Robot == null));
+                // Two walls per target plus the two edge stubs: every variant is about as busy.
+                Assert.Equal(quadrant.Targets.Count * 2 + 2, quadrant.Walls.Count);
+            }
+        }
+        Assert.Same(Quadrant.Slots[0][0], Quadrant.All[0]);
+    }
+
+    [Fact]
+    public void EveryMixOfVariantsAndCornersMakesAValidBoard()
+    {
+        int last = BoardGenerator.BoardSize - 1;
+        var centre = new[] { P(7, 7), P(7, 8), P(8, 7), P(8, 8) };
+        foreach (Quadrant a in Quadrant.Slots[0])
+        foreach (Quadrant b in Quadrant.Slots[1])
+        foreach (Quadrant c in Quadrant.Slots[2])
+        foreach (Quadrant d in Quadrant.Slots[3])
+        foreach (Quadrant[] order in Orders(new[] { a, b, c, d }))
+        {
+            GridState grid = BoardGenerator.Build(order);
+            string name = string.Join(", ", order.Select(q => q.Name));
+
+            Assert.Equal(17, grid.Targets.Select(t => t.Position).Distinct().Count());
+            for (int x = 0; x <= last; x++)
+            for (int y = 0; y <= last; y++)
+            {
+                if (centre.Contains(P(x, y))) continue;
+                // No dead-end pockets: a cell walled on three sides (board edges count) would be a trap.
+                int blocked = AllDirections.Count(dir => grid.IsBlocked(P(x, y), dir));
+                Assert.True(blocked <= 2, $"{name}: ({x}, {y}) is blocked on {blocked} sides");
+            }
+        }
+    }
+
+    private static IEnumerable<Quadrant[]> Orders(Quadrant[] items)
+    {
+        if (items.Length == 1)
+        {
+            yield return items;
+            yield break;
+        }
+        for (int i = 0; i < items.Length; i++)
+            foreach (Quadrant[] rest in Orders(items.Where((_, j) => j != i).ToArray()))
+                yield return new[] { items[i] }.Concat(rest).ToArray();
+    }
+
+    [Fact]
+    public void GeneratedBoardsUseMoreThanTheOriginalLayouts()
+    {
+        var random = new Random(5);
+        var layouts = new HashSet<string>();
+        for (int i = 0; i < 300; i++)
+        {
+            RoundSetup round = BoardGenerator.GenerateRound(random);
+            // The wire format minus its last 9 bytes (robots + active target): just the walls and targets.
+            layouts.Add(Convert.ToBase64String(BoardCodec.Encode(round), 0, 128 - 9));
+        }
+        Assert.True(layouts.Count > 24, $"only {layouts.Count} layouts");
     }
 
     [Fact]
