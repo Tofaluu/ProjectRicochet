@@ -6,14 +6,16 @@ namespace Ricochet.Client.Board
     /// <summary>
     /// The player's own options, saved between sessions (the start of the planned settings page): sound,
     /// the big burst when the target robot reaches the target, the move preview dots and the practice boards'
-    /// minimum length.
+    /// length.
     /// </summary>
     public static class PlayerSettings
     {
         private const string MutedPrefKey = "Ricochet.Muted";
         private const string BigBurstPrefKey = "Ricochet.BigBurst";
         private const string MovePreviewPrefKey = "Ricochet.MovePreview";
-        private const string PracticeMinMovesPrefKey = "Ricochet.PracticeMinMoves";
+        private const string PracticeMovesPrefKey = "Ricochet.PracticeMoves";
+        // A typical board's length (the median of random boards).
+        public const int DefaultPracticeMoves = 6;
 
         public static bool Muted
         {
@@ -34,14 +36,17 @@ namespace Ricochet.Client.Board
             set => Set(MovePreviewPrefKey, value);
         }
 
-        /// <summary>Practice boards' shortest solution is at least this long (like a lobby's min moves).</summary>
-        public static int PracticeMinMoves
+        /// <summary>
+        /// Practice boards' shortest solution is exactly this long ("solve in N"; lobbies use a minimum instead, so
+        /// players don't know the best length). Same range as a lobby's min moves.
+        /// </summary>
+        public static int PracticeMoves
         {
-            get => Mathf.Clamp(PlayerPrefs.GetInt(PracticeMinMovesPrefKey, MatchSettings.DefaultMinMoves),
+            get => Mathf.Clamp(PlayerPrefs.GetInt(PracticeMovesPrefKey, DefaultPracticeMoves),
                 MatchSettings.MinMinMoves, MatchSettings.MaxMinMoves);
             set
             {
-                PlayerPrefs.SetInt(PracticeMinMovesPrefKey, Mathf.Clamp(value, MatchSettings.MinMinMoves, MatchSettings.MaxMinMoves));
+                PlayerPrefs.SetInt(PracticeMovesPrefKey, Mathf.Clamp(value, MatchSettings.MinMinMoves, MatchSettings.MaxMinMoves));
                 PlayerPrefs.Save();
             }
         }
