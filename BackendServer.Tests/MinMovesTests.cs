@@ -43,6 +43,26 @@ public class MinMovesTests
     }
 
     [Fact]
+    public async Task BoardsTheSolverGivesUpOn_AreNeverDealt()
+    {
+        // A solver limit so short it gives up on all but the easiest boards, and no search time.
+        var (h, alice) = await MatchWithMinimum(MatchSettings.DefaultMinMoves, o =>
+        {
+            o.SolverTimeLimitSeconds = 0.00001;
+            o.BoardSearchSeconds = 0;
+        });
+
+        for (int board = 1; board <= 4; board++) // the 5th point would end the match
+        {
+            // Only a board with a known shortest solution ends the moment someone finds it.
+            await alice.SubmitShortestAsync();
+            await LobbyHarness.Until(() => alice.Count(HubMethods.RoundEnded) == board, "the round to end at once");
+            Assert.NotEmpty(alice.LastResult.ShortestMoves);
+            await h.AdvanceUntil(() => alice.Count(HubMethods.RoundStarted) == board + 1, "the next board");
+        }
+    }
+
+    [Fact]
     public async Task OutOfSearchTime_DealsTheLongestBoardFound()
     {
         var (_, alice) = await MatchWithMinimum(MatchSettings.MaxMinMoves, o => o.BoardSearchSeconds = 0);

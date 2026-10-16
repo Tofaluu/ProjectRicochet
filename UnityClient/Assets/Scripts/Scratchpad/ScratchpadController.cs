@@ -79,6 +79,7 @@ namespace Ricochet.Client.Scratchpad
         /// <summary>Dims the board under a countdown until the next board arrives (<see cref="LoadRound"/>).</summary>
         public void ShowCountdown(float seconds, string caption)
         {
+            CancelSearch();
             Session.StartCountdown(Time.time, seconds, caption);
             _dragging = false;
         }
@@ -86,6 +87,7 @@ namespace Ricochet.Client.Scratchpad
         /// <summary>The round is over and there's nothing to replay: the board stays, locked.</summary>
         public void EndRound()
         {
+            CancelSearch();
             Session.EndRound();
             _dragging = false;
         }
@@ -108,6 +110,7 @@ namespace Ricochet.Client.Scratchpad
         /// </summary>
         public void PlayReplays(IReadOnlyList<ReplaySegment> segments, float pauseSeconds, bool lockUntilNextBoard = true)
         {
+            CancelSearch();
             StopReplay();
             _replay = StartCoroutine(ReplayRoutine(segments, pauseSeconds, lockUntilNextBoard));
         }
@@ -222,16 +225,63 @@ namespace Ricochet.Client.Scratchpad
                 "Make a move to try it yourself.";
         }
 
+        // ---- Practice boards: the same search as the server's (BoardSearch), a few solves per frame ----
+
+        // Browsers have no threads, so the search runs on the main thread in slices this long; the board is
+        // dimmed meanwhile, so a slow solve's hitch doesn't show.
+        private const float SearchSliceSeconds = 0.025f;
+        // Like the server: after this long, the longest board found so far.
+        private const float PracticeSearchSeconds = 20f;
+        // Shorter than the server's 5 s, as one solve blocks a frame; boards it gives up on are skipped.
+        private static readonly System.TimeSpan PracticeSolverLimit = System.TimeSpan.FromSeconds(2);
+        private BoardSearch _search;
+        private int _searchSeed;
+        private float _searchStarted;
+
+        /// <summary>"Finding a board..." while a practice board is being searched for, else null.</summary>
+        public string SearchStatus => _search == null ? null
+            : _search.Longest == null ? $"Finding a {_search.MinMoves}-move board..."
+            : $"Finding a {_search.MinMoves}-move board...\nlongest so far: {_search.LongestMoves.Length}";
+
+        /// <summary>Saves the practice boards' minimum and deals a practice board with it.</summary>
+        public void SetPracticeMinMoves(int minMoves)
+        {
+            PlayerSettings.PracticeMinMoves = minMoves;
+            if (Session.IsPractice)
+                NewBoard();
+        }
+
         private void NewBoard()
         {
-            int seed = _seed != 0 ? _seed : Random.Range(1, int.MaxValue);
-            RoundSetup generated = BoardGenerator.GenerateRound(new System.Random(seed));
-            // Go through the wire format so the scratchpad sees exactly what a networked client would.
-            Show(BoardCodec.Decode(BoardCodec.Encode(generated)), practice: true, seed);
+            _searchSeed = _seed != 0 ? _seed : Random.Range(1, int.MaxValue);
+            _search = new BoardSearch(PlayerSettings.PracticeMinMoves, new System.Random(_searchSeed), PracticeSolverLimit);
+            _searchStarted = Time.realtimeSinceStartup;
+            _dragging = false;
+            StepSearch(); // usually done at once: no dimmed frame
         }
+
+        private void StepSearch()
+        {
+            float sliceStart = Time.realtimeSinceStartup;
+            do
+            {
+                bool outOfTime = Time.realtimeSinceStartup - _searchStarted >= PracticeSearchSeconds;
+                if (_search.Step(noTimeLimit: outOfTime && _search.Longest == null) || (outOfTime && _search.Longest != null))
+                {
+                    RoundSetup found = _search.Longest;
+                    _search = null;
+                    // Go through the wire format so the scratchpad sees exactly what a networked client would.
+                    Show(BoardCodec.Decode(BoardCodec.Encode(found)), practice: true, _searchSeed);
+                    return;
+                }
+            } while (Time.realtimeSinceStartup - sliceStart < SearchSliceSeconds);
+        }
+
+        private void CancelSearch() => _search = null;
 
         private void Show(RoundSetup round, bool practice, int seed = 0)
         {
+            CancelSearch();
             StopReplay();
             Session.Load(round, practice, seed);
             _boardView.Build(round, Session.Robots);
@@ -311,6 +361,17 @@ namespace Ricochet.Client.Scratchpad
             if (keys != null && keys.mKey.wasPressedThisFrame && !IsTypingInUI())
                 PlayerSettings.Muted = !PlayerSettings.Muted;
             TickCountdown();
+            if (_search != null)
+            {
+                // N or Esc stops looking (the current board stays); robots stay put meanwhile.
+                if (keys != null && !IsTypingInUI() && (keys.nKey.wasPressedThisFrame || keys.escapeKey.wasPressedThisFrame))
+                    CancelSearch();
+                else
+                    StepSearch();
+                _dragging = false;
+                UpdateMovePreview();
+                return;
+            }
             if (!Session.AcceptsInput)
             {
                 _dragging = false;
@@ -335,7 +396,8 @@ namespace Ricochet.Client.Scratchpad
         // The move dots (PlayerSettings.MovePreview): where the selected robot would stop, while the player can move it.
         private void UpdateMovePreview()
         {
-            bool show = PlayerSettings.MovePreview && Session.AcceptsInput && !Session.IsHoldingReplay && !Session.IsSolved;
+            bool show = PlayerSettings.MovePreview && Session.AcceptsInput && !Session.IsHoldingReplay && !Session.IsSolved
+                && _search == null;
             if (show)
             {
                 RobotColor robot = Session.Selected;
