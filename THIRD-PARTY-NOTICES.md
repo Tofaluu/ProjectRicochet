@@ -72,6 +72,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 is in `UnityClient/Assets/Fonts/OFL.txt`. The fonts may be bundled and sold with software; they may not be
 sold on their own.
 
+## Server database components
+
+The server (and its Docker image) uses these NuGet packages to store daily puzzle results in PostgreSQL:
+
+- Entity Framework Core (Microsoft.EntityFrameworkCore 9 and its dependencies),
+  https://github.com/dotnet/efcore - Copyright (c) .NET Foundation and Contributors, MIT License (the
+  same text as above).
+- Npgsql and Npgsql.EntityFrameworkCore.PostgreSQL, https://github.com/npgsql/npgsql and
+  https://github.com/npgsql/efcore.pg - licensed under the PostgreSQL License; the full text is in each
+  repository's `LICENSE` file.
+
+The database itself runs from the official `postgres` Docker image (PostgreSQL License), pulled by the
+server; it isn't part of this repository.
+
 ## Unity
 
 The client is made with Unity 6 and its packages, under the Unity Terms of Service and the

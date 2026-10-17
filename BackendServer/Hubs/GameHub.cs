@@ -11,21 +11,43 @@ namespace BackendServer.Hubs
     public class GameHub : Hub
     {
         private readonly LobbyManager _lobbies;
+        private readonly DailyService _daily;
 
-        public GameHub(LobbyManager lobbies)
+        public GameHub(LobbyManager lobbies, DailyService daily)
         {
             _lobbies = lobbies;
+            _daily = daily;
         }
 
-        [HubMethodName(HubMethods.JoinLobby)]
-        public Task<string> JoinLobby(string playerName, string lobbyCode, int protocolVersion, string playerId)
+        private static void CheckVersion(int protocolVersion)
         {
             if (protocolVersion < HubMethods.ProtocolVersion)
                 throw new HubException("Your game is out of date. Please download the latest version.");
             if (protocolVersion > HubMethods.ProtocolVersion)
                 throw new HubException("The server is running an older version than your game. Ask the host to update it.");
+        }
+
+        [HubMethodName(HubMethods.JoinLobby)]
+        public Task<string> JoinLobby(string playerName, string lobbyCode, int protocolVersion, string playerId)
+        {
+            CheckVersion(protocolVersion);
             return _lobbies.JoinAsync(Context.ConnectionId, playerName, lobbyCode, playerId);
         }
+
+        [HubMethodName(HubMethods.GetDaily)]
+        public Task<DailyPuzzleInfo> GetDaily(string guestId, string name, int protocolVersion)
+        {
+            CheckVersion(protocolVersion);
+            return _daily.GetDailyAsync(guestId, name);
+        }
+
+        [HubMethodName(HubMethods.SubmitDaily)]
+        public Task<DailyResult> SubmitDaily(string guestId, int number, byte[] moves) =>
+            _daily.SubmitAsync(guestId, number, moves);
+
+        [HubMethodName(HubMethods.GetDailyLeaderboard)]
+        public Task<DailyLeaderboard> GetDailyLeaderboard(string guestId, int number) =>
+            _daily.GetLeaderboardAsync(guestId, number);
 
         [HubMethodName(HubMethods.LeaveLobby)]
         public Task LeaveLobby() => _lobbies.LeaveAsync(Context.ConnectionId);
