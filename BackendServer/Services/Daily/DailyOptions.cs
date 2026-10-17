@@ -20,6 +20,10 @@ namespace BackendServer.Services
 
         public int MaxSolutionMoves { get; set; } = 64;
 
+        /// <summary>For testing (e.g. a dev server): every puzzle's length range instead of the weekday's.</summary>
+        public int? MinMoves { get; set; }
+        public int? MaxMoves { get; set; }
+
         /// <summary>Seeds board generation (for tests); null picks a random seed per puzzle.</summary>
         public int? Seed { get; set; }
     }

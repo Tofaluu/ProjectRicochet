@@ -189,6 +189,8 @@ namespace BackendServer.Services
         {
             DateOnly day = DayOf(number);
             (int min, int max) = Difficulty(day.DayOfWeek);
+            min = _options.MinMoves ?? min;
+            max = Math.Max(min, _options.MaxMoves ?? max);
             int seed = _options.Seed.HasValue ? _options.Seed.Value * 10007 + number : Random.Shared.Next();
             var search = new BoardSearch(min, new Random(seed), TimeSpan.FromSeconds(_options.SolverTimeLimitSeconds), max);
             var budget = TimeSpan.FromSeconds(_options.SearchSeconds);
