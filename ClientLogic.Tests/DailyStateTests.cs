@@ -19,8 +19,19 @@ namespace ClientLogic.Tests
             SecondsUntilNext = 3600,
             BestMoves = bestMoves,
             BestSeconds = bestMoves > 0 ? 102 : 0,
+            BestSolution = bestMoves > 0 ? MoveCodec.Encode(Solution(bestMoves)) : new byte[0],
             Streak = streak,
         };
+
+        // Blue, Green, Red, Yellow, Blue, ... (only the robots matter for the share squares).
+        private static Move[] Solution(int length)
+        {
+            var moves = new Move[length];
+            RobotColor[] order = { RobotColor.Blue, RobotColor.Green, RobotColor.Red, RobotColor.Yellow };
+            for (int i = 0; i < length; i++)
+                moves[i] = new Move(order[i % 4], Direction.Up);
+            return moves;
+        }
 
         [Fact]
         public void Loading_ShowsTheBoardAndRunsTheClockFromFirstOpening()
@@ -71,18 +82,26 @@ namespace ClientLogic.Tests
         }
 
         [Fact]
-        public void ShareText_GreenPerBestPossibleMove_YellowPerExtra()
+        public void ShareText_ASquarePerMove_InTheRobotsColour()
         {
             var daily = new DailyState();
             daily.OnLoaded(Info(bestMoves: 9), 0f);
-            string text = daily.ShareText("ricochet.thomasliu.dev");
-            string[] lines = text.Split('\n');
+            string[] lines = daily.ShareText("ricochet.thomasliu.dev").Split('\n');
             Assert.Equal("Ricochet Daily #12: 9/8 moves, 1:42, 2-day streak", lines[0]);
-            Assert.Equal(string.Concat(System.Linq.Enumerable.Repeat("\U0001F7E9", 8)) + "\U0001F7E8", lines[1]);
+            // blue, green, red, yellow, blue, green, red, yellow, blue
+            Assert.Equal("\U0001F7E6\U0001F7E9\U0001F7E5\U0001F7E8\U0001F7E6\U0001F7E9\U0001F7E5\U0001F7E8\U0001F7E6", lines[1]);
             Assert.Equal("ricochet.thomasliu.dev", lines[2]);
 
+            // A new best brings its own moves.
+            daily.OnSubmitted(new DailyResult
+            {
+                BestMoves = 2, BestSeconds = 20, ShortestLength = 8,
+                BestSolution = MoveCodec.Encode(new[] { new Move(RobotColor.Red, Direction.Up), new Move(RobotColor.Red, Direction.Left) }),
+            });
+            Assert.Equal("\U0001F7E5\U0001F7E5", daily.ShareText("x").Split('\n')[1]);
+
             daily.OnLoaded(Info(bestMoves: 8, streak: 1), 0f);
-            Assert.StartsWith("Ricochet Daily #12: 8/8 moves, 1:42\n", daily.ShareText("x")); // no streak line for 1 day
+            Assert.StartsWith("Ricochet Daily #12: 8/8 moves, 1:42\n", daily.ShareText("x")); // no streak for 1 day
         }
 
         [Fact]

@@ -85,6 +85,7 @@ namespace BackendServer.Services
                 SecondsUntilNext = (NextResetUtc(today) - now).TotalSeconds,
                 BestMoves = entry.BestMoves,
                 BestSeconds = entry.BestSeconds,
+                BestSolution = entry.BestSolution ?? Array.Empty<byte>(),
                 Streak = await StreakAsync(guestId, number),
             };
         }
@@ -119,11 +120,13 @@ namespace BackendServer.Services
             bool improved = entry.BestMoves == 0 || moves.Length < entry.BestMoves;
             int bestMoves = entry.BestMoves;
             double bestSeconds = entry.BestSeconds;
+            byte[] bestSolution = entry.BestSolution ?? Array.Empty<byte>();
             if (improved)
             {
                 await _store.SaveBestAsync(number, guestId, moves.Length, seconds, moveData, now);
                 bestMoves = moves.Length;
                 bestSeconds = seconds;
+                bestSolution = moveData;
             }
 
             (_, int players) = await _store.GetLeaderboardAsync(number, 0);
@@ -134,6 +137,7 @@ namespace BackendServer.Services
                 Improved = improved,
                 BestMoves = bestMoves,
                 BestSeconds = bestSeconds,
+                BestSolution = bestSolution,
                 Rank = await _store.GetRankAsync(number, bestMoves, bestSeconds),
                 Players = players,
                 Streak = await StreakAsync(guestId, number),

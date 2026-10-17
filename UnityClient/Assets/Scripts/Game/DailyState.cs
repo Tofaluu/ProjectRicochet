@@ -36,6 +36,8 @@ namespace Ricochet.Client.Game
         public int BestMoves { get; private set; }
         public double BestSeconds { get; private set; }
         public bool HasSolved => BestMoves > 0;
+        /// <summary>The player's best solution's moves (empty until solved), for the share text.</summary>
+        public Move[] BestSolution { get; private set; } = new Move[0];
         public int Streak { get; private set; }
         /// <summary>Place among today's solvers (0 = unknown / not solved) and how many solved it.</summary>
         public int Rank { get; private set; }
@@ -69,6 +71,7 @@ namespace Ricochet.Client.Game
             ShortestLength = info.ShortestLength;
             BestMoves = info.BestMoves;
             BestSeconds = info.BestSeconds;
+            BestSolution = Decode(info.BestSolution);
             Streak = info.Streak;
             _openedSeconds = info.SecondsSinceOpened;
             _untilNext = info.SecondsUntilNext;
@@ -97,6 +100,7 @@ namespace Ricochet.Client.Game
             LastImproved = result.Improved;
             BestMoves = result.BestMoves;
             BestSeconds = result.BestSeconds;
+            BestSolution = Decode(result.BestSolution);
             Streak = result.Streak;
             Rank = result.Rank;
             Players = result.Players;
@@ -127,8 +131,8 @@ namespace Ricochet.Client.Game
         public double UntilNext(float now) => Math.Max(0.0, _untilNext - Math.Max(0f, now - _loadedAt));
 
         /// <summary>
-        /// The Wordle-style result to paste anywhere: no spoilers, a green square per move of the best possible
-        /// solution and a yellow one per extra move.
+        /// The Wordle-style result to paste anywhere: a square per move of the player's best solution in the colour
+        /// of the robot moved - the shape of the solution (which robots, how many moves) without the moves themselves.
         /// </summary>
         public string ShareText(string link)
         {
@@ -136,15 +140,35 @@ namespace Ricochet.Client.Game
             if (Streak > 1)
                 text.Append($", {Streak}-day streak");
             text.Append('\n');
-            int extra = Math.Max(0, BestMoves - ShortestLength);
-            for (int i = 0; i < Math.Min(ShortestLength, 20); i++)
-                text.Append("\U0001F7E9"); // green square
-            for (int i = 0; i < Math.Min(extra, 10); i++)
-                text.Append("\U0001F7E8"); // yellow square
-            if (extra > 10)
-                text.Append('+');
+            foreach (Move move in BestSolution)
+                text.Append(Square(move.Robot));
             text.Append('\n').Append(link);
             return text.ToString();
+        }
+
+        private static string Square(RobotColor robot)
+        {
+            switch (robot)
+            {
+                case RobotColor.Red: return "\U0001F7E5";
+                case RobotColor.Blue: return "\U0001F7E6";
+                case RobotColor.Green: return "\U0001F7E9";
+                default: return "\U0001F7E8"; // yellow
+            }
+        }
+
+        private static Move[] Decode(byte[] moves)
+        {
+            if (moves == null || moves.Length == 0)
+                return new Move[0];
+            try
+            {
+                return MoveCodec.Decode(moves);
+            }
+            catch (FormatException)
+            {
+                return new Move[0];
+            }
         }
 
         /// <summary>"0:42", "12:05", "1:02:03".</summary>

@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 12;
+        public const int ProtocolVersion = 13;
 
         // Client -> server
 
@@ -349,6 +349,9 @@ namespace SharedLogic
         public int BestMoves { get; set; }
         public double BestSeconds { get; set; }
 
+        /// <summary><see cref="MoveCodec"/> bytes of the player's own best solution (empty until solved), for their share text.</summary>
+        public byte[] BestSolution { get; set; }
+
         /// <summary>Days in a row solved, counting today if solved, else up to yesterday.</summary>
         public int Streak { get; set; }
     }
@@ -363,9 +366,10 @@ namespace SharedLogic
         /// <summary>It's the player's new best (their first solve, or fewer moves than before).</summary>
         public bool Improved { get; set; }
 
-        /// <summary>The player's best after this solution.</summary>
+        /// <summary>The player's best after this solution, and its moves (<see cref="MoveCodec"/> bytes).</summary>
         public int BestMoves { get; set; }
         public double BestSeconds { get; set; }
+        public byte[] BestSolution { get; set; }
 
         /// <summary>The player's place among today's solvers (1 = first) and how many have solved it.</summary>
         public int Rank { get; set; }

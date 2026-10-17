@@ -81,6 +81,7 @@ public class DailyTests
 
         DailyResult better = await daily.SubmitAsync(Alice, 1, Encode(shortest));
         Assert.True(better.Improved);
+        Assert.Equal(Encode(shortest), better.BestSolution); // the player's own best comes back (for sharing)
         Assert.Equal(shortest.Length, better.BestMoves);
         Assert.Equal(60, better.BestSeconds, 3);
         Assert.Equal(shortest.Length, better.ShortestLength);
@@ -89,6 +90,7 @@ public class DailyTests
         DailyResult same = await daily.SubmitAsync(Alice, 1, Encode(shortest));
         Assert.False(same.Improved); // as few moves, later: the earlier time stands
         Assert.Equal(60, same.BestSeconds, 3);
+        Assert.Equal(Encode(shortest), (await daily.GetDailyAsync(Alice, "Alice")).BestSolution);
         Assert.Equal(1, same.Streak);
     }
 
