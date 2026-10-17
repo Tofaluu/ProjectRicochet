@@ -11,7 +11,10 @@ public class BoardGeneratorTests
 
     public static TheoryData<int> Seeds() => new() { 1, 2, 3, 42, 1234 };
 
-    private static IEnumerable<Quadrant> AllVariants => Quadrant.Slots.SelectMany(slot => slot);
+    // A slot's pieces, each also mirrored: everything a board can deal for that slot.
+    private static IEnumerable<Quadrant> WithMirrors(IEnumerable<Quadrant> slot) => slot.Concat(slot.Select(q => q.Mirrored));
+
+    private static IEnumerable<Quadrant> AllVariants => Quadrant.Slots.SelectMany(WithMirrors);
 
     [Fact]
     public void QuadrantTargetsStayClearOfEdgesSeamsAndEachOther()
@@ -42,7 +45,7 @@ public class BoardGeneratorTests
         for (int slot = 0; slot < Quadrant.Slots.Count; slot++)
         {
             Assert.InRange(Quadrant.Slots[slot].Count, 2, 3);
-            foreach (Quadrant quadrant in Quadrant.Slots[slot])
+            foreach (Quadrant quadrant in WithMirrors(Quadrant.Slots[slot]))
             {
                 foreach (RobotColor color in Enum.GetValues<RobotColor>())
                     Assert.Single(quadrant.Targets, t => t.Robot == color);
@@ -60,10 +63,10 @@ public class BoardGeneratorTests
     {
         int last = BoardGenerator.BoardSize - 1;
         var centre = new[] { P(7, 7), P(7, 8), P(8, 7), P(8, 8) };
-        foreach (Quadrant a in Quadrant.Slots[0])
-        foreach (Quadrant b in Quadrant.Slots[1])
-        foreach (Quadrant c in Quadrant.Slots[2])
-        foreach (Quadrant d in Quadrant.Slots[3])
+        foreach (Quadrant a in WithMirrors(Quadrant.Slots[0]))
+        foreach (Quadrant b in WithMirrors(Quadrant.Slots[1]))
+        foreach (Quadrant c in WithMirrors(Quadrant.Slots[2]))
+        foreach (Quadrant d in WithMirrors(Quadrant.Slots[3]))
         foreach (Quadrant[] order in Orders(new[] { a, b, c, d }))
         {
             GridState grid = BoardGenerator.Build(order);
@@ -91,6 +94,23 @@ public class BoardGeneratorTests
         for (int i = 0; i < items.Length; i++)
             foreach (Quadrant[] rest in Orders(items.Where((_, j) => j != i).ToArray()))
                 yield return new[] { items[i] }.Concat(rest).ToArray();
+    }
+
+    [Fact]
+    public void MirroringFlipsAPieceAcrossItsDiagonal()
+    {
+        Quadrant alpha = Quadrant.All[0];
+        Quadrant mirror = alpha.Mirrored;
+
+        // Alpha's red target is at (1, 2) with walls Up + Right; flipped it's at (2, 1) with walls Right + Up.
+        Assert.Contains(mirror.Targets, t => t.Position == P(2, 1) && t.Robot == RobotColor.Red);
+        Assert.Contains(mirror.Walls, w => w.Cell == P(2, 1) && w.Side == Direction.Right);
+        Assert.Contains(mirror.Walls, w => w.Cell == P(2, 1) && w.Side == Direction.Up);
+        // The bottom-edge stub (east side of (4, 0)) moves to the left edge (north side of (0, 4)).
+        Assert.Contains(mirror.Walls, w => w.Cell == P(0, 4) && w.Side == Direction.Up);
+
+        Assert.NotEqual(alpha.Walls.ToHashSet(), mirror.Walls.ToHashSet());
+        Assert.Same(alpha, mirror.Mirrored);
     }
 
     [Fact]
