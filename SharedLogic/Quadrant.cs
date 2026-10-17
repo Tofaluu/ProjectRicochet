@@ -19,9 +19,45 @@ namespace SharedLogic
         public IReadOnlyList<(GridPos Cell, Direction Side)> Walls => _walls;
         public IReadOnlyList<Target> Targets => _targets;
 
+        private Quadrant _mirrored;
+
         private Quadrant(string name)
         {
             Name = name;
+        }
+
+        /// <summary>
+        /// This piece flipped across its corner-to-centre diagonal ((x, y) -> (y, x)): the two board edges swap,
+        /// so it still fits any corner, but it's a mirror image no rotation can make. Same targets and walls,
+        /// so it follows the same rules. Mirroring the mirror gives the original layout back.
+        /// </summary>
+        public Quadrant Mirrored
+        {
+            get
+            {
+                if (_mirrored != null)
+                    return _mirrored;
+                var mirror = new Quadrant(Name + " (mirrored)") { _mirrored = this };
+                foreach ((GridPos cell, Direction side) in _walls)
+                    mirror._walls.Add((Flip(cell), Flip(side)));
+                foreach (Target target in _targets)
+                    mirror._targets.Add(new Target(Flip(target.Position), target.Robot));
+                return _mirrored = mirror;
+            }
+        }
+
+        private static GridPos Flip(GridPos cell) => new GridPos(cell.Y, cell.X);
+
+        // Reflecting across the diagonal swaps the axes: up (+y) becomes right (+x), down becomes left.
+        private static Direction Flip(Direction side)
+        {
+            switch (side)
+            {
+                case Direction.Up: return Direction.Right;
+                case Direction.Right: return Direction.Up;
+                case Direction.Down: return Direction.Left;
+                default: return Direction.Down;
+            }
         }
 
         /// <summary>

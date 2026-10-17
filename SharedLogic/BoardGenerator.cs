@@ -51,12 +51,18 @@ namespace SharedLogic
             return grid;
         }
 
-        /// <summary>A board with a random variant of each <see cref="Quadrant.Slots"/> slot, dealt to the corners in random order.</summary>
+        /// <summary>
+        /// A board with a random variant of each <see cref="Quadrant.Slots"/> slot, each either way round
+        /// (<see cref="Quadrant.Mirrored"/>), dealt to the corners in random order: 81 x 16 x 24 = 31104 layouts.
+        /// </summary>
         public static GridState GenerateGrid(Random random)
         {
             var quadrants = new List<Quadrant>();
             foreach (IReadOnlyList<Quadrant> variants in Quadrant.Slots)
-                quadrants.Add(variants[random.Next(variants.Count)]);
+            {
+                Quadrant variant = variants[random.Next(variants.Count)];
+                quadrants.Add(random.Next(2) == 0 ? variant : variant.Mirrored);
+            }
             for (int i = quadrants.Count - 1; i > 0; i--)
             {
                 int j = random.Next(i + 1);
