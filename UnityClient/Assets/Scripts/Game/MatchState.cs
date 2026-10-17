@@ -93,9 +93,15 @@ namespace Ricochet.Client.Game
         public bool CanWatchBest => Stage == MatchStage.Solving && BestSolution != null && BestSolution.Count > 0 && BestPlayer != MyName;
         public bool IAmLeading { get; private set; }
         public bool IAmDone { get; private set; }
-        /// <summary>The vote among the players who can vote (connected, not leading).</summary>
-        public int DoneCount { get; private set; }
-        public int VoterCount { get; private set; }
+        /// <summary>
+        /// The vote among the players who can vote: connected ones, minus the leader during a round (ending it early
+        /// is the others' call); skipping the replays is everyone's, the winner's too.
+        /// </summary>
+        public int DoneCount => Voters.Count(p => p.Done);
+        public int VoterCount => Voters.Count();
+        private IEnumerable<PlayerInfo> Voters =>
+            _players.Where(p => p.Connected && (Stage == MatchStage.RoundOver || !p.Leading));
+        private PlayerInfo[] _players = new PlayerInfo[0];
 
         /// <summary>The current (or just finished) match's boards with everyone's solutions, in order.</summary>
         public IReadOnlyList<HistoryRound> History => _history;
@@ -122,7 +128,7 @@ namespace Ricochet.Client.Game
             get
             {
                 MatchStage stage = Stage;
-                if (IAmLeading || (stage != MatchStage.Solving && stage != MatchStage.RoundOver))
+                if ((IAmLeading && stage == MatchStage.Solving) || (stage != MatchStage.Solving && stage != MatchStage.RoundOver))
                     return DoneAction.None;
                 if (stage == MatchStage.RoundOver)
                     return DoneAction.SkipReplay;
@@ -161,9 +167,7 @@ namespace Ricochet.Client.Game
             PlayerInfo me = state.Players.FirstOrDefault(p => p.Name == myName);
             IAmDone = me != null && me.Done;
             IAmLeading = me != null && me.Leading;
-            PlayerInfo[] voters = state.Players.Where(p => !p.Leading && p.Connected).ToArray();
-            DoneCount = voters.Count(p => p.Done);
-            VoterCount = voters.Length;
+            _players = state.Players;
             return change;
         }
 
@@ -400,6 +404,7 @@ namespace Ricochet.Client.Game
             Settings = null;
             MatchWinner = null;
             Standings = new PlayerInfo[0];
+            _players = new PlayerInfo[0];
             Phase = MatchPhase.Waiting;
             _history.Clear();
         }

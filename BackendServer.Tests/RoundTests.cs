@@ -195,9 +195,36 @@ public class RoundTests
         await alice.SubmitShortestAsync();
         await LobbyHarness.Until(() => bob.Count(HubMethods.RoundEnded) == 1, "the round to end");
 
-        // Bob (the only non-winner) skips; no fake time passes.
+        // Everyone votes, the winner too; no fake time passes.
         await bob.SetDoneAsync();
+        await Task.Delay(200);
+        Assert.Equal(1, bob.Count(HubMethods.RoundCountdown)); // still waiting for Alice
+        Assert.Equal(2, bob.State.Players.Count(p => p.Connected));
+        await alice.SetDoneAsync();
         await LobbyHarness.Until(() => bob.Count(HubMethods.RoundCountdown) == 2, "the countdown");
+    }
+
+    [Fact]
+    public async Task SoloWinner_CanSkipTheReplays()
+    {
+        var h = new LobbyHarness();
+        TestClient alice = await h.JoinAsync("Alice");
+        await h.StartMatchAsync(alice);
+        await alice.SubmitShortestAsync();
+        await LobbyHarness.Until(() => alice.Count(HubMethods.RoundEnded) == 1, "the round to end");
+
+        await alice.SetDoneAsync();
+        await LobbyHarness.Until(() => alice.Count(HubMethods.RoundCountdown) == 2, "the countdown");
+    }
+
+    [Fact]
+    public async Task TheLeader_StillCantVoteToEndTheRoundEarly()
+    {
+        var (h, alice, bob) = await TwoPlayerMatch();
+        await alice.SubmitLongerAsync();
+        await alice.SetDoneAsync(); // ignored: ending early is the others' call
+        Assert.False(bob.Player("Alice").Done);
+        Assert.Equal(0, bob.Count(HubMethods.RoundEnded));
     }
 
     [Fact]

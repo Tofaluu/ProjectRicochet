@@ -152,6 +152,19 @@ namespace ClientLogic.Tests
         }
 
         [Fact]
+        public void SkippingTheReplays_IsEveryonesVote_TheWinnersToo()
+        {
+            MatchState match = InRound();
+            match.OnLobbyState(Lobby(MatchPhase.Playing, 1, false, null, P(Me, leading: true), P("Bob"), P("Carol", done: true)), Me);
+            match.OnRoundEnded(Result(7), Moves(5), Moves(5));
+            match.OnLobbyState(Lobby(MatchPhase.Playing, 1, false, null, P(Me, leading: true), P("Bob"), P("Carol", done: true)), Me);
+
+            Assert.Equal(DoneAction.SkipReplay, match.DoneAction); // the winner gets the button too
+            Assert.Equal(3, match.VoterCount);
+            Assert.Equal(1, match.DoneCount);
+        }
+
+        [Fact]
         public void Solved_SentOnlyWhenItCanTakeTheLead()
         {
             MatchState match = InRound();

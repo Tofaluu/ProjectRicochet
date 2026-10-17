@@ -584,8 +584,8 @@ namespace BackendServer.Services
         /// <summary>
         /// A player votes (or un-votes). During a round: to end it early - when every player except the
         /// leader has voted, it ends now (skipped with no point if nobody solved it, otherwise as if the
-        /// timer ran out). After a round: to skip the replay - when every player except the winner has
-        /// voted, the next board (or the match results) comes straight away.
+        /// timer ran out). After a round: to skip the replays - when every player, the winner too, has voted, the
+        /// next board (or the match results) comes straight away (a lone player skips with their own vote).
         /// </summary>
         public async Task SetDoneAsync(string connectionId, int roundNumber, bool done)
         {
@@ -598,8 +598,8 @@ namespace BackendServer.Services
                     || seat.Lobby.RoundNumber != roundNumber)
                     return;
                 lobby = seat.Lobby;
-                // The leader / winner isn't part of either vote.
-                if (seat.Player.Id == lobby.BestPlayerId)
+                // The leader isn't part of the vote to end the round early; the replays are everyone's to skip.
+                if (seat.Player.Id == lobby.BestPlayerId && lobby.Phase != RoundPhase.Intermission)
                     return;
 
                 seat.Player.Done = done;
@@ -614,12 +614,16 @@ namespace BackendServer.Services
         }
 
         /// <summary>
-        /// True when at least one player is connected and every connected player except the current
-        /// leader / winner has voted. Disconnected players aren't waited on.
+        /// True when at least one player is connected and every connected voter has voted: during a round everyone
+        /// but the current leader, after it (skipping the replays) everyone, the winner too. Disconnected players
+        /// aren't waited on.
         /// </summary>
-        private static bool AllOthersDoneLocked(Lobby lobby) =>
-            lobby.Players.Values.Any(p => p.Connected)
-            && lobby.Players.Values.Where(p => p.Connected && p.Id != lobby.BestPlayerId).All(p => p.Done);
+        private static bool AllOthersDoneLocked(Lobby lobby)
+        {
+            string? excluded = lobby.Phase == RoundPhase.Intermission ? null : lobby.BestPlayerId;
+            return lobby.Players.Values.Any(p => p.Connected)
+                && lobby.Players.Values.Where(p => p.Connected && p.Id != excluded).All(p => p.Done);
+        }
 
         /// <summary>
         /// Acts on a completed vote: after a round it skips the replay (here); during one it returns
