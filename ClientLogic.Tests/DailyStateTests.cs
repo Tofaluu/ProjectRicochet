@@ -63,9 +63,13 @@ namespace ClientLogic.Tests
             Assert.True(daily.HasSolved);
             Assert.Equal(3, daily.Rank);
             Assert.Equal(3, daily.Streak);
+            Assert.False(daily.IsPerfect); // 10 > the best possible 8
             Assert.False(daily.IsImprovement(10));
             Assert.False(daily.IsImprovement(11));
             Assert.True(daily.IsImprovement(9));
+
+            daily.OnSubmitted(new DailyResult { Moves = 8, Improved = true, BestMoves = 8, BestSeconds = 70, ShortestLength = 8 });
+            Assert.True(daily.IsPerfect);
         }
 
         [Fact]

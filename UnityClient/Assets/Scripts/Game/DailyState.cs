@@ -36,6 +36,8 @@ namespace Ricochet.Client.Game
         public int BestMoves { get; private set; }
         public double BestSeconds { get; private set; }
         public bool HasSolved => BestMoves > 0;
+        /// <summary>The player's best is the best possible: nothing left to improve, the puzzle is done.</summary>
+        public bool IsPerfect => HasSolved && BestMoves <= ShortestLength;
         /// <summary>The player's best solution's moves (empty until solved), for the share text.</summary>
         public Move[] BestSolution { get; private set; } = new Move[0];
         public int Streak { get; private set; }

@@ -87,6 +87,9 @@ namespace Ricochet.Client.UI
                 _scratchpad.ShowDaily(_daily.Round);
                 if (_daily.HasSolved)
                     RefreshLeaderboard();
+                // Already perfect: show how, then the board stays on the solved position (locked: nothing to improve).
+                if (_daily.IsPerfect && _daily.BestSolution.Length > 0)
+                    _scratchpad.PlayReplays(new[] { new ReplaySegment("Your solution", _daily.BestSolution, 0.6f) }, 0.5f);
             }
             catch (Exception e)
             {
@@ -99,12 +102,31 @@ namespace Ricochet.Client.UI
             if (!OnDailyBoard)
                 return;
             Move[] solution = new List<Move>(_scratchpad.Session.Moves).ToArray();
-            if (_daily.IsImprovement(moves))
-                Submit(solution);
-            else
+            if (!_daily.IsImprovement(moves))
+            {
                 _scratchpad.View.MarkNotShorter();
+                Show($"Not shorter than your best ({_daily.BestMoves}). Try again!");
+            }
+            else
+            {
+                Submit(solution);
+                if (moves <= _daily.ShortestLength)
+                {
+                    // The best possible: the puzzle is done; the solved board stays, locked (after the burst, which
+                    // celebrates the player's own solve only while the board is still theirs).
+                    StartCoroutine(LockAfterBurst(_daily.Round));
+                    return;
+                }
+            }
             // Back to the start to look for a shorter one (a longer solution is a dead end).
             _scratchpad.ResetAfter(SolvedResetDelay);
+        }
+
+        private System.Collections.IEnumerator LockAfterBurst(RoundSetup round)
+        {
+            yield return new WaitForSeconds(SolvedResetDelay);
+            if (_scratchpad.Session.Round == round && _daily.Stage == DailyStage.Playing)
+                _scratchpad.EndRound();
         }
 
         private async void Submit(Move[] solution)
@@ -177,7 +199,8 @@ namespace Ricochet.Client.UI
                     : _daily.Number > 0 ? $"Daily Puzzle #{_daily.Number}" : "Daily Puzzle";
             if (!OnDailyBoard)
                 return;
-            _scratchpad.Session.Title = _daily.HasSolved
+            _scratchpad.Session.Title = _daily.IsPerfect ? $"Daily #{_daily.Number}  ·  perfect!"
+                : _daily.HasSolved
                 ? $"Daily #{_daily.Number}  ·  best {_daily.BestMoves}"
                 : $"Daily #{_daily.Number}  ·  {DailyState.Clock(_daily.Elapsed(Time.time))}";
             if (_daily.UntilNext(Time.time) <= 0f && _daily.Stage == DailyStage.Playing)
@@ -225,7 +248,9 @@ namespace Ricochet.Client.UI
                         string rank = _daily.Rank > 0 ? $"#{_daily.Rank} of {_daily.Players} today" : "";
                         string streak = _daily.Streak > 0 ? $"{_daily.Streak}-day streak" : "";
                         lines.Add((string.Join("  ·  ", new[] { rank, streak }.Where(s => s.Length > 0)), _textStyle));
-                        if (_daily.BestMoves > _daily.ShortestLength)
+                        if (_daily.IsPerfect)
+                            lines.Add(("Perfect! You found the best possible solution. See you tomorrow.", _textStyle));
+                        else
                             lines.Add(("Keep going: a shorter solution beats your best.", _smallStyle));
                         AddLeaderboard(lines);
                     }

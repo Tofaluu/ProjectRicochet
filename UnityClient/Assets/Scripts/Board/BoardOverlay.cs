@@ -267,7 +267,7 @@ namespace Ricochet.Client.Board
                         ? $"{who}  ·  {replay.Moves.Count} moves{paused}"
                         : $"{who}  ·  move {session.ReplayStep} of {replay.Moves.Count}{paused}";
                 case BoardMode.RoundOver:
-                    return "Round over";
+                    return session.Title ?? "Round over";
                 default:
                     string board = session.Title ?? (session.Mode == BoardMode.Practice ? "Practice board" : "Your board");
                     return session.IsSolved ? $"{board}  ·  solved in {moves}!" : $"{board}  ·  {moves} {(moves == 1 ? "move" : "moves")}";
