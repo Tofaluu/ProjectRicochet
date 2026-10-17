@@ -83,9 +83,11 @@ namespace Ricochet.Client.UI
             _lockInButton.gameObject.name = "Watch Button";
             _watchLabel = _lockInButton.GetComponentInChildren<Text>(true);
             CreateBoardMovesRow();
+            Button dailyButton = CreateDailyButton();
             CreateShowBestRow();
             UiSkin.Apply(transform, GameTheme.OrDefault(_theme));
             gameObject.AddComponent<MatchHistoryOverlay>().Init(_match, _scratchpad, _theme);
+            gameObject.AddComponent<DailyPuzzleUI>().Init(_network, _scratchpad, _theme, dailyButton, DailyPlayerName);
             _joinPanel.SetActive(true);
             _lockInButton.gameObject.SetActive(false);
             _gamePanel.SetActive(false);
@@ -139,6 +141,29 @@ namespace Ricochet.Client.UI
                     text.text = label;
             }
             return row;
+        }
+
+        // The daily puzzle's entry on the join screen: a copy of the Join button under it (DailyPuzzleUI runs it).
+        private Button CreateDailyButton()
+        {
+            GameObject daily = Instantiate(_joinButton.gameObject, _joinButton.transform.parent);
+            daily.name = "Daily Button";
+            daily.transform.SetSiblingIndex(_joinButton.transform.GetSiblingIndex() + 1);
+            var button = daily.GetComponent<Button>();
+            button.onClick = new Button.ButtonClickedEvent(); // drop the copied Join listener
+            Text label = daily.GetComponentInChildren<Text>(true);
+            if (label != null)
+                label.text = "Daily Puzzle";
+            return button;
+        }
+
+        // The name typed for lobbies, also shown on the daily leaderboard (saved like a join saves it).
+        private string DailyPlayerName()
+        {
+            string name = _nameInput.text.Trim();
+            if (name.Length > 0)
+                PlayerPrefs.SetString(NamePrefKey, name);
+            return name.Length > 0 ? name : PlayerPrefs.GetString(NamePrefKey, "");
         }
 
         // "Board moves  [3] to [15]": the range of the dealt boards' shortest solution. Two narrower boxes so the

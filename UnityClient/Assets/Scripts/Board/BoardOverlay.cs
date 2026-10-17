@@ -269,7 +269,7 @@ namespace Ricochet.Client.Board
                 case BoardMode.RoundOver:
                     return "Round over";
                 default:
-                    string board = session.Mode == BoardMode.Practice ? "Practice board" : "Your board";
+                    string board = session.Title ?? (session.Mode == BoardMode.Practice ? "Practice board" : "Your board");
                     return session.IsSolved ? $"{board}  ·  solved in {moves}!" : $"{board}  ·  {moves} {(moves == 1 ? "move" : "moves")}";
             }
         }

@@ -212,6 +212,40 @@ namespace Ricochet.Client.Network
             }
         }
 
+        // ---- Daily puzzle (no lobby needed; errors surface as exceptions, see DescribeError) ----
+
+        /// <summary>Today's daily puzzle; the day's first call starts the player's clock.</summary>
+        public async Task<DailyPuzzleInfo> GetDailyAsync(string guestId, string playerName)
+        {
+            await EnsureConnectedAsync();
+            return await _connection.InvokeAsync<DailyPuzzleInfo>(HubMethods.GetDaily, guestId, playerName, HubMethods.ProtocolVersion);
+        }
+
+        public async Task<DailyResult> SubmitDailyAsync(string guestId, int number, IReadOnlyList<Move> moves)
+        {
+            await EnsureConnectedAsync();
+            return await _connection.InvokeAsync<DailyResult>(HubMethods.SubmitDaily, guestId, number, MoveCodec.Encode(moves));
+        }
+
+        public async Task<DailyLeaderboard> GetDailyLeaderboardAsync(string guestId, int number)
+        {
+            await EnsureConnectedAsync();
+            return await _connection.InvokeAsync<DailyLeaderboard>(HubMethods.GetDailyLeaderboard, guestId, number);
+        }
+
+        /// <summary>The server's message for a failed call (without the transport's prefix).</summary>
+        public static string DescribeError(Exception e) => Describe(e);
+
+        // Reuses a live connection (never resets a lobby's); connects otherwise.
+        private async Task EnsureConnectedAsync()
+        {
+            if (_connection == null || _connection.IsDisconnected || _connectedUrl != _serverUrl)
+            {
+                await ConnectAsync();
+                SetStatus(""); // connected: clear "Connecting to..." (a lobby join sets its own status)
+            }
+        }
+
         private async Task ConnectAsync()
         {
             SetStatus("Connecting to " + _serverUrl + "...");

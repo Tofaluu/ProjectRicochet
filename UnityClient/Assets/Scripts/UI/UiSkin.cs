@@ -47,7 +47,7 @@ namespace Ricochet.Client.UI
         {
             string name = image.gameObject.name;
             Color color = name.StartsWith("Leave") ? theme.DangerButton
-                : name.StartsWith("Done") || name.StartsWith("Watch") || name.StartsWith("Toggle") ? theme.SecondaryButton
+                : name.StartsWith("Done") || name.StartsWith("Watch") || name.StartsWith("Toggle") || name.StartsWith("Daily") ? theme.SecondaryButton
                 : theme.PrimaryButton;
             Round(image, WidgetRadius, color);
 

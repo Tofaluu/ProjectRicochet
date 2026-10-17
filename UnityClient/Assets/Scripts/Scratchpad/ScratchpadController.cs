@@ -238,6 +238,9 @@ namespace Ricochet.Client.Scratchpad
         /// <summary>A finished board from the match history, as a practice board to look at and try.</summary>
         public void ShowHistoryBoard(RoundSetup round) => Show(round, practice: true);
 
+        /// <summary>The daily puzzle's board: played like a round (no new board or hint), from the join screen.</summary>
+        public void ShowDaily(RoundSetup round) => Show(round, practice: false);
+
         /// <summary>Plays a solution on the board shown (e.g. from the match history); the player's next move starts afresh.</summary>
         public void ShowSolution(ReplaySegment segment) =>
             PlayReplays(new[] { segment }, Mathf.Min(0.5f, segment.StepSeconds), lockUntilNextBoard: false);

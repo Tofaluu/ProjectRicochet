@@ -48,6 +48,8 @@ namespace Ricochet.Client.Game
         public int Seed { get; private set; }
         /// <summary>Result of the offline "show shortest solution" request, if any.</summary>
         public string HintText { get; set; }
+        /// <summary>What the banner calls this board instead of "Practice board" / "Your board" (e.g. "Daily #12"); cleared by <see cref="Load"/>.</summary>
+        public string Title { get; set; }
 
         /// <summary>
         /// The replay on the board (null when none). A locked replay stays here, on its final position,
@@ -88,6 +90,7 @@ namespace Ricochet.Client.Game
             IsPractice = practice;
             Seed = seed;
             HintText = null;
+            Title = null;
             _roundOver = false;
             _countdownEnd = -1f;
             StopReplay();
