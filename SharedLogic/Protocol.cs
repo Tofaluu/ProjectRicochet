@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 11;
+        public const int ProtocolVersion = 12;
 
         // Client -> server
 
@@ -64,6 +64,27 @@ namespace SharedLogic
         /// has voted, the next board comes straight away.
         /// </summary>
         public const string SetDone = "SetDone";
+
+        // Daily puzzle (no lobby needed). One board a day for everyone, resetting at midnight Eastern. guestId is a
+        // random secret the client keeps on the device (16-64 letters, digits, '-' or '_'): it carries the player's
+        // results and streak without an account. Errors (bad id, invalid solution, a day that's over) are HubExceptions.
+
+        /// <summary>
+        /// (string guestId, string name, int protocolVersion) returns <see cref="DailyPuzzleInfo"/>: today's puzzle
+        /// and how the player stands on it. The day's first call starts the player's clock; name is shown on the
+        /// leaderboard (updated each call). Fails if protocolVersion != <see cref="ProtocolVersion"/>.
+        /// </summary>
+        public const string GetDaily = "GetDaily";
+
+        /// <summary>
+        /// (string guestId, int number, byte[] moves) returns <see cref="DailyResult"/>. A solution to today's puzzle
+        /// (number = <see cref="DailyPuzzleInfo.Number"/>). Players may keep improving until the reset; their best is
+        /// the fewest moves, timed from first opening the puzzle (a later solution of the same length doesn't replace it).
+        /// </summary>
+        public const string SubmitDaily = "SubmitDaily";
+
+        /// <summary>(string guestId, int number) returns <see cref="DailyLeaderboard"/>: the top players and the caller's rank.</summary>
+        public const string GetDailyLeaderboard = "GetDailyLeaderboard";
 
         // Server -> client
 
@@ -301,5 +322,77 @@ namespace SharedLogic
         /// the current board can't be solved any more. Tells a player who (re)joins then.
         /// </summary>
         public bool RoundOver { get; set; }
+    }
+
+    /// <summary>Today's daily puzzle and how the asking player stands on it (<see cref="HubMethods.GetDaily"/>).</summary>
+    public class DailyPuzzleInfo
+    {
+        /// <summary>Puzzle #1 was the launch day; one per day after that.</summary>
+        public int Number { get; set; }
+
+        /// <summary>The puzzle's day in Eastern time, "yyyy-MM-dd".</summary>
+        public string Date { get; set; }
+
+        /// <summary><see cref="BoardCodec"/> bytes.</summary>
+        public byte[] Board { get; set; }
+
+        /// <summary>The shortest possible solution's length (the solution itself is never sent).</summary>
+        public int ShortestLength { get; set; }
+
+        /// <summary>Since the player first opened today's puzzle (their clock).</summary>
+        public double SecondsSinceOpened { get; set; }
+
+        /// <summary>Until the next puzzle (midnight Eastern).</summary>
+        public double SecondsUntilNext { get; set; }
+
+        /// <summary>The player's best today: moves (0 = not solved yet) and the time it took.</summary>
+        public int BestMoves { get; set; }
+        public double BestSeconds { get; set; }
+
+        /// <summary>Days in a row solved, counting today if solved, else up to yesterday.</summary>
+        public int Streak { get; set; }
+    }
+
+    /// <summary>The answer to <see cref="HubMethods.SubmitDaily"/>.</summary>
+    public class DailyResult
+    {
+        /// <summary>This solution: its length and the time since the player first opened the puzzle.</summary>
+        public int Moves { get; set; }
+        public double Seconds { get; set; }
+
+        /// <summary>It's the player's new best (their first solve, or fewer moves than before).</summary>
+        public bool Improved { get; set; }
+
+        /// <summary>The player's best after this solution.</summary>
+        public int BestMoves { get; set; }
+        public double BestSeconds { get; set; }
+
+        /// <summary>The player's place among today's solvers (1 = first) and how many have solved it.</summary>
+        public int Rank { get; set; }
+        public int Players { get; set; }
+
+        public int Streak { get; set; }
+        public int ShortestLength { get; set; }
+    }
+
+    /// <summary>The answer to <see cref="HubMethods.GetDailyLeaderboard"/>: fewest moves first, then fastest.</summary>
+    public class DailyLeaderboard
+    {
+        public int Number { get; set; }
+        public DailyLeaderboardEntry[] Top { get; set; }
+
+        /// <summary>The asking player's place (0 = not solved yet) and how many have solved it.</summary>
+        public int MyRank { get; set; }
+        public int Players { get; set; }
+    }
+
+    public class DailyLeaderboardEntry
+    {
+        public string Name { get; set; }
+        public int Moves { get; set; }
+        public double Seconds { get; set; }
+
+        /// <summary>The asking player.</summary>
+        public bool IsMe { get; set; }
     }
 }
