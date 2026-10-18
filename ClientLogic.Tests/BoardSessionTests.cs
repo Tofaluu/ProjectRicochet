@@ -154,6 +154,20 @@ namespace ClientLogic.Tests
         }
 
         [Fact]
+        public void ControllableLockedReplay_StaysLockedWhenSteppedToTheEnd()
+        {
+            // E.g. the player's own perfect daily solution: steppable, but the board never takes moves again.
+            BoardSession board = Loaded();
+            board.BeginReplay(new ReplaySegment("Your solution", Shortest, 0.6f), controllable: true, locksAtEnd: true);
+            while (board.ReplayStepForward()) { }
+            Assert.True(board.ReplayFinished);
+            Assert.False(board.IsHoldingReplay);
+            Assert.False(board.AcceptsInput);
+            Assert.True(board.CanControlReplay);
+            Assert.True(board.ReplayStepBack()); // still steppable
+        }
+
+        [Fact]
         public void LockedReplay_CantBeControlled()
         {
             BoardSession board = Loaded();

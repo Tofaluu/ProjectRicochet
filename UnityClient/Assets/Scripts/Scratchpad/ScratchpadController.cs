@@ -108,14 +108,18 @@ namespace Ricochet.Client.Scratchpad
         /// Plays several solutions one after another (e.g. the winner's, then the shortest), each from the
         /// round's start after <paramref name="pauseSeconds"/> on the starting position.
         /// </summary>
-        public void PlayReplays(IReadOnlyList<ReplaySegment> segments, float pauseSeconds, bool lockUntilNextBoard = true)
+        /// <param name="controllable">May the player pause and step it? Default: practice replays that don't lock the
+        /// board (the hint, the match history), never a round's.</param>
+        public void PlayReplays(IReadOnlyList<ReplaySegment> segments, float pauseSeconds, bool lockUntilNextBoard = true,
+            bool? controllable = null)
         {
             CancelSearch();
             StopReplay();
-            // Practice replays (the hint, the match history) can be paused and stepped; a round's never.
-            bool controllable = !lockUntilNextBoard && Session.IsPractice;
+            bool canControl = controllable ?? (!lockUntilNextBoard && Session.IsPractice);
             _replayPause = pauseSeconds;
-            _replay = StartCoroutine(ReplayRoutine(segments, pauseSeconds, lockUntilNextBoard, controllable));
+            _replayLocks = lockUntilNextBoard;
+            _replayControllable = canControl;
+            _replay = StartCoroutine(ReplayRoutine(segments, pauseSeconds, lockUntilNextBoard, canControl));
         }
 
         private IEnumerator ReplayRoutine(IReadOnlyList<ReplaySegment> segments, float pauseSeconds, bool lockUntilNextBoard,
@@ -124,7 +128,7 @@ namespace Ricochet.Client.Scratchpad
             _dragging = false;
             foreach (ReplaySegment segment in segments)
             {
-                Apply(() => Session.BeginReplay(segment, controllable));
+                Apply(() => Session.BeginReplay(segment, controllable, lockUntilNextBoard));
                 yield return Wait(pauseSeconds);
                 yield return PlaySteps(segment);
             }
@@ -164,6 +168,8 @@ namespace Ricochet.Client.Scratchpad
         // ---- Practice replay controls: pause/play and one move back or forward ----
 
         private float _replayPause;
+        private bool _replayLocks;
+        private bool _replayControllable;
 
         /// <summary>Pauses or resumes a practice replay; at its end, plays it again from the start.</summary>
         public void ToggleReplayPause()
@@ -173,7 +179,7 @@ namespace Ricochet.Client.Scratchpad
             ReplaySegment segment = Session.CurrentReplay;
             if (Session.ReplayFinished)
             {
-                PlayReplays(new[] { segment }, _replayPause, lockUntilNextBoard: false);
+                PlayReplays(new[] { segment }, _replayPause, _replayLocks, _replayControllable);
                 return;
             }
             Session.SetReplayPaused(!Session.ReplayPaused);
@@ -185,7 +191,7 @@ namespace Ricochet.Client.Scratchpad
         {
             yield return PlaySteps(segment);
             _replay = null;
-            Session.FinishReplays(lockUntilNextBoard: false);
+            Session.FinishReplays(_replayLocks);
         }
 
         /// <summary>One move forward (+1) or back (-1) in a practice replay; pauses it.</summary>
@@ -495,6 +501,8 @@ namespace Ricochet.Client.Scratchpad
             if (!Session.AcceptsInput)
             {
                 _dragging = false;
+                if (keys != null && !IsTypingInUI())
+                    HandleReplayKeys(keys);
                 HandleHintShortcuts();
                 UpdateMovePreview();
                 return;
@@ -558,7 +566,6 @@ namespace Ricochet.Client.Scratchpad
             Keyboard keyboard = Keyboard.current;
             if (!Session.IsPractice || !Session.IsReplaying || keyboard == null || IsTypingInUI())
                 return;
-            HandleReplayKeys(keyboard);
             if (keyboard.rKey.wasPressedThisFrame)
             {
                 StopReplay();

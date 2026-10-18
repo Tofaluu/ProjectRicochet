@@ -33,8 +33,10 @@ namespace Ricochet.Client.Game
         private bool _roundOver;
         // A finished unlocked replay still on the board (see FinishReplays).
         private bool _replayHeld;
-        // The replay can be paused and stepped through (practice only, never in a round).
+        // The replay can be paused and stepped through (practice, or the player's own perfect daily; never a round's).
         private bool _replayControllable;
+        // Stepping a controllable replay to its end leaves the board locked (true) or held for the player's own try.
+        private bool _replayLocksAtEnd;
 
         public RoundSetup Round { get; private set; }
         public RobotPositions Robots { get; private set; }
@@ -157,10 +159,12 @@ namespace Ricochet.Client.Game
 
         /// <summary>
         /// Starts showing <paramref name="segment"/> from the round's start. <paramref name="controllable"/>: the player
-        /// may pause it and step through it (<see cref="CanControlReplay"/>; practice only).
+        /// may pause it and step through it (<see cref="CanControlReplay"/>); <paramref name="locksAtEnd"/>: stepping
+        /// to its end locks the board (as <see cref="FinishReplays"/> with lockUntilNextBoard) instead of holding it.
         /// </summary>
-        public void BeginReplay(ReplaySegment segment, bool controllable = false)
+        public void BeginReplay(ReplaySegment segment, bool controllable = false, bool locksAtEnd = false)
         {
+            _replayLocksAtEnd = locksAtEnd;
             CurrentReplay = segment;
             ReplayStep = 0;
             ReplayFinished = false;
@@ -201,7 +205,7 @@ namespace Ricochet.Client.Game
                 return false;
             ReplayNextMove();
             if (ReplayStep == CurrentReplay.Moves.Count)
-                FinishReplays(lockUntilNextBoard: false);
+                FinishReplays(_replayLocksAtEnd);
             return true;
         }
 

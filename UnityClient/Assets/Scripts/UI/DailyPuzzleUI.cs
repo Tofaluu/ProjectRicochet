@@ -89,7 +89,8 @@ namespace Ricochet.Client.UI
                     RefreshLeaderboard();
                 // Already perfect: show how, then the board stays on the solved position (locked: nothing to improve).
                 if (_daily.IsPerfect && _daily.BestSolution.Length > 0)
-                    _scratchpad.PlayReplays(new[] { new ReplaySegment("Your solution", _daily.BestSolution, 0.6f) }, 0.5f);
+                    _scratchpad.PlayReplays(new[] { new ReplaySegment("Your solution", _daily.BestSolution, 0.6f) }, 0.5f,
+                        lockUntilNextBoard: true, controllable: true); // their own solution: pause and step freely
             }
             catch (Exception e)
             {
