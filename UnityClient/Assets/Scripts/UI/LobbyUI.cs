@@ -157,9 +157,12 @@ namespace Ricochet.Client.UI
             return button;
         }
 
-        // The name typed for lobbies, also shown on the daily leaderboard (saved like a join saves it).
+        // The name typed for lobbies, also shown on the daily leaderboard (saved like a join saves it). Called just
+        // before the daily puzzle connects, so it also points the connection at the server like a join does (the
+        // NetworkManager's own serialized address is only a stale default).
         private string DailyPlayerName()
         {
+            _network.ServerUrl = _serverInput.text;
             string name = _nameInput.text.Trim();
             if (name.Length > 0)
                 PlayerPrefs.SetString(NamePrefKey, name);
