@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Ricochet.Client.Board
@@ -16,7 +17,10 @@ namespace Ricochet.Client.Board
         private static AudioClip _tick;
         private static AudioClip _start;
         private static AudioClip _boom;
-        private static AudioClip _boomReversed;
+        // How each sound is made (by name), so a reversed version can be made from the same recipe.
+        private static readonly Dictionary<string, (float Seconds, System.Func<float, float> Sample)> Recipes =
+            new Dictionary<string, (float, System.Func<float, float>)>();
+        private static readonly Dictionary<string, AudioClip> ReversedClips = new Dictionary<string, AudioClip>();
 
         /// <summary>A robot stopping against a wall or another robot: a soft, low knock.</summary>
         public static AudioClip Thud => _thud != null ? _thud : (_thud = Create("Thud", 0.16f, t =>
@@ -60,9 +64,21 @@ namespace Ricochet.Client.Board
         /// <summary>Under the big burst: a soft low boom (falling sine plus a puff of noise).</summary>
         public static AudioClip Boom => _boom != null ? _boom : (_boom = Create("Boom", 0.7f, BoomSample));
 
-        /// <summary>The boom played backwards (a "whoomp" sucking in) for an undone burst.</summary>
-        public static AudioClip BoomReversed => _boomReversed != null ? _boomReversed
-            : (_boomReversed = Create("BoomReversed", 0.7f, BoomSample, reversed: true));
+        /// <summary>
+        /// <paramref name="clip"/> played backwards and <paramref name="speed"/> times as fast, like a tape rewinding (an
+        /// undone landing: the thud, the success chime, the boom). Null for a clip this class didn't make.
+        /// </summary>
+        public static AudioClip Reversed(AudioClip clip, float speed)
+        {
+            string key = clip.name + "@" + speed;
+            if (ReversedClips.TryGetValue(key, out AudioClip reversed))
+                return reversed;
+            if (!Recipes.TryGetValue(clip.name, out var recipe))
+                return null;
+            reversed = Create(clip.name + " Reversed", recipe.Seconds / speed, t => recipe.Sample(t * speed), reversed: true);
+            ReversedClips[key] = reversed;
+            return reversed;
+        }
 
         private static float BoomSample(float t)
         {
@@ -97,6 +113,8 @@ namespace Ricochet.Client.Board
 
         private static AudioClip Create(string name, float seconds, System.Func<float, float> sample, bool reversed = false)
         {
+            if (!reversed)
+                Recipes[name] = (seconds, sample);
             int count = Mathf.CeilToInt(seconds * Rate);
             var data = new float[count];
             for (int i = 0; i < count; i++)

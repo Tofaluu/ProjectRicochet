@@ -93,6 +93,7 @@ namespace Ricochet.Client.Board
             _content.SetParent(transform, false);
             _robots.Clear();
             _particles.Clear();
+            _pendingSounds.Clear();
             _hasSelection = false;
 
             if (Camera.main != null)
@@ -292,6 +293,13 @@ namespace Ricochet.Client.Board
                 _targetGlow.transform.localScale = new Vector3(1.5f * pulse, 1.5f * pulse, 1f);
             }
             UpdateParticles(time);
+            for (int i = _pendingSounds.Count - 1; i >= 0; i--)
+            {
+                if (time < _pendingSounds[i].At)
+                    continue;
+                Play(_pendingSounds[i].Clip, _pendingSounds[i].Volume);
+                _pendingSounds.RemoveAt(i);
+            }
 
             // The big burst shakes the board for a moment (rewound: the shake builds up to the moment it started).
             float shake = time < _shakeUntil ? (_shakeUntil - time) / ShakeSeconds
@@ -639,10 +647,15 @@ namespace Ricochet.Client.Board
             public List<(ParticleSpec Spec, float At)> Trail;
             public float SlideSeconds;
             public Vector2 LookBefore;
+            // The sounds it played (thud, success, boom), played reversed when it's rewound.
+            public readonly List<(AudioClip Clip, float Volume)> Sounds = new List<(AudioClip, float)>();
         }
 
         // The landing being recorded (set around Impact), or null.
         private Landing _recording;
+        // Reversed landing sounds scheduled to end as the robot sets off back (dropped if the rewind is cut short).
+        private readonly List<(float At, AudioClip Clip, float Volume, Landing Landing)> _pendingSounds =
+            new List<(float, AudioClip, float, Landing)>();
         private bool _celebrated;
         private const float RewindSpeed = 1.6f;
         // The slide back (and its reversed trail) relative to a normal slide; 1 = as fast as the move it undoes.
@@ -761,7 +774,15 @@ namespace Ricochet.Client.Board
                 robot.Exploded = true;
                 _rewindShakeStart = time + hold - ShakeSeconds / RewindSpeed;
                 _rewindShakeEnd = time + hold;
-                Play(BoardSounds.BoomReversed, 0.8f);
+            }
+            // Its sounds backwards, at the rewind's speed, each ending as the robot sets off back (where it began).
+            foreach ((AudioClip clip, float volume) in landing.Sounds)
+            {
+                if (clip == BoardSounds.Success)
+                    continue; // the reversed boom already carries an undone win; a backwards chime is just noise
+                AudioClip reversed = BoardSounds.Reversed(clip, RewindSpeed);
+                if (reversed != null)
+                    _pendingSounds.Add((time + Mathf.Max(0f, hold - reversed.length), reversed, volume, landing));
             }
 
             // The slide's trail in reverse once the robot sets off back (at its normal speed, so it takes as long): a
@@ -783,6 +804,7 @@ namespace Ricochet.Client.Board
         private void FinishRewind(RobotVisual robot)
         {
             RemoveParticles(robot.LastRewind, reverse: true);
+            _pendingSounds.RemoveAll(sound => sound.Landing == robot.LastRewind);
             if (robot.Rewinding != null)
             {
                 robot.Exploded = false;
@@ -807,6 +829,7 @@ namespace Ricochet.Client.Board
 
         private void Play(AudioClip clip, float volume)
         {
+            _recording?.Sounds.Add((clip, volume));
             if (_audio != null && _volume > 0f && !PlayerSettings.Muted)
                 _audio.PlayOneShot(clip, volume * _volume);
         }
