@@ -58,11 +58,12 @@
 .main--home { flex-direction: row-reverse; }
 .stage { flex-grow: 1; flex-basis: 0; min-width: 320px; }
 .stage-head { flex-direction: row; justify-content: space-between; align-items: center; min-height: 40px; }
-.goal { flex-direction: row; align-items: center; flex-shrink: 1; }
+.goal { flex-direction: row; align-items: center; flex-grow: 1; flex-shrink: 1; flex-basis: 0; min-width: 0; }
 .goal-icon { width: 24px; height: 24px; -unity-background-scale-mode: scale-to-fit; flex-shrink: 0; }
-.goal-label { font-size: 17px; margin-left: 10px; white-space: normal; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
-.banner { padding: 7px 14px; border-radius: 10px; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); flex-shrink: 0; margin-left: 12px; }
-.replay-bar { flex-direction: row; align-items: center; margin-left: auto; }
+.goal-label { font-size: 17px; margin-left: 10px; white-space: normal; flex-shrink: 1; min-width: 0; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
+.banner { padding: 7px 14px; border-radius: 10px; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); flex-shrink: 0; margin-left: auto; }
+/* After the banner, at the far right: banner text changes move the banner, never the buttons under the cursor. */
+.replay-bar { flex-direction: row; align-items: center; flex-shrink: 0; margin-left: 8px; }
 .board-area { flex-grow: 1; margin: 10px 0; min-height: 300px; }
 .board-controls { flex-direction: row; margin: 0 -5px; }
 /* First visit only: how to move, floating over the bottom of the board until the first move. */
@@ -119,6 +120,8 @@
 .app .btn--square { width: 48px; padding: 0; }
 .board-controls .btn { flex-grow: 1; flex-basis: 0; margin: 0 5px; }
 .replay-bar .btn { margin: 0 4px; }
+/* One width for Pause / Play / Again, so the bar doesn't shift when the label changes. */
+.app #replay-pause { width: 84px; padding: 0; }
 
 /* ---- Daily result ---- */
 .stat { flex-grow: 1; flex-basis: 0; background-color: var(--input); border-radius: 12px; padding: 10px 12px; margin-right: 8px; }
