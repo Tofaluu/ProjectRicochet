@@ -413,6 +413,29 @@ namespace Ricochet.Client.Scratchpad
         /// Turns exact-length practice boards on (deals one, unless the board shown already has the length) or
         /// off (the board stays; N deals plain random boards again).
         /// </summary>
+        /// <summary>
+        /// Plain random practice boards for now, even with puzzle mode saved on (e.g. the Play with friends screen); the
+        /// saved setting isn't touched. Changing it swaps a practice board that no longer fits (a puzzle board here, or a
+        /// plain one once puzzle mode applies again).
+        /// </summary>
+        public bool PlainPractice
+        {
+            get => _plainPractice;
+            set
+            {
+                if (_plainPractice == value)
+                    return;
+                _plainPractice = value;
+                if (!Session.IsPractice || Session.IsReplaying)
+                    return;
+                if (PuzzleMode ? _shownShortest != PlayerSettings.PracticeMoves : _shownShortest > 0 || _search != null)
+                    NewBoard();
+            }
+        }
+
+        private bool _plainPractice;
+        private bool PuzzleMode => PlayerSettings.PracticeExact && !_plainPractice;
+
         public void SetPracticeExact(bool on)
         {
             PlayerSettings.PracticeExact = on;
@@ -435,7 +458,7 @@ namespace Ricochet.Client.Scratchpad
         private void NewBoard()
         {
             _searchSeed = _seed != 0 ? _seed : Random.Range(1, int.MaxValue);
-            if (!PlayerSettings.PracticeExact)
+            if (!PuzzleMode)
             {
                 // Any random board, its length unknown.
                 RoundSetup generated = BoardGenerator.GenerateRound(new System.Random(_searchSeed));

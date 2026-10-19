@@ -51,6 +51,10 @@ namespace Ricochet.Client.App
         private string _shownLobbyPlayers, _shownMatchPlayers, _shownHistory;
         private int _historyIndex = -1;
         private float _copiedUntil;
+        private ScrollView _side;
+        private float _scrollTarget, _scrollSetTo;
+        private bool _scrollGliding;
+        private const float WheelStep = 60f, GlideRate = 18f;
         private TextField _nameField, _codeField;
         private readonly List<(Button Switch, Func<bool> IsOn)> _switches = new List<(Button, Func<bool>)>();
         private readonly List<(Label Value, Button Minus, Button Plus)> _steppers = new List<(Label, Button, Button)>();
@@ -134,8 +138,10 @@ namespace Ricochet.Client.App
             _overlayHint = _root.Q<Label>("overlay-hint");
             _replayBar = _root.Q("replay-bar");
             _settings = _root.Q("settings");
-            // The default wheel step (a few pixels) makes the side panel feel stuck.
-            _root.Q<ScrollView>("side").mouseWheelScrollSize = 90f;
+            // The side panel scrolls smoothly: wheel and trackpad events move a target the panel glides to (the
+            // ScrollView's own wheel handling jumps a fixed step per event, which stutters on a trackpad).
+            _side = _root.Q<ScrollView>("side");
+            _side.RegisterCallback<WheelEvent>(OnSideWheel, TrickleDown.TrickleDown);
 
             _navHome = Click("nav-home", () => Choose(Screen.Home));
             _navDaily = Click("nav-daily", OpenDaily);
@@ -393,6 +399,38 @@ namespace Ricochet.Client.App
             _steppers.Add((value, minus, plus));
         }
 
+        private void OnSideWheel(WheelEvent e)
+        {
+            float max = Mathf.Max(0f, _side.contentContainer.layout.height - _side.contentViewport.layout.height);
+            if (!_scrollGliding)
+                _scrollTarget = _side.scrollOffset.y;
+            _scrollTarget = Mathf.Clamp(_scrollTarget + e.delta.y * WheelStep, 0f, max);
+            _scrollSetTo = _side.scrollOffset.y;
+            _scrollGliding = true;
+            e.StopPropagation(); // not the ScrollView's own step-per-event scrolling too
+        }
+
+        // Eases the side panel towards the wheel's target; dragging the scrollbar meanwhile takes over.
+        private void GlideSide()
+        {
+            if (!_scrollGliding)
+                return;
+            float current = _side.scrollOffset.y;
+            if (Mathf.Abs(current - _scrollSetTo) > 1f)
+            {
+                _scrollGliding = false; // the player moved it themselves
+                return;
+            }
+            float next = Mathf.Lerp(current, _scrollTarget, 1f - Mathf.Exp(-GlideRate * Time.unscaledDeltaTime));
+            if (Mathf.Abs(next - _scrollTarget) < 0.5f)
+            {
+                next = _scrollTarget;
+                _scrollGliding = false;
+            }
+            _side.scrollOffset = new Vector2(_side.scrollOffset.x, next);
+            _scrollSetTo = _side.scrollOffset.y;
+        }
+
         // ---- Actions ----
 
         private void Choose(Screen screen)
@@ -423,7 +461,10 @@ namespace Ricochet.Client.App
                 Scratchpad.Camera.backgroundColor = Ground;
 
             CloseSettingsOnOutsideClick();
+            GlideSide();
             Screen screen = Current;
+            // Puzzle mode is the Practice side's: Play with friends and the lobby get plain random boards.
+            Scratchpad.PlainPractice = screen == Screen.Play || screen == Screen.Lobby || screen == Screen.Match;
             _main.EnableInClassList("main--home", screen == Screen.Home);
             foreach (KeyValuePair<Screen, VisualElement> pair in _screens)
                 pair.Value.EnableInClassList("is-visible", pair.Key == screen);
