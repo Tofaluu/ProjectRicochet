@@ -28,6 +28,9 @@ namespace Ricochet.Editor
 
         private static void Build(BuildTarget target, string path)
         {
+            // No "Made with Unity" splash: optional since Unity 6, Personal licence included. The game starts on our
+            // own loading page instead.
+            PlayerSettings.SplashScreen.show = false;
             var options = new BuildPlayerOptions
             {
                 scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray(),
