@@ -16,6 +16,7 @@ namespace Ricochet.Client.Board
         private static AudioClip _tick;
         private static AudioClip _start;
         private static AudioClip _boom;
+        private static AudioClip _boomReversed;
 
         /// <summary>A robot stopping against a wall or another robot: a soft, low knock.</summary>
         public static AudioClip Thud => _thud != null ? _thud : (_thud = Create("Thud", 0.16f, t =>
@@ -57,13 +58,19 @@ namespace Ricochet.Client.Board
             (Mathf.Sin(2f * Mathf.PI * 1320f * t) + 0.3f * Mathf.Sin(2f * Mathf.PI * 660f * t)) * Mathf.Exp(-t * 7f) * 0.25f));
 
         /// <summary>Under the big burst: a soft low boom (falling sine plus a puff of noise).</summary>
-        public static AudioClip Boom => _boom != null ? _boom : (_boom = Create("Boom", 0.7f, t =>
+        public static AudioClip Boom => _boom != null ? _boom : (_boom = Create("Boom", 0.7f, BoomSample));
+
+        /// <summary>The boom played backwards (a "whoomp" sucking in) for an undone burst.</summary>
+        public static AudioClip BoomReversed => _boomReversed != null ? _boomReversed
+            : (_boomReversed = Create("BoomReversed", 0.7f, BoomSample, reversed: true));
+
+        private static float BoomSample(float t)
         {
             float pitch = Mathf.Lerp(110f, 45f, Mathf.Clamp01(t / 0.35f));
             float body = Mathf.Sin(2f * Mathf.PI * pitch * t) * Mathf.Exp(-t * 6f);
             float puff = (Random.value * 2f - 1f) * Mathf.Exp(-t * 18f) * 0.35f;
             return (body + puff) * 0.6f;
-        }));
+        }
 
         /// <summary>Reached the target, but not in fewer moves than the best: a low, falling "uh-uh".</summary>
         public static AudioClip NotShorter => _notShorter != null ? _notShorter : (_notShorter = Create("NotShorter", 0.45f, t =>
@@ -88,7 +95,7 @@ namespace Ricochet.Client.Board
             return sum;
         }
 
-        private static AudioClip Create(string name, float seconds, System.Func<float, float> sample)
+        private static AudioClip Create(string name, float seconds, System.Func<float, float> sample, bool reversed = false)
         {
             int count = Mathf.CeilToInt(seconds * Rate);
             var data = new float[count];
@@ -101,6 +108,8 @@ namespace Ricochet.Client.Board
                 float fade = Mathf.Clamp01(t / 0.003f) * fadeOut * fadeOut;
                 data[i] = Mathf.Clamp(sample(t) * fade, -1f, 1f);
             }
+            if (reversed)
+                System.Array.Reverse(data); // the fades swap ends too, so it still never pops
             AudioClip clip = AudioClip.Create(name, count, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;

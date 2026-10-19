@@ -186,29 +186,45 @@ namespace Ricochet.Client.Board
             foreach (KeyValuePair<RobotColor, RobotVisual> pair in _robots)
             {
                 RobotVisual robot = pair.Value;
-                if (robot.Exploded)
-                {
-                    // A reset, undo or replay brings a blown-up robot back, popping in where it now stands.
-                    robot.Exploded = false;
-                    robot.PoppedInAt = Time.time;
-                }
+                // A rewind still playing is cut short, like a slide: the robot is where it was going.
+                if (robot.Rewinding != null)
+                    FinishRewind(robot);
                 // A robot still sliding from the previous move finishes it instantly first; otherwise
                 // it would cut diagonally from mid-slide to the new destination.
                 robot.Root.localPosition = robot.Destination;
 
                 Vector3 destination = CellCenter(robots[pair.Key]);
                 Vector3 delta = destination - robot.Destination;
+                // A step back (undo, a replay stepped back) from where this robot last landed rewinds that landing.
+                Landing rewind = null;
+                if (quiet && !instant && delta != Vector3.zero)
+                {
+                    if (robot.Landings.Count > 0 && robot.Landings.Peek().At == robot.Destination)
+                        rewind = robot.Landings.Pop();
+                    else
+                        robot.Landings.Clear(); // out of step with the board's history: nothing to rewind
+                }
+                if (robot.Exploded && rewind == null)
+                {
+                    // A reset, undo or replay brings a blown-up robot back, popping in where it now stands.
+                    robot.Exploded = false;
+                    robot.PoppedInAt = Time.time;
+                }
                 robot.Destination = destination;
                 if (instant || delta == Vector3.zero)
                 {
                     robot.Moving = false;
                     robot.Root.localPosition = destination;
+                    if (instant && delta != Vector3.zero)
+                        robot.Landings.Clear(); // a jump (reset, a new replay) leaves no landings to rewind
                     continue;
                 }
                 robot.Moving = true;
                 robot.Quiet = quiet;
                 robot.Heading = delta.normalized;
                 robot.GhostDistance = 0f;
+                if (rewind != null)
+                    StartRewind(robot, rewind);
             }
         }
 
@@ -273,11 +289,12 @@ namespace Ricochet.Client.Board
             }
             UpdateParticles(time);
 
-            // The big burst shakes the board for a moment.
+            // The big burst shakes the board for a moment (rewound: the shake builds up to the moment it started).
+            float shake = time < _shakeUntil ? (_shakeUntil - time) / ShakeSeconds
+                : time >= _rewindShakeStart && time < _rewindShakeEnd ? (time - _rewindShakeStart) / (_rewindShakeEnd - _rewindShakeStart)
+                : 0f;
             if (_content != null)
-                _content.localPosition = time < _shakeUntil
-                    ? (Vector3)(Random.insideUnitCircle * 0.14f * ((_shakeUntil - time) / ShakeSeconds))
-                    : Vector3.zero;
+                _content.localPosition = shake > 0f ? (Vector3)(Random.insideUnitCircle * 0.14f * shake) : Vector3.zero;
         }
 
         // ---- Robots ----
@@ -304,6 +321,11 @@ namespace Ricochet.Client.Board
             public bool Exploded;
             public float ExplodedAt = -10f;
             public float PoppedInAt = -10f;
+            // Its landings so far, newest on top, for rewinding them one by one.
+            public readonly Stack<Landing> Landings = new Stack<Landing>();
+            // A celebration playing backwards before the slide back, until RewindEnd (null = none).
+            public Landing Rewinding;
+            public float RewindEnd;
         }
 
         private const float SwellSeconds = 0.1f, PopInSeconds = 0.3f;
@@ -311,6 +333,13 @@ namespace Ricochet.Client.Board
         // The robot's overall size around the big burst (1 = normal).
         private static float BurstScale(RobotVisual robot, float time)
         {
+            if (robot.Exploded && robot.Rewinding != null)
+            {
+                // The swell in reverse: gone until the end of the rewind, then back from a little too big.
+                float window = SwellSeconds / RewindSpeed;
+                float left = robot.RewindEnd - time;
+                return left > window ? 0f : 1f + 0.3f * Mathf.Max(0f, left) / window;
+            }
             if (robot.Exploded)
             {
                 float t = time - robot.ExplodedAt;
@@ -369,6 +398,13 @@ namespace Ricochet.Client.Board
         {
             Vector3 along = robot.Heading;
             float stretch = 0f;
+            if (robot.Rewinding != null && time >= robot.RewindEnd)
+            {
+                // The celebration has played backwards: whole again, now slide back.
+                robot.Rewinding = null;
+                robot.Exploded = false;
+                robot.Moving = robot.Root.localPosition != robot.Destination;
+            }
             if (robot.Moving)
             {
                 Vector3 from = robot.Root.localPosition;
@@ -383,7 +419,15 @@ namespace Ricochet.Client.Board
                     if (!robot.Quiet)
                     {
                         robot.ImpactTime = time;
+                        // Record what the landing sets off, so it can be rewound.
+                        var landing = new Landing { At = robot.Destination };
+                        _recording = landing;
+                        _celebrated = false;
                         Impact(color, robot);
+                        _recording = null;
+                        landing.Celebrated = _celebrated;
+                        landing.Exploded = robot.Exploded;
+                        robot.Landings.Push(landing);
                     }
                 }
             }
@@ -462,6 +506,7 @@ namespace Ricochet.Client.Board
                 Play(BoardSounds.NotShorter, 0.8f);
                 return;
             }
+            _celebrated = true;
             bool ownSolve = _mode == BoardMode.Practice || _mode == BoardMode.Round;
             if (PlayerSettings.BigBurst)
             {
@@ -528,23 +573,68 @@ namespace Ricochet.Client.Board
 
         // ---- Short-lived effect sprites ----
 
+        // One effect sprite as spawned: enough to play it again, forwards or backwards.
+        private sealed class ParticleSpec
+        {
+            public Sprite Sprite;
+            public Color Color;
+            public Vector3 Start, Velocity;
+            public float StartSize, EndSize, Life;
+            public int Order;
+            public string Name;
+        }
+
         private sealed class Particle
         {
             public SpriteRenderer Renderer;
-            public Color Color;
-            public Vector3 Velocity;
-            public float Born, Life, StartSize, EndSize;
+            public ParticleSpec Spec;
+            public float Born;
+            // Played backwards from its end, Speed times as fast (an undone landing's rewind).
+            public bool Reverse;
+            public float Speed = 1f;
+            // The landing it belongs to (if any), so a rewind can take over from it.
+            public Landing Landing;
         }
+
+        // Everything a robot's landing set off (dust, a celebration), kept per robot so undo / a replay stepped back can
+        // play it backwards (RobotVisual.Landings).
+        private sealed class Landing
+        {
+            public Vector3 At;
+            public readonly List<ParticleSpec> Specs = new List<ParticleSpec>();
+            // It reached the target with a celebration (rewound before the robot slides back), and blew the robot up.
+            public bool Celebrated, Exploded;
+        }
+
+        // The landing being recorded (set around Impact), or null.
+        private Landing _recording;
+        private bool _celebrated;
+        private const float RewindSpeed = 1.6f;
+        private float _rewindShakeStart = -10f, _rewindShakeEnd = -10f;
+
+        // Drag: speed falls to 4% per second, so a particle starting at v has moved v * Drift(age) after age seconds
+        // (the exact distance, so the same particle can be placed at any age - which a rewind needs).
+        private static readonly float DragRate = -Mathf.Log(0.04f);
+        private static float Drift(float age) => (1f - Mathf.Exp(-DragRate * age)) / DragRate;
 
         private void Spawn(Sprite sprite, Color color, Vector3 at, Vector3 velocity, float startSize, float endSize, float life, int order,
             string name = "Effect")
         {
-            SpriteRenderer renderer = CreateSprite(name, sprite, color, at, new Vector2(startSize, startSize), order);
-            _particles.Add(new Particle
+            var spec = new ParticleSpec
             {
-                Renderer = renderer, Color = color, Velocity = velocity,
-                Born = Time.time, Life = life, StartSize = startSize, EndSize = endSize,
-            });
+                Sprite = sprite, Color = color, Start = at, Velocity = velocity,
+                StartSize = startSize, EndSize = endSize, Life = life, Order = order, Name = name,
+            };
+            _recording?.Specs.Add(spec);
+            AddParticle(spec, reverse: false, 1f, _recording);
+        }
+
+        private void AddParticle(ParticleSpec spec, bool reverse, float speed, Landing landing)
+        {
+            SpriteRenderer renderer = CreateSprite(spec.Name, spec.Sprite, spec.Color, spec.Start,
+                new Vector2(spec.StartSize, spec.StartSize), spec.Order);
+            _particles.Add(new Particle { Renderer = renderer, Spec = spec, Born = Time.time, Reverse = reverse, Speed = speed, Landing = landing });
+            PlaceParticle(_particles[_particles.Count - 1], reverse ? spec.Life : 0f);
         }
 
         private void UpdateParticles(float time)
@@ -552,23 +642,79 @@ namespace Ricochet.Client.Board
             for (int i = _particles.Count - 1; i >= 0; i--)
             {
                 Particle p = _particles[i];
-                float t = (time - p.Born) / p.Life;
-                if (t >= 1f || p.Renderer == null)
+                float elapsed = (time - p.Born) * p.Speed;
+                float age = p.Reverse ? p.Spec.Life - elapsed : elapsed;
+                if (age >= p.Spec.Life && !p.Reverse || age <= 0f && p.Reverse || p.Renderer == null)
                 {
-                    if (p.Renderer != null)
-                        Destroy(p.Renderer.gameObject);
-                    _particles.RemoveAt(i);
+                    RemoveParticle(i);
                     continue;
                 }
-                Transform tr = p.Renderer.transform;
-                tr.localPosition += p.Velocity * Time.deltaTime;
-                p.Velocity *= Mathf.Pow(0.04f, Time.deltaTime); // drag
-                float size = Mathf.Lerp(p.StartSize, p.EndSize, t);
-                tr.localScale = new Vector3(size, size, 1f);
-                Color c = p.Color;
-                c.a *= 1f - t * t;
-                p.Renderer.color = c;
+                PlaceParticle(p, age);
             }
+        }
+
+        private static void PlaceParticle(Particle p, float age)
+        {
+            ParticleSpec s = p.Spec;
+            float t = Mathf.Clamp01(age / s.Life);
+            Transform tr = p.Renderer.transform;
+            tr.localPosition = s.Start + s.Velocity * Drift(age);
+            float size = Mathf.Lerp(s.StartSize, s.EndSize, t);
+            tr.localScale = new Vector3(size, size, 1f);
+            Color c = s.Color;
+            c.a *= 1f - t * t;
+            p.Renderer.color = c;
+        }
+
+        private void RemoveParticle(int index)
+        {
+            if (_particles[index].Renderer != null)
+                Destroy(_particles[index].Renderer.gameObject);
+            _particles.RemoveAt(index);
+        }
+
+        private void RemoveParticles(Landing landing, bool reverse)
+        {
+            for (int i = _particles.Count - 1; i >= 0; i--)
+                if (_particles[i].Landing == landing && _particles[i].Reverse == reverse)
+                    RemoveParticle(i);
+        }
+
+        // ---- Rewind (undo / a replay stepped back) ----
+
+        // Plays the robot's last landing backwards: its dust (and celebration: the burst flies back in, the shake builds
+        // up, the boom sucks in, the robot reforms) - a celebration first, then the slide back; plain dust while it slides.
+        private void StartRewind(RobotVisual robot, Landing landing)
+        {
+            RemoveParticles(landing, reverse: false); // still flying from the landing itself: the rewind takes over
+            float duration = 0f;
+            foreach (ParticleSpec spec in landing.Specs)
+            {
+                AddParticle(spec, reverse: true, RewindSpeed, landing);
+                duration = Mathf.Max(duration, spec.Life / RewindSpeed);
+            }
+            if (!landing.Celebrated)
+                return;
+            float time = Time.time;
+            robot.Rewinding = landing;
+            robot.RewindEnd = time + duration;
+            robot.Moving = false; // held until the celebration has played backwards (AnimateRobot)
+            if (landing.Exploded)
+            {
+                robot.Exploded = true;
+                _rewindShakeStart = time + duration - ShakeSeconds / RewindSpeed;
+                _rewindShakeEnd = time + duration;
+                Play(BoardSounds.BoomReversed, 0.8f);
+            }
+        }
+
+        // Cuts a rewind short (the player moved on): its effects vanish and the robot is whole, wherever it was going.
+        private void FinishRewind(RobotVisual robot)
+        {
+            RemoveParticles(robot.Rewinding, reverse: true);
+            robot.Rewinding = null;
+            robot.Exploded = false;
+            _rewindShakeEnd = -10f;
         }
 
         /// <summary>Another player locked in a new best solution.</summary>
