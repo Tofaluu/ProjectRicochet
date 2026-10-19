@@ -33,6 +33,8 @@ namespace Ricochet.Client.Board
         private GUIStyle _bodyStyle;
         private GUIStyle _headerStyle;
         private GUIStyle _keyStyle;
+        private GUIStyle _linkStyle;
+        private GUIStyle _rowStyle;
         private GUIStyle _toggleStyle;
 
         private GameTheme Colors => GameTheme.OrDefault(_theme);
@@ -192,6 +194,14 @@ namespace Ricochet.Client.Board
                 normal = { background = ShapeSprites.RoundedTexture(6), textColor = Colors.PanelText },
                 border = new RectOffset(6, 6, 6, 6), padding = new RectOffset(9, 9, 0, 0),
             };
+            // _keyStyle's look works for a button too (its background stays the same on hover; DrawCard tints it).
+            _keyStyle.hover = _keyStyle.normal;
+            _keyStyle.active = _keyStyle.normal;
+            // Control row words: one line, measured exactly (the body style wraps, which clipped them).
+            _rowStyle = new GUIStyle(_bodyStyle) { wordWrap = false, clipping = TextClipping.Overflow, padding = new RectOffset() };
+            _linkStyle = new GUIStyle(_rowStyle);
+            _linkStyle.hover = new GUIStyleState { textColor = Colors.PanelText };
+            _linkStyle.active = new GUIStyleState { textColor = Colors.PanelText };
             _toggleStyle = new GUIStyle(GUI.skin.button)
             {
                 alignment = TextAnchor.MiddleCenter, font = Colors.BoldFont, fontSize = 13,
@@ -319,19 +329,23 @@ namespace Ricochet.Client.Board
             if (session.IsPractice && session.HintText != null)
                 status += "\n" + session.HintText;
 
-            var controls = new List<(string action, string[] keys)>
+            // Rows of (label words, key chips); a word or chip with an action can be clicked to do it, so the
+            // game also works with the mouse alone (selecting and moving already do: click a robot, then a dot or drag).
+            var controls = new List<((string text, ControlAction? action)[] words, (string key, ControlAction? action)[] keys)>
             {
-                ("Select", new[] { "Click", "1-4", "Tab" }),
-                ("Move", new[] { "Arrows", "WASD", "Drag" }),
-                ("Undo / reset", new[] { "Z", "R" }),
+                (Words(("Select", null)), Keys(("Click", null), ("1-4", null), ("Tab", null))),
+                (Words(("Move", null)), Keys(("Arrows", null), ("WASD", null), ("Drag", null))),
+                (Words(("Undo", ControlAction.Undo), ("Reset", ControlAction.Reset)),
+                    Keys(("Z", ControlAction.Undo), ("R", ControlAction.Reset))),
             };
             if (session.IsPractice)
             {
-                controls.Add(("New board", new[] { "N" }));
-                controls.Add(("Shortest", new[] { "H" }));
+                controls.Add((Words(("New board", ControlAction.NewBoard)), Keys(("N", ControlAction.NewBoard))));
+                controls.Add((Words(("Shortest", ControlAction.Shortest)), Keys(("H", ControlAction.Shortest))));
             }
             if (session.CanControlReplay)
-                controls.Add(("Replay", new[] { "Space", ",", "." }));
+                controls.Add((Words(("Replay", null)),
+                    Keys(("Space", ControlAction.ReplayPause), (",", ControlAction.ReplayBack), (".", ControlAction.ReplayForward))));
 
             float goalHeight = Mathf.Max(28f, _goalStyle.CalcHeight(new GUIContent(goal), inner - 36f));
             float statusHeight = _bodyStyle.CalcHeight(new GUIContent(status), inner);
@@ -360,14 +374,44 @@ namespace Ricochet.Client.Board
             Color body = _bodyStyle.normal.textColor;
             _bodyStyle.normal.textColor = Colors.MutedText;
             GUI.backgroundColor = Tint(Colors.Input);
-            foreach ((string action, string[] keys) in controls)
+            _rowStyle.normal.textColor = Colors.MutedText;
+            _linkStyle.normal.textColor = Colors.MutedText;
+            _linkStyle.hover.textColor = Colors.PanelText;
+            foreach (var (words, keys) in controls)
             {
-                GUI.Label(new Rect(x, y, actionWidth, rowHeight - 4f), action, _bodyStyle);
+                float wordX = x;
+                for (int i = 0; i < words.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        float slash = _rowStyle.CalcSize(new GUIContent(" / ")).x;
+                        GUI.Label(new Rect(wordX, y, slash, rowHeight - 4f), " / ", _rowStyle);
+                        wordX += slash;
+                    }
+                    (string text, ControlAction? action) = words[i];
+                    float width = _rowStyle.CalcSize(new GUIContent(text)).x;
+                    var rect = new Rect(wordX, y, width, rowHeight - 4f);
+                    if (action == null)
+                        GUI.Label(rect, text, _rowStyle);
+                    else
+                        Clickable(rect, text, _linkStyle, action.Value);
+                    wordX += width;
+                }
                 float keyX = x + actionWidth;
-                foreach (string key in keys)
+                foreach ((string key, ControlAction? action) in keys)
                 {
                     float width = _keyStyle.CalcSize(new GUIContent(key)).x + 2f;
-                    GUI.Label(new Rect(keyX, y + 1f, width, rowHeight - 8f), key, _keyStyle);
+                    var rect = new Rect(keyX, y + 1f, width, rowHeight - 8f);
+                    if (action == null)
+                        GUI.Label(rect, key, _keyStyle);
+                    else
+                    {
+                        // Brighter under the pointer, so it reads as a button.
+                        GUI.backgroundColor = Tint(rect.Contains(Event.current.mousePosition) && _controller.CanPerform(action.Value)
+                            ? Color.Lerp(Colors.Input, Colors.PanelText, 0.25f) : Colors.Input);
+                        Clickable(rect, key, _keyStyle, action.Value);
+                        GUI.backgroundColor = Tint(Colors.Input);
+                    }
                     keyX += width + 6f;
                 }
                 y += rowHeight;
@@ -375,6 +419,19 @@ namespace Ricochet.Client.Board
             _bodyStyle.normal.textColor = body;
             GUI.backgroundColor = previous;
             return card;
+        }
+
+        private static (string, ControlAction?)[] Words(params (string, ControlAction?)[] words) => words;
+        private static (string, ControlAction?)[] Keys(params (string, ControlAction?)[] keys) => keys;
+
+        // A word or key chip that does its control when clicked; greyed out when it can't right now.
+        private void Clickable(Rect rect, string text, GUIStyle style, ControlAction action)
+        {
+            bool wasEnabled = GUI.enabled;
+            GUI.enabled = _controller.CanPerform(action);
+            if (GUI.Button(rect, text, style))
+                _controller.Perform(action);
+            GUI.enabled = wasEnabled;
         }
 
         // In browser builds (linear colour space) IMGUI gamma-corrects tint colours once more than on desktop,

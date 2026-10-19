@@ -11,6 +11,18 @@ using UnityEngine.UI;
 
 namespace Ricochet.Client.Scratchpad
 {
+    /// <summary>The controls that work by key or by clicking them on the controls card (<see cref="ScratchpadController.Perform"/>).</summary>
+    public enum ControlAction
+    {
+        Undo,
+        Reset,
+        NewBoard,
+        Shortest,
+        ReplayPause,
+        ReplayBack,
+        ReplayForward,
+    }
+
     /// <summary>
     /// Drives the <see cref="BoardSession"/> the player sees: input, replay timing, offline boards and
     /// hints, and the camera. The state lives in <see cref="Session"/>; <see cref="BoardView"/> draws the
@@ -211,11 +223,63 @@ namespace Ricochet.Client.Scratchpad
         // Space pauses/plays, comma and period step (like a video player's frame keys).
         private void HandleReplayKeys(Keyboard keyboard)
         {
-            if (!Session.CanControlReplay)
+            if (keyboard.spaceKey.wasPressedThisFrame) Perform(ControlAction.ReplayPause);
+            if (keyboard.commaKey.wasPressedThisFrame) Perform(ControlAction.ReplayBack);
+            if (keyboard.periodKey.wasPressedThisFrame) Perform(ControlAction.ReplayForward);
+        }
+
+        /// <summary>
+        /// Whether a control does anything right now (the overlay greys out the ones that don't). Mirrors the keys:
+        /// new board and shortest are practice only, undo/reset need a board taking moves - except that a practice
+        /// hint still playing can be cut short with reset or new board - and the replay controls need a controllable replay.
+        /// </summary>
+        public bool CanPerform(ControlAction action)
+        {
+            if (_search != null)
+                return action == ControlAction.NewBoard; // stops looking
+            switch (action)
+            {
+                case ControlAction.ReplayPause:
+                case ControlAction.ReplayBack:
+                case ControlAction.ReplayForward:
+                    return Session.CanControlReplay;
+                case ControlAction.Undo:
+                    return Session.AcceptsInput;
+                case ControlAction.Reset:
+                    return Session.AcceptsInput || (Session.IsPractice && Session.IsReplaying);
+                case ControlAction.NewBoard:
+                    return Session.IsPractice && (Session.AcceptsInput || Session.IsReplaying);
+                case ControlAction.Shortest:
+                    return Session.IsPractice && Session.AcceptsInput;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>A control from the keyboard or a click on the overlay's controls card: both go through here.</summary>
+        public void Perform(ControlAction action)
+        {
+            if (!CanPerform(action))
                 return;
-            if (keyboard.spaceKey.wasPressedThisFrame) ToggleReplayPause();
-            if (keyboard.commaKey.wasPressedThisFrame) StepReplay(-1);
-            if (keyboard.periodKey.wasPressedThisFrame) StepReplay(1);
+            if (_search != null)
+            {
+                CancelSearch();
+                return;
+            }
+            switch (action)
+            {
+                case ControlAction.ReplayPause: ToggleReplayPause(); break;
+                case ControlAction.ReplayBack: StepReplay(-1); break;
+                case ControlAction.ReplayForward: StepReplay(1); break;
+                case ControlAction.Undo: Undo(); break;
+                case ControlAction.Reset:
+                    if (!Session.AcceptsInput)
+                        StopReplay(); // the practice hint, cut short
+                    ResetToStart();
+                    break;
+                case ControlAction.NewBoard: NewBoard(); break;
+                case ControlAction.Shortest: RequestHint(); break;
+            }
         }
 
         /// <summary>
@@ -567,14 +631,9 @@ namespace Ricochet.Client.Scratchpad
             if (!Session.IsPractice || !Session.IsReplaying || keyboard == null || IsTypingInUI())
                 return;
             if (keyboard.rKey.wasPressedThisFrame)
-            {
-                StopReplay();
-                ResetToStart();
-            }
+                Perform(ControlAction.Reset);
             else if (keyboard.nKey.wasPressedThisFrame)
-            {
-                NewBoard();
-            }
+                Perform(ControlAction.NewBoard);
         }
 
         private void HandleKeyboard()
@@ -599,11 +658,11 @@ namespace Ricochet.Client.Scratchpad
             if (keyboard.downArrowKey.wasPressedThisFrame || keyboard.sKey.wasPressedThisFrame) TryMove(Direction.Down);
             if (keyboard.leftArrowKey.wasPressedThisFrame || keyboard.aKey.wasPressedThisFrame) TryMove(Direction.Left);
 
-            if (keyboard.zKey.wasPressedThisFrame || keyboard.backspaceKey.wasPressedThisFrame) Undo();
-            if (keyboard.rKey.wasPressedThisFrame) ResetToStart();
-            // Offline practice only; online it would give the answer away.
-            if (keyboard.nKey.wasPressedThisFrame && Session.IsPractice) NewBoard();
-            if (keyboard.hKey.wasPressedThisFrame && Session.IsPractice) RequestHint();
+            if (keyboard.zKey.wasPressedThisFrame || keyboard.backspaceKey.wasPressedThisFrame) Perform(ControlAction.Undo);
+            if (keyboard.rKey.wasPressedThisFrame) Perform(ControlAction.Reset);
+            // Offline practice only (CanPerform); online it would give the answer away.
+            if (keyboard.nKey.wasPressedThisFrame) Perform(ControlAction.NewBoard);
+            if (keyboard.hKey.wasPressedThisFrame) Perform(ControlAction.Shortest);
         }
 
         // Typing a name into an input field shouldn't also move robots.
