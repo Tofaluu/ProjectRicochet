@@ -187,7 +187,7 @@ namespace Ricochet.Client.Board
             {
                 RobotVisual robot = pair.Value;
                 // A rewind still playing is cut short, like a slide: the robot is where it was going.
-                if (robot.Rewinding != null)
+                if (robot.LastRewind != null)
                     FinishRewind(robot);
                 // A robot still sliding from the previous move finishes it instantly first; otherwise
                 // it would cut diagonally from mid-slide to the new destination.
@@ -223,6 +223,10 @@ namespace Ricochet.Client.Board
                 robot.Quiet = quiet;
                 robot.Heading = delta.normalized;
                 robot.GhostDistance = 0f;
+                // A forward slide is recorded for its landing (trail, look before); a step back plays one in reverse.
+                robot.Trail = quiet ? null : new List<(ParticleSpec, float)>();
+                robot.SlideStartedAt = Time.time;
+                robot.LookAtSlideStart = robot.Look;
                 if (rewind != null)
                     StartRewind(robot, rewind);
             }
@@ -323,9 +327,16 @@ namespace Ricochet.Client.Board
             public float PoppedInAt = -10f;
             // Its landings so far, newest on top, for rewinding them one by one.
             public readonly Stack<Landing> Landings = new Stack<Landing>();
-            // A celebration playing backwards before the slide back, until RewindEnd (null = none).
-            public Landing Rewinding;
-            public float RewindEnd;
+            // A landing playing backwards before the slide back (the celebration, or just the squash), until RewindEnd
+            // (null = none); LastRewind stays until the slide back arrives (its reversed trail is still playing).
+            public Landing Rewinding, LastRewind;
+            public float RewindEnd, SquashRewindEnd = -10f;
+            // Where the eyes looked before the rewound move, restored when the slide back arrives.
+            public Vector2? LookAfterRewind;
+            // The forward slide being recorded for its landing: trail ghosts (spawn time from the slide's start), the look before.
+            public List<(ParticleSpec Spec, float At)> Trail;
+            public float SlideStartedAt;
+            public Vector2 LookAtSlideStart;
         }
 
         private const float SwellSeconds = 0.1f, PopInSeconds = 0.3f;
@@ -408,10 +419,13 @@ namespace Ricochet.Client.Board
             if (robot.Moving)
             {
                 Vector3 from = robot.Root.localPosition;
-                Vector3 to = Vector3.MoveTowards(from, robot.Destination, _slideSpeed * Time.deltaTime);
+                float speed = _slideSpeed * (robot.LastRewind != null ? RewindSlideSpeed : 1f);
+                Vector3 to = Vector3.MoveTowards(from, robot.Destination, speed * Time.deltaTime);
                 SpawnGhosts(robot, from, to);
                 robot.Root.localPosition = to;
-                robot.Look = new Vector2(along.x, along.y);
+                // Rewound, the robot keeps looking the way it went (a true rewind is a moonwalk) until it is back.
+                if (robot.LastRewind == null)
+                    robot.Look = new Vector2(along.x, along.y);
                 stretch = 0.12f;
                 if (to == robot.Destination)
                 {
@@ -427,14 +441,27 @@ namespace Ricochet.Client.Board
                         _recording = null;
                         landing.Celebrated = _celebrated;
                         landing.Exploded = robot.Exploded;
+                        landing.Trail = robot.Trail;
+                        landing.SlideSeconds = time - robot.SlideStartedAt;
+                        landing.LookBefore = robot.LookAtSlideStart;
+                        robot.Trail = null;
                         robot.Landings.Push(landing);
+                    }
+                    else if (robot.LastRewind != null)
+                    {
+                        // Back where the rewound move started: the eyes look where they did before it.
+                        if (robot.LookAfterRewind.HasValue)
+                            robot.Look = robot.LookAfterRewind.Value;
+                        robot.LookAfterRewind = null;
+                        robot.LastRewind = null;
                     }
                 }
             }
             else
             {
-                // Squash against the wall, then a little wobble back.
-                float t = (time - robot.ImpactTime) / 0.25f;
+                // Squash against the wall, then a little wobble back (rewound: the wobble backwards, before the slide back).
+                float t = time < robot.SquashRewindEnd ? (robot.SquashRewindEnd - time) * RewindSpeed / 0.25f
+                    : (time - robot.ImpactTime) / 0.25f;
                 if (t < 1f)
                     stretch = -0.3f * Mathf.Sin(t * Mathf.PI * 1.5f) * (1f - t);
             }
@@ -467,6 +494,8 @@ namespace Ricochet.Client.Board
         // Faint copies left along the slide, so fast moves read as motion instead of a jump.
         private void SpawnGhosts(RobotVisual robot, Vector3 from, Vector3 to)
         {
+            if (robot.Quiet && robot.LastRewind?.Trail != null)
+                return; // sliding back over a recorded trail: it plays in reverse instead (StartRewind)
             const float spacing = 0.35f;
             float distance = Vector3.Distance(from, to);
             robot.GhostDistance += distance;
@@ -476,7 +505,8 @@ namespace Ricochet.Client.Board
                 Vector3 at = to - robot.Heading * robot.GhostDistance;
                 Color ghost = robot.Color;
                 ghost.a = 0.28f;
-                Spawn(ShapeSprites.Circle, ghost, at, Vector3.zero, 0.62f, 0.4f, 0.2f, GhostOrder, "Ghost");
+                ParticleSpec spec = Spawn(ShapeSprites.Circle, ghost, at, Vector3.zero, 0.62f, 0.4f, 0.2f, GhostOrder, "Ghost");
+                robot.Trail?.Add((spec, Time.time - robot.SlideStartedAt));
             }
         }
 
@@ -588,8 +618,9 @@ namespace Ricochet.Client.Board
         {
             public SpriteRenderer Renderer;
             public ParticleSpec Spec;
-            public float Born;
-            // Played backwards from its end, Speed times as fast (an undone landing's rewind).
+            // Shown from Born (hidden before: a rewound trail ghost waits for the robot), starting at StartAge.
+            public float Born, StartAge;
+            // Played backwards towards age 0, Speed times as fast (an undone landing's rewind).
             public bool Reverse;
             public float Speed = 1f;
             // The landing it belongs to (if any), so a rewind can take over from it.
@@ -604,12 +635,18 @@ namespace Ricochet.Client.Board
             public readonly List<ParticleSpec> Specs = new List<ParticleSpec>();
             // It reached the target with a celebration (rewound before the robot slides back), and blew the robot up.
             public bool Celebrated, Exploded;
+            // The slide that led here: its trail ghosts, how long it took, and where the robot looked before it.
+            public List<(ParticleSpec Spec, float At)> Trail;
+            public float SlideSeconds;
+            public Vector2 LookBefore;
         }
 
         // The landing being recorded (set around Impact), or null.
         private Landing _recording;
         private bool _celebrated;
         private const float RewindSpeed = 1.6f;
+        // The slide back (and its reversed trail) relative to a normal slide; 1 = as fast as the move it undoes.
+        private const float RewindSlideSpeed = 1f;
         private float _rewindShakeStart = -10f, _rewindShakeEnd = -10f;
 
         // Drag: speed falls to 4% per second, so a particle starting at v has moved v * Drift(age) after age seconds
@@ -617,7 +654,7 @@ namespace Ricochet.Client.Board
         private static readonly float DragRate = -Mathf.Log(0.04f);
         private static float Drift(float age) => (1f - Mathf.Exp(-DragRate * age)) / DragRate;
 
-        private void Spawn(Sprite sprite, Color color, Vector3 at, Vector3 velocity, float startSize, float endSize, float life, int order,
+        private ParticleSpec Spawn(Sprite sprite, Color color, Vector3 at, Vector3 velocity, float startSize, float endSize, float life, int order,
             string name = "Effect")
         {
             var spec = new ParticleSpec
@@ -627,14 +664,21 @@ namespace Ricochet.Client.Board
             };
             _recording?.Specs.Add(spec);
             AddParticle(spec, reverse: false, 1f, _recording);
+            return spec;
         }
 
-        private void AddParticle(ParticleSpec spec, bool reverse, float speed, Landing landing)
+        private void AddParticle(ParticleSpec spec, bool reverse, float speed, Landing landing, float delay = 0f, float? startAge = null)
         {
             SpriteRenderer renderer = CreateSprite(spec.Name, spec.Sprite, spec.Color, spec.Start,
                 new Vector2(spec.StartSize, spec.StartSize), spec.Order);
-            _particles.Add(new Particle { Renderer = renderer, Spec = spec, Born = Time.time, Reverse = reverse, Speed = speed, Landing = landing });
-            PlaceParticle(_particles[_particles.Count - 1], reverse ? spec.Life : 0f);
+            var particle = new Particle
+            {
+                Renderer = renderer, Spec = spec, Born = Time.time + delay, StartAge = startAge ?? (reverse ? spec.Life : 0f),
+                Reverse = reverse, Speed = speed, Landing = landing,
+            };
+            _particles.Add(particle);
+            renderer.enabled = delay <= 0f;
+            PlaceParticle(particle, particle.StartAge);
         }
 
         private void UpdateParticles(float time)
@@ -642,9 +686,17 @@ namespace Ricochet.Client.Board
             for (int i = _particles.Count - 1; i >= 0; i--)
             {
                 Particle p = _particles[i];
+                if (p.Renderer == null)
+                {
+                    RemoveParticle(i);
+                    continue;
+                }
+                if (time < p.Born)
+                    continue; // not yet
+                p.Renderer.enabled = true;
                 float elapsed = (time - p.Born) * p.Speed;
-                float age = p.Reverse ? p.Spec.Life - elapsed : elapsed;
-                if (age >= p.Spec.Life && !p.Reverse || age <= 0f && p.Reverse || p.Renderer == null)
+                float age = p.Reverse ? p.StartAge - elapsed : p.StartAge + elapsed;
+                if (p.Reverse ? age <= 0f : age >= p.Spec.Life)
                 {
                     RemoveParticle(i);
                     continue;
@@ -687,34 +739,61 @@ namespace Ricochet.Client.Board
         private void StartRewind(RobotVisual robot, Landing landing)
         {
             RemoveParticles(landing, reverse: false); // still flying from the landing itself: the rewind takes over
-            float duration = 0f;
+            float time = Time.time;
+            float effects = 0f;
             foreach (ParticleSpec spec in landing.Specs)
             {
                 AddParticle(spec, reverse: true, RewindSpeed, landing);
-                duration = Mathf.Max(duration, spec.Life / RewindSpeed);
+                effects = Mathf.Max(effects, spec.Life / RewindSpeed);
             }
-            if (!landing.Celebrated)
-                return;
-            float time = Time.time;
+            // Held before sliding back: through the whole celebration, or just the squash wobble played backwards.
+            float squash = 0.25f / RewindSpeed;
+            float hold = landing.Celebrated ? Mathf.Max(effects, squash) : squash;
             robot.Rewinding = landing;
-            robot.RewindEnd = time + duration;
-            robot.Moving = false; // held until the celebration has played backwards (AnimateRobot)
-            if (landing.Exploded)
+            robot.LastRewind = landing;
+            robot.RewindEnd = time + hold;
+            robot.Moving = false; // until RewindEnd (AnimateRobot)
+            robot.LookAfterRewind = landing.LookBefore;
+            if (!landing.Exploded)
+                robot.SquashRewindEnd = time + squash;
+            else
             {
                 robot.Exploded = true;
-                _rewindShakeStart = time + duration - ShakeSeconds / RewindSpeed;
-                _rewindShakeEnd = time + duration;
+                _rewindShakeStart = time + hold - ShakeSeconds / RewindSpeed;
+                _rewindShakeEnd = time + hold;
                 Play(BoardSounds.BoomReversed, 0.8f);
+            }
+
+            // The slide's trail in reverse once the robot sets off back (at its normal speed, so it takes as long): a
+            // ghost left `at` seconds into a slide lasting `slide` shows while the robot is still on its way to it,
+            // brightening, and vanishes as the robot passes it.
+            if (landing.Trail == null)
+                return;
+            float slide = landing.SlideSeconds;
+            foreach ((ParticleSpec spec, float at) in landing.Trail)
+            {
+                float age = Mathf.Min(spec.Life, slide - at);
+                if (age > 0f)
+                    AddParticle(spec, reverse: true, RewindSlideSpeed, landing,
+                        delay: hold + Mathf.Max(0f, slide - at - spec.Life) / RewindSlideSpeed, startAge: age);
             }
         }
 
         // Cuts a rewind short (the player moved on): its effects vanish and the robot is whole, wherever it was going.
         private void FinishRewind(RobotVisual robot)
         {
-            RemoveParticles(robot.Rewinding, reverse: true);
+            RemoveParticles(robot.LastRewind, reverse: true);
+            if (robot.Rewinding != null)
+            {
+                robot.Exploded = false;
+                _rewindShakeEnd = -10f;
+            }
+            if (robot.LookAfterRewind.HasValue)
+                robot.Look = robot.LookAfterRewind.Value;
             robot.Rewinding = null;
-            robot.Exploded = false;
-            _rewindShakeEnd = -10f;
+            robot.LastRewind = null;
+            robot.LookAfterRewind = null;
+            robot.SquashRewindEnd = -10f;
         }
 
         /// <summary>Another player locked in a new best solution.</summary>
