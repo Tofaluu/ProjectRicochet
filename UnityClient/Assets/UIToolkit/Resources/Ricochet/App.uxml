@@ -19,11 +19,11 @@
             <ui:VisualElement class="spacer" />
             <ui:Button name="nav-settings" text="Settings" class="nav-item" />
             <ui:VisualElement class="profile">
-                <ui:Label name="profile-avatar" text="?" class="avatar" />
-                <ui:VisualElement class="profile-text">
+                <ui:VisualElement class="profile-row">
+                    <ui:Label name="profile-avatar" text="?" class="avatar" />
                     <ui:Label name="profile-name" text="Guest" class="profile-name" />
-                    <ui:Label text="Playing as a guest" class="profile-sub" />
                 </ui:VisualElement>
+                <ui:Label text="Playing as a guest" class="profile-sub" />
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -146,12 +146,66 @@
                     <ui:Button name="daily-back" text="Back to practice" class="btn" />
                 </ui:VisualElement>
 
-                <ui:VisualElement name="screen-soon" class="screen">
-                    <ui:Label name="soon-title" text="Coming next" class="h1 gap-s" />
-                    <ui:Label name="soon-text" text="" class="muted body gap-l" />
-                    <ui:VisualElement class="row">
-                        <ui:Button name="soon-action" text="Back" class="btn btn--primary" />
+                <ui:VisualElement name="screen-lobby" class="screen">
+                    <ui:Label name="lobby-title" text="Lobby" class="h1 gap-s" />
+                    <ui:Label name="lobby-sub" text="" class="muted body gap-m" />
+                    <ui:Button name="lobby-start" text="Start match" class="btn btn--primary gap-l" />
+                    <ui:VisualElement name="lobby-code-card" class="card">
+                        <ui:Label text="LOBBY CODE" class="h3 gap-s" />
+                        <ui:VisualElement class="row row--spread">
+                            <ui:Label name="lobby-code" text="ABCD" class="code-big" />
+                            <ui:Button name="lobby-copy" text="Copy invite link" class="btn btn--small" />
+                        </ui:VisualElement>
+                        <ui:Label name="lobby-copied" text="Copied! Send it to your friends." class="notice" />
                     </ui:VisualElement>
+                    <ui:VisualElement name="lobby-history" class="card">
+                        <ui:Label text="MATCH HISTORY" class="h3 gap-s" />
+                        <ui:VisualElement class="row row--spread gap-s">
+                            <ui:Button name="history-prev" text="&lt;" class="btn btn--small btn--square" />
+                            <ui:Label name="history-board" text="Board 1 of 1" class="setting-label" />
+                            <ui:Button name="history-next" text="&gt;" class="btn btn--small btn--square" />
+                        </ui:VisualElement>
+                        <ui:Label name="history-winner" text="" class="body gap-s" />
+                        <ui:VisualElement name="history-solutions" />
+                        <ui:Label text="Pick one to replay it on its board." class="muted small" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card">
+                        <ui:VisualElement class="row row--spread gap-s">
+                            <ui:Label name="lobby-players-title" text="Players" class="h2" />
+                            <ui:Label name="lobby-players-sub" text="" class="muted small" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="lobby-players" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="lobby-settings" class="card">
+                        <ui:Label text="MATCH SETTINGS" class="h3 gap-s" />
+                        <ui:VisualElement name="lobby-settings-list" />
+                    </ui:VisualElement>
+                    <ui:Label name="lobby-summary" text="" class="muted body gap-m" />
+                    <ui:Label name="lobby-feedback" text="" class="notice gap-m" />
+                    <ui:Button name="lobby-leave" text="Leave lobby" class="btn btn--ghost" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="screen-match" class="screen">
+                    <ui:VisualElement class="row row--spread gap-l">
+                        <ui:Label name="match-title" text="Round 1" class="h1" />
+                        <ui:Label name="match-sub" text="" class="muted small" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card">
+                        <ui:VisualElement class="row row--spread">
+                            <ui:Label name="timer-caption" text="TIME LEFT" class="h3" />
+                            <ui:Label name="timer-value" text="0:42" class="timer-value" />
+                        </ui:VisualElement>
+                        <ui:Label name="timer-sub" text="" class="muted body gap-s" />
+                        <ui:Label name="match-best" text="" class="body gap-m" />
+                        <ui:Button name="match-watch" text="Watch" class="btn btn--ghost" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card">
+                        <ui:Label text="PLAYERS" class="h3 gap-s" />
+                        <ui:VisualElement name="match-players" />
+                    </ui:VisualElement>
+                    <ui:Button name="match-done" text="I'm done" class="btn btn--primary gap-m" />
+                    <ui:Label name="match-feedback" text="" class="notice gap-m" />
+                    <ui:Button name="match-leave" text="Leave lobby" class="btn btn--ghost" />
                 </ui:VisualElement>
 
             </ui:ScrollView>

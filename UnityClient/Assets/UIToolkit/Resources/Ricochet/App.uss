@@ -47,11 +47,11 @@
 .app .nav-item:hover { background-color: var(--panel); color: var(--text); }
 .app .nav-item.is-active { background-color: var(--panel-2); color: #ffffff; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
 .spacer { flex-grow: 1; }
-.profile { flex-direction: row; align-items: center; padding: 12px; margin-top: 6px; border-top-width: 1px; border-color: var(--panel-2); }
+.profile { padding: 12px; margin-top: 6px; border-top-width: 1px; border-color: var(--panel-2); }
+.profile-row { flex-direction: row; align-items: center; }
 .avatar { width: 34px; height: 34px; border-radius: 17px; background-color: #3b74e6; -unity-text-align: middle-center; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); color: #ffffff; }
-.profile-text { margin-left: 10px; flex-shrink: 1; overflow: hidden; }
-.profile-name { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
-.profile-sub { font-size: 13px; color: var(--muted); }
+.profile-name { margin-left: 10px; flex-shrink: 1; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.profile-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
 
 /* ---- Main area: the board stage and the side panel ---- */
 .main { flex-grow: 1; flex-direction: row; padding: 28px 40px; }
@@ -136,6 +136,27 @@
 .lb-name { flex-grow: 1; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-moves { width: 40px; font-size: 15px; -unity-text-align: middle-right; }
 .lb-time { width: 56px; font-size: 15px; color: var(--muted); -unity-text-align: middle-right; }
+
+/* ---- Lobby and match ---- */
+.code-big { font-size: 40px; letter-spacing: 6px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.player-row { flex-direction: row; align-items: center; padding: 8px 10px; border-radius: 12px; }
+.player-row.is-me { background-color: var(--panel-2); }
+.player-avatar { width: 34px; height: 34px; border-radius: 17px; margin-right: 12px; -unity-text-align: middle-center; font-size: 15px; color: #ffffff; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); flex-shrink: 0; }
+.player-name { font-size: 16px; margin-right: 8px; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
+.tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; margin-right: 4px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); flex-shrink: 0; }
+.tag--host { background-color: var(--panel-2); color: var(--muted); }
+.player-row.is-me .tag--host { background-color: var(--panel); }
+.tag--lead { background-color: var(--daily); color: var(--on-daily); }
+.tag--done { color: var(--good); padding-left: 0; }
+.tag--away { color: var(--muted); padding-left: 0; }
+.player-score { margin-left: auto; padding-left: 8px; font-size: 22px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); flex-shrink: 0; }
+.timer-value { font-size: 44px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.timer-value.is-bumped { color: var(--good); }
+.app .solution-btn { margin-bottom: 8px; -unity-text-align: middle-left; }
+.app .solution-btn--shortest { background-color: #4a4f66; }
+.mini-stepper { flex-direction: row; align-items: center; flex-shrink: 0; margin-left: 10px; }
+.mini-stepper-value { min-width: 74px; font-size: 16px; -unity-text-align: middle-center; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.app .mini-stepper .btn { width: 36px; height: 36px; padding: 0; border-radius: 10px; font-size: 18px; }
 
 /* ---- Inputs ---- */
 .field { margin: 0; flex-grow: 1; }
