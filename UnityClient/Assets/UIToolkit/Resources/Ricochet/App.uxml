@@ -48,7 +48,6 @@
                     <ui:Button name="control-new" text="New board  (N)" class="btn" />
                     <ui:Button name="control-shortest" text="Shortest  (H)" class="btn" />
                 </ui:VisualElement>
-                <ui:Label name="board-status" text="" class="board-status" picking-mode="Ignore" />
             </ui:VisualElement>
 
             <ui:ScrollView name="side" class="side">
@@ -217,6 +216,7 @@
             <ui:Label text="Palette: Indigo night (more palettes coming)" class="muted small" style="margin-top: 10px;" />
         </ui:VisualElement>
 
+        <ui:Label name="board-tip" text="Click a robot, then a dot to move it. Arrow keys and dragging work too." class="board-tip" picking-mode="Ignore" />
         <ui:VisualElement name="board-overlay" class="board-overlay" picking-mode="Ignore">
             <ui:Label name="overlay-caption" text="" class="overlay-caption" picking-mode="Ignore" />
             <ui:Label name="overlay-number" text="" class="overlay-number" picking-mode="Ignore" />

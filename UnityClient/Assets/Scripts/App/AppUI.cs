@@ -34,7 +34,7 @@ namespace Ricochet.Client.App
         private Screen _chosen = Screen.Home;
 
         private VisualElement _main, _boardArea, _boardOverlay, _goalIcon, _replayBar, _settings;
-        private Label _goalLabel, _banner, _boardStatus, _overlayCaption, _overlayNumber, _overlayHint;
+        private Label _goalLabel, _banner, _boardTip, _overlayCaption, _overlayNumber, _overlayHint;
         private Button _navHome, _navDaily, _navPlay, _navPractice, _navSettings;
         private Button _undo, _reset, _newBoard, _shortest, _replayPause, _replayBack, _replayForward;
         private readonly Dictionary<Screen, VisualElement> _screens = new Dictionary<Screen, VisualElement>();
@@ -132,7 +132,7 @@ namespace Ricochet.Client.App
             _goalIcon = _root.Q("goal-icon");
             _goalLabel = _root.Q<Label>("goal-label");
             _banner = _root.Q<Label>("banner");
-            _boardStatus = _root.Q<Label>("board-status");
+            _boardTip = _root.Q<Label>("board-tip");
             _overlayCaption = _root.Q<Label>("overlay-caption");
             _overlayNumber = _root.Q<Label>("overlay-number");
             _overlayHint = _root.Q<Label>("overlay-hint");
@@ -907,7 +907,7 @@ namespace Ricochet.Client.App
             if (replay)
                 _replayPause.text = !Session.ReplayPaused && !Session.ReplayFinished ? "Pause" : Session.ReplayFinished ? "Again" : "Play";
 
-            _boardStatus.text = StatusText(best);
+            ShowTip();
             ShowOverlay();
         }
 
@@ -940,20 +940,28 @@ namespace Ricochet.Client.App
             }
         }
 
-        private string StatusText(int best)
+        private const string TipSeenKey = "Ricochet.SeenMoveTip";
+
+        // How to move, over the bottom of the board, until the player's first move ever (then never again here).
+        private void ShowTip()
         {
-            int moves = Session.Moves.Count;
-            string status = Session.IsReplaying ? ""
-                : Session.IsSolved && best > 0 && moves <= best ? $"Solved in {moves} moves: optimal!"
-                : Session.IsSolved && best > 0 ? $"Solved in {moves} moves (best is {best})"
-                : Session.IsSolved ? $"Solved in {moves} moves!"
-                : "Click a robot, then a dot to move it. Arrow keys and dragging work too.";
-            if (Session.IsPractice && Session.HintText != null)
-                status = Session.HintText;
-            return status;
+            bool seen = PlayerPrefs.GetInt(TipSeenKey, 0) == 1;
+            if (!seen && Session.Moves.Count > 0 && !Session.IsReplaying)
+            {
+                PlayerPrefs.SetInt(TipSeenKey, 1);
+                seen = true;
+            }
+            bool show = !seen && Session.AcceptsInput && !Session.IsCountingDown && Scratchpad.SearchStatus == null;
+            _boardTip.EnableInClassList("is-visible", show);
+            if (!show)
+                return;
+            Rect board = BoardOnPanel();
+            _boardTip.style.left = board.x + board.width * 0.08f;
+            _boardTip.style.width = board.width * 0.84f;
+            _boardTip.style.top = board.yMax - 64f;
         }
 
-        private static string BannerText(BoardSession session)
+        private string BannerText(BoardSession session)
         {
             int moves = session.Moves.Count;
             switch (session.Mode)
@@ -972,7 +980,12 @@ namespace Ricochet.Client.App
                     return session.Title ?? "Round over";
                 default:
                     string board = session.Title ?? (session.Mode == BoardMode.Practice ? "Practice board" : "Your board");
-                    return session.IsSolved ? $"{board}  ·  solved in {moves}!" : $"{board}  ·  {moves} {(moves == 1 ? "move" : "moves")}";
+                    if (!session.IsSolved)
+                        return $"{board}  ·  {moves} {(moves == 1 ? "move" : "moves")}";
+                    // A practice board of a known length says how the solve compares.
+                    int best = Scratchpad.PracticeShortest;
+                    string verdict = best <= 0 ? "!" : moves <= best ? ": optimal!" : $"  ·  best is {best}";
+                    return $"{board}  ·  solved in {moves}{verdict}";
             }
         }
 

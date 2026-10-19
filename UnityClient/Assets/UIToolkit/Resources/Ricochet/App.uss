@@ -65,7 +65,9 @@
 .replay-bar { flex-direction: row; align-items: center; margin-left: auto; }
 .board-area { flex-grow: 1; margin: 10px 0; min-height: 300px; }
 .board-controls { flex-direction: row; margin: 0 -5px; }
-.board-status { margin-top: 10px; font-size: 15px; color: var(--muted); -unity-text-align: middle-center; white-space: normal; }
+/* First visit only: how to move, floating over the bottom of the board until the first move. */
+.board-tip { position: absolute; display: none; padding: 8px 16px; border-radius: 10px; background-color: rgba(18, 20, 31, 0.88); color: #ecebf5; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); -unity-text-align: middle-center; }
+.board-tip.is-visible { display: flex; }
 
 /* The countdown / "finding a board" layer, placed over the board itself. */
 .board-overlay { position: absolute; display: none; background-color: rgba(12, 12, 24, 0.66); border-radius: 14px; align-items: center; justify-content: center; }
