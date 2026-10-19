@@ -84,6 +84,7 @@ namespace Ricochet.Client.UI
                 if (_daily.Stage != DailyStage.Loading || _network.IsInLobby)
                     return; // closed, or joined a lobby, meanwhile
                 _daily.OnLoaded(info, Time.time);
+                UsageTracker.Track("daily_open");
                 _scratchpad.ShowDaily(_daily.Round);
                 if (_daily.HasSolved)
                     RefreshLeaderboard();
@@ -136,7 +137,10 @@ namespace Ricochet.Client.UI
             try
             {
                 DailyResult result = await _network.SubmitDailyAsync(GuestIdentity.Id, _daily.Number, solution);
+                bool firstSolve = !_daily.HasSolved;
                 _daily.OnSubmitted(result);
+                if (firstSolve && result.Improved)
+                    UsageTracker.Track("daily_solve");
                 RefreshLeaderboard();
             }
             catch (Exception e)

@@ -5,6 +5,11 @@ ricochet.thomasliu.dev {
 		reverse_proxy server:8080
 	}
 
+	# Usage events from the game and the private stats page (Services/Usage).
+	handle /api/* {
+		reverse_proxy server:8080
+	}
+
 	# The browser build (Builds/WebGL, uploaded by Tools/deploy-web.sh). Unity's files are
 	# pre-compressed (gzip, or Brotli), so they need these headers; no-cache = revalidate by ETag, so a
 	# new upload is picked up on the next load.

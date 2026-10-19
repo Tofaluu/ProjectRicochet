@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSignalR();
 builder.Services.Configure<GameOptions>(builder.Configuration.GetSection("Game"));
 builder.Services.Configure<DailyOptions>(builder.Configuration.GetSection("Daily"));
+builder.Services.Configure<UsageOptions>(builder.Configuration.GetSection("Usage"));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LobbyManager>();
 
@@ -18,11 +19,14 @@ if (!string.IsNullOrWhiteSpace(dailyDatabase))
 {
     builder.Services.AddDbContextFactory<DailyDbContext>(options => options.UseNpgsql(dailyDatabase));
     builder.Services.AddSingleton<IDailyStore, EfDailyStore>();
+    builder.Services.AddSingleton<IUsageStore, EfUsageStore>();
 }
 else
 {
     builder.Services.AddSingleton<IDailyStore, InMemoryDailyStore>();
+    builder.Services.AddSingleton<IUsageStore, InMemoryUsageStore>();
 }
+builder.Services.AddSingleton<UsageService>();
 builder.Services.AddSingleton<DailyService>();
 builder.Services.AddHostedService<DailyPrepareService>();
 
@@ -55,5 +59,11 @@ if (app.Environment.IsDevelopment())
 
 app.MapHub<GameHub>(HubMethods.HubPath);
 app.MapGet("/", () => "Ricochet Game Server is running!");
+
+// Usage tracking (Services/Usage): the game reports events; the stats page needs the key from the server's environment.
+app.MapPost("/api/events", async (UsageEventRequest request, UsageService usage) =>
+    await usage.RecordAsync(request) ? Results.NoContent() : Results.BadRequest());
+app.MapGet("/api/stats", async (string? key, UsageService usage) =>
+    usage.StatsKeyMatches(key) ? Results.Content(UsagePage.Render(await usage.SummaryAsync()), "text/html") : Results.NotFound());
 
 app.Run();

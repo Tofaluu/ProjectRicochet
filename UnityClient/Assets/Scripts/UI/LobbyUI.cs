@@ -87,6 +87,7 @@ namespace Ricochet.Client.UI
             CreateShowBestRow();
             UiSkin.Apply(transform, GameTheme.OrDefault(_theme));
             gameObject.AddComponent<MatchHistoryOverlay>().Init(_match, _scratchpad, _theme);
+            gameObject.AddComponent<UsageTracker>().Init(() => NetworkManager.NormalizeServerUrl(_serverInput.text));
             gameObject.AddComponent<DailyPuzzleUI>().Init(_network, _scratchpad, _theme, dailyButton, DailyPlayerName);
             _joinPanel.SetActive(true);
             _lockInButton.gameObject.SetActive(false);
@@ -255,15 +256,21 @@ namespace Ricochet.Client.UI
             string name = QueryValue(Application.absoluteURL, "name");
             string server = QueryValue(Application.absoluteURL, "server");
             string lobby = QueryValue(Application.absoluteURL, "lobby");
+            string internalFlag = QueryValue(Application.absoluteURL, "internal");
 #else
             string[] args = System.Environment.GetCommandLineArgs();
             string name = ArgValue(args, "-name");
             string server = ArgValue(args, "-server");
             string lobby = ArgValue(args, "-lobby");
+            string internalFlag = System.Array.IndexOf(args, "-internal") >= 0 ? "1" : null;
 #endif
 
             if (name != null) _nameInput.text = name;
             if (server != null) _serverInput.text = server;
+            // The developer's own devices: remembered, so it only has to be in the address once.
+            if (internalFlag == "1" || internalFlag == "0")
+                UsageTracker.SetInternal(internalFlag == "1");
+            UsageTracker.Track("visit");
             if (lobby != null)
             {
                 _codeInput.text = lobby.ToUpperInvariant();
@@ -355,6 +362,7 @@ namespace Ricochet.Client.UI
             }
             _network.ServerUrl = _serverInput.text;
             _network.JoinLobby(_nameInput.text, code);
+            UsageTracker.Track("lobby_join");
         }
 
         // Reaching the target sends the solution if it can take the lead; either way the board then goes
@@ -362,7 +370,11 @@ namespace Ricochet.Client.UI
         private void OnBoardSolved(int moves)
         {
             if (!_match.InLobby || _match.Stage != MatchStage.Solving)
+            {
+                if (_scratchpad.Session.IsPractice)
+                    UsageTracker.Track("practice_solve");
                 return; // practice: just "Solved in N"
+            }
             Move[] solution = new List<Move>(Board.Moves).ToArray();
             if (_match.OnSolved(moves))
             {
