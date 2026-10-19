@@ -63,6 +63,15 @@ namespace Ricochet.Client.Scratchpad
         /// <summary>The UI panel on the right; the camera keeps the board clear of it.</summary>
         public RectTransform SidePanel { get; set; }
 
+        /// <summary>
+        /// Where on screen the board should be fitted (pixels, origin bottom-left), set by a UI that reserves an area for
+        /// it; null = the old layout (between the overlay card and <see cref="SidePanel"/>).
+        /// </summary>
+        public System.Func<Rect> BoardArea { get; set; }
+
+        /// <summary>Extra "the player is typing" check for a UI's text fields (keys then don't move robots).</summary>
+        public static System.Func<bool> TypingInOtherUI { get; set; }
+
         private void Start()
         {
             if (_camera == null)
@@ -668,6 +677,8 @@ namespace Ricochet.Client.Scratchpad
         // Typing a name into an input field shouldn't also move robots.
         private static bool IsTypingInUI()
         {
+            if (TypingInOtherUI != null && TypingInOtherUI())
+                return true;
             EventSystem eventSystem = EventSystem.current;
             if (eventSystem == null || eventSystem.currentSelectedGameObject == null)
                 return false;
@@ -723,6 +734,19 @@ namespace Ricochet.Client.Scratchpad
 
             float width = Session.Round.Grid.Width;
             float height = Session.Round.Grid.Height;
+            if (BoardArea != null)
+            {
+                // Fit the board and its frame into the area, centred.
+                Rect area = BoardArea();
+                const float pad = 0.45f;
+                float ppu = Mathf.Max(1f, Mathf.Min(area.width / (width + 2f * pad), area.height / (height + 2f * pad)));
+                _camera.orthographic = true;
+                _camera.orthographicSize = _camera.pixelHeight / ppu / 2f;
+                _camera.transform.position = new Vector3(
+                    width / 2f + (_camera.pixelWidth / 2f - area.center.x) / ppu,
+                    height / 2f + (_camera.pixelHeight / 2f - area.center.y) / ppu, -10f);
+                return;
+            }
             // Extra room above the board for the banner (see BoardOverlay).
             const float margin = 0.6f;
             const float bottom = 0.8f;

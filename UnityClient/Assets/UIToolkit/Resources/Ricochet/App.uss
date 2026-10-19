@@ -1,0 +1,156 @@
+/* The app's look: the Indigo night palette as variables (a palette picker swaps these), Nunito throughout. */
+:root {
+    --bg: #171a29;
+    --nav: #12141f;
+    --panel: #1f2336;
+    --panel-2: #262b42;
+    --panel-hover: #2f3552;
+    --input: #171a29;
+    --line: #3a4060;
+    --text: #ecebf5;
+    --muted: #a3a6bf;
+    --action: #6a5be0;
+    --action-hover: #7a6cf0;
+    --on-action: #ffffff;
+    --daily: #efb02e;
+    --daily-hover: #f5bf4a;
+    --on-daily: #1b1d2a;
+    --daily-tint: #232032;
+    --daily-border: #4a4030;
+    --daily-soft: #3a3022;
+    --daily-text: #ffcf6b;
+    --good: #8fd9a8;
+
+    -unity-font: url("/Assets/Fonts/Nunito-Regular.ttf");
+    -unity-font-definition: initial;
+    color: var(--text);
+    font-size: 15px;
+}
+
+.app { flex-grow: 1; flex-direction: row; }
+
+/* ---- Navigation ---- */
+.nav { width: 232px; flex-shrink: 0; background-color: var(--nav); padding: 24px 16px; }
+.brand { flex-direction: row; align-items: center; padding: 4px 10px 22px 10px; }
+.brand-dots { flex-direction: row; flex-wrap: wrap; width: 28px; }
+.dot { width: 11px; height: 11px; border-radius: 6px; margin: 1px; }
+.dot--red { background-color: #e0484d; }
+.dot--blue { background-color: #3b74e6; }
+.dot--green { background-color: #2f9e5b; }
+.dot--yellow { background-color: #efb02e; }
+.brand-name { font-size: 26px; margin-left: 10px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.app .nav-item {
+    height: 46px; margin: 0 0 6px 0; padding: 0 12px; border-width: 0; border-radius: 12px;
+    background-color: rgba(0, 0, 0, 0); color: #c4c6da; font-size: 16px; -unity-text-align: middle-left;
+    -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf");
+}
+.app .nav-item:hover { background-color: var(--panel); color: var(--text); }
+.app .nav-item.is-active { background-color: var(--panel-2); color: #ffffff; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.spacer { flex-grow: 1; }
+.profile { flex-direction: row; align-items: center; padding: 12px; margin-top: 6px; border-top-width: 1px; border-color: var(--panel-2); }
+.avatar { width: 34px; height: 34px; border-radius: 17px; background-color: #3b74e6; -unity-text-align: middle-center; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); color: #ffffff; }
+.profile-text { margin-left: 10px; }
+.profile-name { font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.profile-sub { font-size: 13px; color: var(--muted); }
+
+/* ---- Main area: the board stage and the side panel ---- */
+.main { flex-grow: 1; flex-direction: row; padding: 28px 40px; }
+.main--home { flex-direction: row-reverse; }
+.stage { flex-grow: 1; flex-basis: 0; min-width: 320px; }
+.stage-head { flex-direction: row; justify-content: space-between; align-items: center; min-height: 40px; }
+.goal { flex-direction: row; align-items: center; flex-shrink: 1; }
+.goal-icon { width: 24px; height: 24px; -unity-background-scale-mode: scale-to-fit; flex-shrink: 0; }
+.goal-label { font-size: 17px; margin-left: 10px; white-space: normal; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
+.banner { padding: 6px 16px; border-radius: 999px; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); flex-shrink: 0; margin-left: 12px; }
+.replay-bar { flex-direction: row; align-items: center; margin-left: auto; }
+.board-area { flex-grow: 1; margin: 10px 0; min-height: 300px; }
+.board-controls { flex-direction: row; margin: 0 -5px; }
+.board-status { margin-top: 10px; font-size: 15px; color: var(--muted); -unity-text-align: middle-center; white-space: normal; }
+
+/* The countdown / "finding a board" layer, placed over the board itself. */
+.board-overlay { position: absolute; display: none; background-color: rgba(12, 12, 24, 0.66); border-radius: 14px; align-items: center; justify-content: center; }
+.board-overlay.is-visible { display: flex; }
+.overlay-caption { font-size: 24px; color: #ffffff; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); -unity-text-align: middle-center; white-space: normal; }
+.overlay-number { font-size: 150px; color: #ffffff; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); -unity-text-align: middle-center; }
+.overlay-hint { font-size: 16px; color: #d7d8e6; margin-top: 8px; -unity-text-align: middle-center; }
+
+.side { width: 380px; flex-shrink: 0; margin-left: 36px; }
+.main--home .side { width: 560px; margin-left: 0; margin-right: 40px; }
+.screen { display: none; }
+.screen.is-visible { display: flex; }
+
+/* ---- Text ---- */
+.h1 { font-size: 34px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); white-space: normal; }
+.h2 { font-size: 22px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); white-space: normal; }
+.h3 { font-size: 13px; color: var(--muted); letter-spacing: 1px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.body { font-size: 16px; white-space: normal; color: #d7d8e6; }
+.muted { color: var(--muted); white-space: normal; }
+.small { font-size: 14px; }
+
+/* ---- Cards ---- */
+.card { background-color: var(--panel); border-radius: 20px; padding: 22px; margin-bottom: 18px; }
+.card--daily { background-color: var(--daily-tint); border-width: 1px; border-color: var(--daily-border); }
+.card-head { flex-direction: row; align-items: center; margin-bottom: 14px; }
+.card-icon { width: 44px; height: 44px; border-radius: 12px; background-color: var(--daily); margin-right: 12px; align-items: center; justify-content: center; }
+.card-icon-dot { width: 16px; height: 16px; border-radius: 8px; background-color: var(--on-daily); }
+.card-title { flex-grow: 1; }
+.pill { padding: 5px 12px; border-radius: 999px; font-size: 14px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.pill--daily { background-color: var(--daily-soft); color: var(--daily-text); }
+.row { flex-direction: row; align-items: center; }
+.row--spread { justify-content: space-between; }
+.grow { flex-grow: 1; }
+
+/* ---- Buttons ---- */
+.app .btn {
+    height: 48px; margin: 0; padding: 0 22px; border-width: 0; border-radius: 13px; font-size: 16px;
+    -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); -unity-text-align: middle-center;
+    background-color: var(--panel-2); color: var(--text);
+}
+.app .btn:hover { background-color: var(--panel-hover); }
+.app .btn:disabled { opacity: 0.4; }
+.app .btn--primary { background-color: var(--action); color: var(--on-action); }
+.app .btn--primary:hover { background-color: var(--action-hover); }
+.app .btn--daily { background-color: var(--daily); color: var(--on-daily); }
+.app .btn--daily:hover { background-color: var(--daily-hover); }
+.app .btn--ghost { background-color: rgba(0, 0, 0, 0); border-width: 1px; border-color: var(--line); }
+.app .btn--small { height: 40px; padding: 0 14px; font-size: 15px; }
+.app .btn--square { width: 48px; padding: 0; }
+.board-controls .btn { flex-grow: 1; flex-basis: 0; margin: 0 5px; }
+.replay-bar .btn { margin: 0 4px; }
+
+/* ---- Inputs ---- */
+.field { margin: 0; flex-grow: 1; }
+.app .field .unity-base-text-field__input {
+    height: 46px; padding: 0 14px; border-width: 1px; border-radius: 12px; border-color: var(--line);
+    background-color: var(--input); color: var(--text); font-size: 17px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf");
+}
+.app .field:focus .unity-base-text-field__input { border-color: var(--action); }
+.app .field--code .unity-base-text-field__input { letter-spacing: 3px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.field-label { font-size: 14px; color: var(--muted); margin-bottom: 6px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
+
+/* ---- Switches and the stepper ---- */
+.app .switch { width: 52px; height: 30px; border-radius: 15px; border-width: 0; margin: 0; padding: 0; background-color: var(--panel-2); justify-content: center; }
+.app .switch:hover { background-color: var(--panel-hover); }
+.app .switch.is-on { background-color: var(--action); }
+.switch-knob { width: 22px; height: 22px; border-radius: 11px; background-color: #ffffff; margin-left: 4px; }
+.switch.is-on .switch-knob { margin-left: 26px; }
+.setting-row { flex-direction: row; align-items: center; justify-content: space-between; min-height: 44px; }
+.setting-label { font-size: 16px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
+.stepper { flex-direction: row; align-items: center; justify-content: space-between; background-color: var(--input); border-radius: 12px; padding: 5px; }
+.stepper-value { font-size: 17px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+
+/* ---- Settings popover ---- */
+.popover { position: absolute; left: 248px; bottom: 24px; width: 290px; display: none; background-color: var(--panel); border-radius: 18px; padding: 16px 18px; border-width: 1px; border-color: var(--line); }
+.popover.is-open { display: flex; }
+
+/* ---- The side panel's scrollbar: thin, dark, no arrow buttons ---- */
+.side .unity-scroller--vertical { width: 8px; margin-left: 6px; border-width: 0; background-color: rgba(0, 0, 0, 0); }
+.side .unity-scroller__low-button, .side .unity-scroller__high-button { display: none; }
+.side .unity-base-slider__tracker { background-color: rgba(0, 0, 0, 0); border-width: 0; }
+.side .unity-base-slider__dragger { background-color: var(--panel-2); border-width: 0; border-radius: 4px; }
+.side .unity-base-slider__dragger:hover { background-color: var(--panel-hover); }
+
+/* ---- Spacing utilities (last, so they win over the components above) ---- */
+.app .gap-s { margin-bottom: 8px; }
+.app .gap-m { margin-bottom: 14px; }
+.app .gap-l { margin-bottom: 22px; }

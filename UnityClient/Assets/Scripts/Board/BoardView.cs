@@ -70,6 +70,8 @@ namespace Ricochet.Client.Board
         public static GridPos WorldToCell(Vector3 world) => new GridPos(Mathf.FloorToInt(world.x), Mathf.FloorToInt(world.y));
 
         private GameTheme Colors => GameTheme.OrDefault(_theme);
+        /// <summary>The board's colours (for UI that matches it, e.g. the frame colour of a mode).</summary>
+        public GameTheme Theme => Colors;
 
         private void Awake()
         {

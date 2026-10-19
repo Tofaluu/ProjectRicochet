@@ -1,0 +1,134 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="App.uss" />
+    <ui:VisualElement name="app" class="app" picking-mode="Ignore">
+
+        <ui:VisualElement name="nav" class="nav">
+            <ui:VisualElement class="brand">
+                <ui:VisualElement class="brand-dots">
+                    <ui:VisualElement class="dot dot--red" />
+                    <ui:VisualElement class="dot dot--blue" />
+                    <ui:VisualElement class="dot dot--green" />
+                    <ui:VisualElement class="dot dot--yellow" />
+                </ui:VisualElement>
+                <ui:Label text="Ricochet" class="brand-name" />
+            </ui:VisualElement>
+            <ui:Button name="nav-home" text="Home" class="nav-item" />
+            <ui:Button name="nav-daily" text="Daily puzzle" class="nav-item" />
+            <ui:Button name="nav-play" text="Play with friends" class="nav-item" />
+            <ui:Button name="nav-practice" text="Practice" class="nav-item" />
+            <ui:VisualElement class="spacer" />
+            <ui:Button name="nav-settings" text="Settings" class="nav-item" />
+            <ui:VisualElement class="profile">
+                <ui:Label name="profile-avatar" text="?" class="avatar" />
+                <ui:VisualElement class="profile-text">
+                    <ui:Label name="profile-name" text="Guest" class="profile-name" />
+                    <ui:Label text="Guest · no account needed" class="profile-sub" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="main" class="main" picking-mode="Ignore">
+            <ui:VisualElement name="stage" class="stage" picking-mode="Ignore">
+                <ui:VisualElement class="stage-head" picking-mode="Ignore">
+                    <ui:VisualElement class="goal" picking-mode="Ignore">
+                        <ui:VisualElement name="goal-icon" class="goal-icon" picking-mode="Ignore" />
+                        <ui:Label name="goal-label" text="Get the robot to its target" class="goal-label" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="replay-bar" class="replay-bar">
+                        <ui:Button name="replay-pause" text="Pause" class="btn btn--small" />
+                        <ui:Button name="replay-back" text="&lt;" class="btn btn--small btn--square" />
+                        <ui:Button name="replay-forward" text="&gt;" class="btn btn--small btn--square" />
+                        </ui:VisualElement>
+                    <ui:Label name="banner" text="Practice board" class="banner" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:VisualElement name="board-area" class="board-area" picking-mode="Ignore" />
+                <ui:VisualElement name="board-controls" class="board-controls">
+                    <ui:Button name="control-undo" text="Undo  (Z)" class="btn" />
+                    <ui:Button name="control-reset" text="Reset  (R)" class="btn" />
+                    <ui:Button name="control-new" text="New board  (N)" class="btn" />
+                    <ui:Button name="control-shortest" text="Shortest  (H)" class="btn" />
+                </ui:VisualElement>
+                <ui:Label name="board-status" text="" class="board-status" picking-mode="Ignore" />
+            </ui:VisualElement>
+
+            <ui:ScrollView name="side" class="side">
+
+                <ui:VisualElement name="screen-home" class="screen">
+                    <ui:Label name="home-title" text="Welcome to Ricochet" class="h1 gap-s" />
+                    <ui:Label text="Slide the robots, find the shortest path to the target." class="muted body gap-l" />
+
+                    <ui:VisualElement class="card card--daily">
+                        <ui:VisualElement class="card-head">
+                            <ui:VisualElement class="card-icon"><ui:VisualElement class="card-icon-dot" /></ui:VisualElement>
+                            <ui:VisualElement class="card-title">
+                                <ui:Label name="home-daily-title" text="Daily Puzzle" class="h2" />
+                                <ui:Label text="New every day at midnight (Eastern)" class="muted small" />
+                            </ui:VisualElement>
+                            <ui:Label name="home-daily-streak" text="5-day streak" class="pill pill--daily" />
+                        </ui:VisualElement>
+                        <ui:Label text="One board for everyone. Fewest moves wins; your time counts from when you first open it." class="body gap-m" />
+                        <ui:VisualElement class="row">
+                            <ui:Button name="home-daily-play" text="Play today's puzzle" class="btn btn--daily" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="card">
+                        <ui:Label text="Play with friends" class="h2 gap-m" />
+                        <ui:Label text="Your name" class="field-label" />
+                        <ui:TextField name="home-name" max-length="20" class="field gap-m" />
+                        <ui:Button name="home-create" text="Create a lobby" class="btn btn--primary gap-m" />
+                        <ui:Label text="Or join with a code" class="field-label" />
+                        <ui:VisualElement class="row">
+                            <ui:TextField name="home-code" max-length="8" class="field field--code" />
+                            <ui:Button name="home-join" text="Join" class="btn" style="margin-left: 8px;" />
+                        </ui:VisualElement>
+                        <ui:Label name="home-status" text="" class="muted small" style="margin-top: 10px;" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="card">
+                        <ui:Label text="Practice" class="h2 gap-s" />
+                        <ui:Label text="Play on the board here any time. Puzzle mode deals boards that need exactly this many moves." class="muted body gap-m" />
+                        <ui:VisualElement name="home-puzzle-row" class="setting-row gap-s" />
+                        <ui:VisualElement name="home-stepper-slot" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="screen-practice" class="screen">
+                    <ui:Label text="Practice" class="h1 gap-s" />
+                    <ui:Label text="Free play: no timer, no score. Try to match the shortest possible solution." class="muted body gap-l" />
+                    <ui:VisualElement class="card">
+                        <ui:Label text="PUZZLE MODE" class="h3 gap-s" />
+                        <ui:VisualElement name="practice-puzzle-row" class="setting-row gap-s" />
+                        <ui:VisualElement name="practice-stepper-slot" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="card">
+                        <ui:Label text="HOW TO PLAY" class="h3 gap-s" />
+                        <ui:Label text="Robots slide until they hit a wall or another robot. Get the robot shown above onto its target in as few moves as you can." class="body gap-m" />
+                        <ui:Label text="Click a robot, then click a dot to move it, or drag it. Keys: 1-4 or Tab to pick, arrows or WASD to move, Z undo, R reset, N new board, H shortest solution." class="muted small" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="screen-soon" class="screen">
+                    <ui:Label name="soon-title" text="Coming next" class="h1 gap-s" />
+                    <ui:Label name="soon-text" text="" class="muted body gap-l" />
+                    <ui:VisualElement class="row">
+                        <ui:Button name="soon-action" text="Back" class="btn btn--primary" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+            </ui:ScrollView>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="settings" class="popover">
+            <ui:Label text="SETTINGS" class="h3 gap-s" />
+            <ui:VisualElement name="settings-list" />
+            <ui:Label text="Palette: Indigo night (more palettes coming)" class="muted small" style="margin-top: 10px;" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="board-overlay" class="board-overlay" picking-mode="Ignore">
+            <ui:Label name="overlay-caption" text="" class="overlay-caption" picking-mode="Ignore" />
+            <ui:Label name="overlay-number" text="" class="overlay-number" picking-mode="Ignore" />
+            <ui:Label name="overlay-hint" text="" class="overlay-hint" picking-mode="Ignore" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
