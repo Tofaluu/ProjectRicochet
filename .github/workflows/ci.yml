@@ -67,5 +67,6 @@ jobs:
           $SSH "echo TAG=${{ github.sha }} > ~/ricochet/.env"
           echo "$TOKEN" | $SSH "docker login ghcr.io -u $ACTOR --password-stdin"
           $SSH 'cd ~/ricochet && docker compose pull && docker compose up -d && docker image prune -f; docker logout ghcr.io'
-          # A changed Caddyfile doesn't recreate the container; reload it (no downtime).
-          $SSH 'cd ~/ricochet && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile'
+          # The Caddyfile is a single-file bind mount: scp replaces the file, but the running container keeps the
+          # old one (a reload re-reads stale routes). A restart re-binds it (a second or two; the server restarted anyway).
+          $SSH 'cd ~/ricochet && docker compose restart caddy'
