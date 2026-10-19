@@ -49,8 +49,8 @@
 .spacer { flex-grow: 1; }
 .profile { flex-direction: row; align-items: center; padding: 12px; margin-top: 6px; border-top-width: 1px; border-color: var(--panel-2); }
 .avatar { width: 34px; height: 34px; border-radius: 17px; background-color: #3b74e6; -unity-text-align: middle-center; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); color: #ffffff; }
-.profile-text { margin-left: 10px; }
-.profile-name { font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.profile-text { margin-left: 10px; flex-shrink: 1; overflow: hidden; }
+.profile-name { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
 .profile-sub { font-size: 13px; color: var(--muted); }
 
 /* ---- Main area: the board stage and the side panel ---- */
@@ -61,7 +61,7 @@
 .goal { flex-direction: row; align-items: center; flex-shrink: 1; }
 .goal-icon { width: 24px; height: 24px; -unity-background-scale-mode: scale-to-fit; flex-shrink: 0; }
 .goal-label { font-size: 17px; margin-left: 10px; white-space: normal; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
-.banner { padding: 6px 16px; border-radius: 999px; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); flex-shrink: 0; margin-left: 12px; }
+.banner { padding: 7px 14px; border-radius: 10px; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); flex-shrink: 0; margin-left: 12px; }
 .replay-bar { flex-direction: row; align-items: center; margin-left: auto; }
 .board-area { flex-grow: 1; margin: 10px 0; min-height: 300px; }
 .board-controls { flex-direction: row; margin: 0 -5px; }
@@ -117,6 +117,25 @@
 .app .btn--square { width: 48px; padding: 0; }
 .board-controls .btn { flex-grow: 1; flex-basis: 0; margin: 0 5px; }
 .replay-bar .btn { margin: 0 4px; }
+
+/* ---- Daily result ---- */
+.stat { flex-grow: 1; flex-basis: 0; background-color: var(--input); border-radius: 12px; padding: 10px 12px; margin-right: 8px; }
+.stat--last { margin-right: 0; }
+.stat-value { font-size: 24px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.stat-value--daily { color: var(--daily-text); }
+.stat-label { font-size: 13px; color: var(--muted); }
+.squares { flex-direction: row; flex-wrap: wrap; }
+.square { width: 24px; height: 24px; border-radius: 5px; margin: 0 5px 5px 0; }
+.notice { margin-top: 10px; font-size: 14px; color: var(--daily-text); -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); white-space: normal; }
+.lb-row { flex-direction: row; align-items: center; padding: 7px 8px; border-radius: 10px; }
+.lb-row.is-me { background-color: var(--panel-2); }
+.lb-rank { width: 28px; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); color: var(--muted); }
+.lb-rank--1 { color: #ffcf6b; }
+.lb-rank--2 { color: #c9ccdd; }
+.lb-rank--3 { color: #d9a07a; }
+.lb-name { flex-grow: 1; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-moves { width: 40px; font-size: 15px; -unity-text-align: middle-right; }
+.lb-time { width: 56px; font-size: 15px; color: var(--muted); -unity-text-align: middle-right; }
 
 /* ---- Inputs ---- */
 .field { margin: 0; flex-grow: 1; }

@@ -20,7 +20,7 @@ namespace Ricochet.Client.App
     /// </summary>
     public class AppUI : MonoBehaviour
     {
-        private enum Screen { Home, Practice, Lobby, Daily }
+        private enum Screen { Home, Play, Practice, Lobby, Daily }
 
         // The palette's ground, behind the board (the camera's clear colour).
         private static readonly Color Ground = new Color32(0x17, 0x1a, 0x29, 0xff);
@@ -35,8 +35,11 @@ namespace Ricochet.Client.App
         private Button _navHome, _navDaily, _navPlay, _navPractice, _navSettings;
         private Button _undo, _reset, _newBoard, _shortest, _replayPause, _replayBack, _replayForward;
         private readonly Dictionary<Screen, VisualElement> _screens = new Dictionary<Screen, VisualElement>();
-        private VisualElement _soonScreen;
-        private Label _soonTitle, _soonText, _homeTitle, _homeDailyTitle, _homeDailyStreak, _homeStatus, _profileAvatar, _profileName;
+        private VisualElement _soonScreen, _dailySquares, _dailyRows, _dailyStats, _dailyBoard;
+        private Label _dailyHeader, _dailyHeadline, _dailyMoves, _dailyMovesLabel, _dailyTime, _dailyStreak, _dailyDetail, _dailyNotice, _dailyRank, _dailyNext;
+        private Button _dailyCopy, _dailyRetry;
+        private string _shownSquares, _shownRows;
+        private Label _soonTitle, _soonText, _homeTitle, _homeDailyTitle, _homeDailyStreak, _playStatus, _profileAvatar, _profileName;
         private Button _soonAction;
         private TextField _nameField, _codeField;
         private readonly List<(Button Switch, Func<bool> IsOn)> _switches = new List<(Button, Func<bool>)>();
@@ -125,11 +128,7 @@ namespace Ricochet.Client.App
 
             _navHome = Click("nav-home", () => Choose(Screen.Home));
             _navDaily = Click("nav-daily", OpenDaily);
-            _navPlay = Click("nav-play", () =>
-            {
-                Choose(Screen.Home);
-                _codeField.Focus();
-            });
+            _navPlay = Click("nav-play", () => Choose(Screen.Play));
             _navPractice = Click("nav-practice", () => Choose(Screen.Practice));
             _navSettings = Click("nav-settings", () => _settings.EnableInClassList("is-open", !_settings.ClassListContains("is-open")));
 
@@ -142,7 +141,26 @@ namespace Ricochet.Client.App
             _replayForward = Click("replay-forward", () => Scratchpad.Perform(ControlAction.ReplayForward));
 
             _screens[Screen.Home] = _root.Q("screen-home");
+            _screens[Screen.Play] = _root.Q("screen-play");
             _screens[Screen.Practice] = _root.Q("screen-practice");
+            _screens[Screen.Daily] = _root.Q("screen-daily");
+            _dailyHeader = _root.Q<Label>("daily-header");
+            _dailyHeadline = _root.Q<Label>("daily-headline");
+            _dailyStats = _root.Q("daily-stats");
+            _dailyMoves = _root.Q<Label>("daily-moves");
+            _dailyMovesLabel = _root.Q<Label>("daily-moves-label");
+            _dailyTime = _root.Q<Label>("daily-time");
+            _dailyStreak = _root.Q<Label>("daily-streak");
+            _dailyDetail = _root.Q<Label>("daily-detail");
+            _dailySquares = _root.Q("daily-squares");
+            _dailyNotice = _root.Q<Label>("daily-notice");
+            _dailyBoard = _root.Q("daily-board");
+            _dailyRank = _root.Q<Label>("daily-rank");
+            _dailyRows = _root.Q("daily-rows");
+            _dailyNext = _root.Q<Label>("daily-next");
+            _dailyCopy = Click("daily-copy", _daily.CopyResult);
+            _dailyRetry = Click("daily-retry", _daily.Open);
+            Click("daily-back", () => Choose(Screen.Practice));
             _soonScreen = _root.Q("screen-soon");
             _soonTitle = _root.Q<Label>("soon-title");
             _soonText = _root.Q<Label>("soon-text");
@@ -151,17 +169,18 @@ namespace Ricochet.Client.App
             _homeTitle = _root.Q<Label>("home-title");
             _homeDailyTitle = _root.Q<Label>("home-daily-title");
             _homeDailyStreak = _root.Q<Label>("home-daily-streak");
-            _homeStatus = _root.Q<Label>("home-status");
+            _playStatus = _root.Q<Label>("play-status");
             _profileAvatar = _root.Q<Label>("profile-avatar");
             _profileName = _root.Q<Label>("profile-name");
             Click("home-daily-play", OpenDaily);
-            Click("home-create", () => _game.CreateLobby(_nameField.value));
-            Click("home-join", () => _game.Join(_codeField.value, _nameField.value));
+            Click("home-play", () => Choose(Screen.Play));
+            Click("play-create", () => _game.CreateLobby(_nameField.value));
+            Click("play-join", () => _game.Join(_codeField.value, _nameField.value));
 
-            _nameField = _root.Q<TextField>("home-name");
+            _nameField = _root.Q<TextField>("play-name");
             _nameField.value = _game.PlayerName;
             _nameField.RegisterValueChangedCallback(e => _game.PlayerName = e.newValue);
-            _codeField = _root.Q<TextField>("home-code");
+            _codeField = _root.Q<TextField>("play-code");
             // Lobby codes aren't case-sensitive; show them the way the lobby does.
             _codeField.RegisterValueChangedCallback(e =>
             {
@@ -279,6 +298,7 @@ namespace Ricochet.Client.App
             if (Scratchpad.Camera != null)
                 Scratchpad.Camera.backgroundColor = Ground;
 
+            CloseSettingsOnOutsideClick();
             Screen screen = Current;
             _main.EnableInClassList("main--home", screen == Screen.Home);
             foreach (KeyValuePair<Screen, VisualElement> pair in _screens)
@@ -286,12 +306,14 @@ namespace Ricochet.Client.App
             ShowSoon(screen);
             _navHome.EnableInClassList("is-active", screen == Screen.Home);
             _navDaily.EnableInClassList("is-active", screen == Screen.Daily);
-            _navPlay.EnableInClassList("is-active", screen == Screen.Lobby);
+            _navPlay.EnableInClassList("is-active", screen == Screen.Play || screen == Screen.Lobby);
             _navPractice.EnableInClassList("is-active", screen == Screen.Practice);
             _navSettings.EnableInClassList("is-active", _settings.ClassListContains("is-open"));
 
             ShowProfile();
             ShowHome();
+            if (screen == Screen.Daily)
+                ShowDaily();
             foreach ((Button button, Func<bool> isOn) in _switches)
                 button.EnableInClassList("is-on", isOn());
             foreach ((Label value, Button minus, Button plus) in _steppers)
@@ -306,10 +328,33 @@ namespace Ricochet.Client.App
                 ShowStage();
         }
 
+        // The settings popover closes when the player clicks anywhere else (the board included) or presses Esc. Read
+        // from the Input System: clicks on the board never reach the UI.
+        private void CloseSettingsOnOutsideClick()
+        {
+            if (!_settings.ClassListContains("is-open"))
+                return;
+            var keyboard = UnityEngine.InputSystem.Keyboard.current;
+            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+            {
+                _settings.RemoveFromClassList("is-open");
+                return;
+            }
+            var pointer = UnityEngine.InputSystem.Pointer.current;
+            if (pointer == null || !pointer.press.wasPressedThisFrame)
+                return;
+            Vector2 position = pointer.position.ReadValue();
+            float s = PanelScale;
+            var onPanel = new Vector2(position.x / s, (UnityEngine.Screen.height - position.y) / s);
+            // The Settings button toggles it by itself.
+            if (!_settings.worldBound.Contains(onPanel) && !_navSettings.worldBound.Contains(onPanel))
+                _settings.RemoveFromClassList("is-open");
+        }
+
         // Lobby and daily screens arrive in the next steps; until then a placeholder with a way back.
         private void ShowSoon(Screen screen)
         {
-            bool soon = screen == Screen.Lobby || screen == Screen.Daily;
+            bool soon = screen == Screen.Lobby;
             _soonScreen.EnableInClassList("is-visible", soon);
             if (screen == Screen.Lobby)
             {
@@ -330,10 +375,98 @@ namespace Ricochet.Client.App
             }
         }
 
+        // The daily puzzle's side: how the player stands (clock or best, streak), their share squares, the leaderboard.
+        private void ShowDaily()
+        {
+            DailyState daily = _daily.State;
+            float now = Time.time;
+            _dailyHeader.text = daily.Number > 0 ? $"DAILY PUZZLE #{daily.Number}  ·  {daily.Weekday.ToUpperInvariant()}" : "DAILY PUZZLE";
+            bool error = daily.Stage == DailyStage.Error, loading = daily.Stage == DailyStage.Loading;
+            bool solved = daily.Stage == DailyStage.Playing && daily.HasSolved;
+
+            _dailyHeadline.text = loading ? "Loading today's puzzle..." : error ? "Couldn't load the puzzle"
+                : daily.IsPerfect ? "Perfect solve!" : solved ? $"Solved in {daily.BestMoves} moves" : "Today's puzzle";
+            _dailyStats.style.display = loading || error ? DisplayStyle.None : DisplayStyle.Flex;
+            _dailyMoves.text = solved ? $"{daily.BestMoves}/{daily.ShortestLength}" : $"{daily.ShortestLength}";
+            _dailyMovesLabel.text = solved ? "moves" : "moves possible";
+            _dailyTime.text = DailyState.Clock(solved ? daily.BestSeconds : daily.Elapsed(now));
+            _dailyStreak.text = daily.Streak.ToString();
+            _dailyDetail.text = error ? daily.Error
+                : loading ? ""
+                : daily.IsPerfect ? "You found the best possible solution. See you tomorrow!"
+                : solved ? "Keep going: a shorter solution beats your best, until midnight."
+                : "Solve it in as few moves as you can. Your time counts from when you first opened it, and you can keep improving until midnight (Eastern).";
+            _dailyCopy.style.display = solved ? DisplayStyle.Flex : DisplayStyle.None;
+            _dailyRetry.style.display = error ? DisplayStyle.Flex : DisplayStyle.None;
+            string notice = _daily.Notice ?? (daily.Submitting ? "Sending..." : null);
+            _dailyNotice.text = notice ?? "";
+            _dailyNotice.style.display = notice != null ? DisplayStyle.Flex : DisplayStyle.None;
+
+            // The squares and rows only change when the result does: rebuild them then, not every frame.
+            string squares = solved ? string.Join(",", daily.BestSolution) : "";
+            _dailySquares.style.display = solved ? DisplayStyle.Flex : DisplayStyle.None;
+            if (squares != _shownSquares)
+            {
+                _shownSquares = squares;
+                _dailySquares.Clear();
+                foreach (Move move in solved ? daily.BestSolution : new Move[0])
+                {
+                    var square = new VisualElement();
+                    square.AddToClassList("square");
+                    square.style.backgroundColor = Theme.RobotColor(move.Robot);
+                    _dailySquares.Add(square);
+                }
+            }
+
+            DailyLeaderboard board = daily.Leaderboard;
+            bool hasBoard = solved && board != null && board.Top != null && board.Top.Length > 0;
+            _dailyBoard.style.display = hasBoard ? DisplayStyle.Flex : DisplayStyle.None;
+            _dailyRank.text = daily.Rank > 0 ? $"#{daily.Rank} of {daily.Players}" : "";
+            string rows = hasBoard ? string.Join("|", Array.ConvertAll(board.Top, e => $"{e.Name}/{e.Moves}/{e.Seconds:0}/{e.IsMe}")) + board.MyRank : "";
+            if (rows != _shownRows)
+            {
+                _shownRows = rows;
+                _dailyRows.Clear();
+                if (hasBoard)
+                {
+                    for (int i = 0; i < board.Top.Length && i < 5; i++)
+                        _dailyRows.Add(LeaderboardRow(i + 1, board.Top[i].IsMe ? "You" : board.Top[i].Name, board.Top[i].Moves, board.Top[i].Seconds, board.Top[i].IsMe));
+                    if (board.MyRank > 5)
+                        _dailyRows.Add(LeaderboardRow(board.MyRank, "You", daily.BestMoves, daily.BestSeconds, true));
+                }
+            }
+            _dailyNext.text = daily.Stage == DailyStage.Playing ? $"Next puzzle in {DailyState.Clock(daily.UntilNext(now))}" : "";
+        }
+
+        private static VisualElement LeaderboardRow(int place, string name, int moves, double seconds, bool me)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("lb-row");
+            row.EnableInClassList("is-me", me);
+            var rank = new Label(place.ToString());
+            rank.AddToClassList("lb-rank");
+            if (place <= 3)
+                rank.AddToClassList($"lb-rank--{place}");
+            var who = new Label(name);
+            who.AddToClassList("lb-name");
+            var count = new Label(moves.ToString());
+            count.AddToClassList("lb-moves");
+            var time = new Label(DailyState.Clock(seconds));
+            time.AddToClassList("lb-time");
+            row.Add(rank);
+            row.Add(who);
+            row.Add(count);
+            row.Add(time);
+            return row;
+        }
+
         private void ShowProfile()
         {
             string name = _game.PlayerName;
             _profileName.text = name.Length > 0 ? name : "Guest";
+            // A name set elsewhere (e.g. ?name= in the link) shows in the box too, unless the player is typing in it.
+            if (_nameField.value != name && !IsTyping())
+                _nameField.SetValueWithoutNotify(name);
             _profileAvatar.text = name.Length > 0 ? name.Substring(0, 1).ToUpperInvariant() : "?";
         }
 
@@ -345,7 +478,7 @@ namespace Ricochet.Client.App
             _homeDailyTitle.text = "Daily Puzzle";
             _homeDailyStreak.text = $"{streak}-day streak";
             _homeDailyStreak.style.display = streak > 0 ? DisplayStyle.Flex : DisplayStyle.None;
-            _homeStatus.text = _game.Status.StartsWith("Join failed") || _game.Status.StartsWith("Enter") ? _game.Status : "";
+            _playStatus.text = _game.Status.StartsWith("Join failed") || _game.Status.StartsWith("Enter") ? _game.Status : "";
         }
 
         private void ShowStage()

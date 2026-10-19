@@ -22,7 +22,7 @@
                 <ui:Label name="profile-avatar" text="?" class="avatar" />
                 <ui:VisualElement class="profile-text">
                     <ui:Label name="profile-name" text="Guest" class="profile-name" />
-                    <ui:Label text="Guest · no account needed" class="profile-sub" />
+                    <ui:Label text="Playing as a guest" class="profile-sub" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
@@ -73,16 +73,11 @@
                     </ui:VisualElement>
 
                     <ui:VisualElement class="card">
-                        <ui:Label text="Play with friends" class="h2 gap-m" />
-                        <ui:Label text="Your name" class="field-label" />
-                        <ui:TextField name="home-name" max-length="20" class="field gap-m" />
-                        <ui:Button name="home-create" text="Create a lobby" class="btn btn--primary gap-m" />
-                        <ui:Label text="Or join with a code" class="field-label" />
+                        <ui:Label text="Play with friends" class="h2 gap-s" />
+                        <ui:Label text="Race your friends on the same board: the shortest solution wins the round." class="muted body gap-m" />
                         <ui:VisualElement class="row">
-                            <ui:TextField name="home-code" max-length="8" class="field field--code" />
-                            <ui:Button name="home-join" text="Join" class="btn" style="margin-left: 8px;" />
+                            <ui:Button name="home-play" text="Create or join a lobby" class="btn btn--primary" />
                         </ui:VisualElement>
-                        <ui:Label name="home-status" text="" class="muted small" style="margin-top: 10px;" />
                     </ui:VisualElement>
 
                     <ui:VisualElement class="card">
@@ -106,6 +101,49 @@
                         <ui:Label text="Robots slide until they hit a wall or another robot. Get the robot shown above onto its target in as few moves as you can." class="body gap-m" />
                         <ui:Label text="Click a robot, then click a dot to move it, or drag it. Keys: 1-4 or Tab to pick, arrows or WASD to move, Z undo, R reset, N new board, H shortest solution." class="muted small" />
                     </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="screen-play" class="screen">
+                    <ui:Label text="Play with friends" class="h1 gap-s" />
+                    <ui:Label text="Everyone gets the same board. The first solution starts a timer, shorter ones extend it, and the shortest when time runs out wins the round." class="muted body gap-l" />
+                    <ui:VisualElement class="card">
+                        <ui:Label text="Your name" class="field-label" />
+                        <ui:TextField name="play-name" max-length="20" class="field gap-m" />
+                        <ui:Button name="play-create" text="Create a lobby" class="btn btn--primary gap-l" />
+                        <ui:Label text="Or join with a code" class="field-label" />
+                        <ui:VisualElement class="row">
+                            <ui:TextField name="play-code" max-length="8" class="field field--code" />
+                            <ui:Button name="play-join" text="Join" class="btn" style="margin-left: 8px;" />
+                        </ui:VisualElement>
+                        <ui:Label name="play-status" text="" class="muted small" style="margin-top: 10px;" />
+                    </ui:VisualElement>
+                    <ui:Label text="Share the lobby code with your friends. Whoever creates the lobby picks the settings and starts the match." class="muted small" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="screen-daily" class="screen">
+                    <ui:Label name="daily-header" text="DAILY PUZZLE" class="h3 gap-s" />
+                    <ui:VisualElement class="card card--daily">
+                        <ui:Label name="daily-headline" text="" class="h2 gap-m" />
+                        <ui:VisualElement name="daily-stats" class="row gap-m">
+                            <ui:VisualElement class="stat"><ui:Label name="daily-moves" class="stat-value" /><ui:Label name="daily-moves-label" text="moves" class="stat-label" /></ui:VisualElement>
+                            <ui:VisualElement class="stat"><ui:Label name="daily-time" class="stat-value" /><ui:Label text="time" class="stat-label" /></ui:VisualElement>
+                            <ui:VisualElement class="stat stat--last"><ui:Label name="daily-streak" class="stat-value stat-value--daily" /><ui:Label text="day streak" class="stat-label" /></ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:Label name="daily-detail" text="" class="muted body gap-m" />
+                        <ui:VisualElement name="daily-squares" class="squares gap-m" />
+                        <ui:Button name="daily-copy" text="Copy result" class="btn btn--daily" />
+                        <ui:Button name="daily-retry" text="Try again" class="btn btn--primary" />
+                        <ui:Label name="daily-notice" text="" class="notice" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="daily-board" class="card">
+                        <ui:VisualElement class="row row--spread gap-s">
+                            <ui:Label text="Today's leaderboard" class="h2" />
+                            <ui:Label name="daily-rank" text="" class="muted small" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="daily-rows" />
+                    </ui:VisualElement>
+                    <ui:Label name="daily-next" text="" class="muted small gap-m" style="-unity-text-align: middle-center;" />
+                    <ui:Button name="daily-back" text="Back to practice" class="btn" />
                 </ui:VisualElement>
 
                 <ui:VisualElement name="screen-soon" class="screen">
