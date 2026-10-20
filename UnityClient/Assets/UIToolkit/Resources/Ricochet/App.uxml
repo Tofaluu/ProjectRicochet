@@ -224,6 +224,16 @@
                 </ui:VisualElement>
 
             </ui:ScrollView>
+
+            <!-- Compact layout only: the side panel is a sheet over the board; this is its handle and one-line summary
+                 (tap or drag it to show the panel or the board). -->
+            <ui:VisualElement name="sheet-head" class="sheet-head">
+                <ui:VisualElement class="sheet-handle" picking-mode="Ignore" />
+                <ui:VisualElement class="sheet-row" picking-mode="Ignore">
+                    <ui:Label name="sheet-summary" text="" class="sheet-summary" picking-mode="Ignore" />
+                    <ui:Label name="sheet-toggle" text="More" class="sheet-toggle" picking-mode="Ignore" />
+                </ui:VisualElement>
+            </ui:VisualElement>
         </ui:VisualElement>
 
         <ui:VisualElement name="settings" class="popover">

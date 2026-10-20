@@ -213,6 +213,17 @@
    Top bar, the board with its controls, the screen's panel below it, the nav as a bottom tab bar. Everything here is
    scoped to .app--compact so the desktop layout above never changes. */
 .topbar { display: none; }
+.sheet-head { display: none; }
+.app--compact .sheet-head {
+    display: flex; position: absolute; height: 48px; padding: 6px 14px 0 14px; background-color: var(--panel);
+    border-top-left-radius: 16px; border-top-right-radius: 16px;
+}
+.sheet-handle { width: 40px; height: 4px; border-radius: 2px; background-color: var(--line); align-self: center; margin-bottom: 8px; }
+.sheet-row { flex-direction: row; align-items: center; }
+.sheet-summary { flex-grow: 1; flex-shrink: 1; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
+.sheet-toggle { flex-shrink: 0; margin-left: 10px; font-size: 14px; color: var(--muted); -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+/* The panel under the sheet's head: opaque, since it slides up over the board. */
+.app--compact .side { position: absolute; background-color: var(--bg); padding-top: 12px; }
 .rotate-hint { display: none; }
 .app--compact { flex-direction: column; }
 .app--compact .topbar { display: flex; flex-direction: row; align-items: center; flex-shrink: 0; padding: 8px 12px; background-color: var(--nav); }
@@ -236,8 +247,7 @@
 .app--compact .board-controls .btn { height: 44px; margin: 0 4px; padding: 0 6px; font-size: 15px; }
 .app--compact #replay-pause { width: 76px; }
 .app--compact .board-controls .btn--square { width: 44px; }
-.app--compact .side { width: auto; flex-grow: 1; flex-basis: 0; margin: 10px 0 0 0; }
-.app--compact .main--home .side { width: auto; margin: 8px 0 0 0; }
+.app--compact .side, .app--compact .main--home .side { width: auto; margin: 0; }
 
 .app--compact .h1 { font-size: 26px; }
 .app--compact .card { padding: 16px; border-radius: 16px; margin-bottom: 12px; }

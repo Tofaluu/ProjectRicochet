@@ -528,6 +528,7 @@ namespace Ricochet.Client.App
                 plus.SetEnabled(PlayerSettings.PracticeExact && moves < MatchSettings.MaxMinMoves);
             }
 
+            ShowSheet(screen);
             if (Session.Round != null)
                 ShowStage();
         }
@@ -946,11 +947,14 @@ namespace Ricochet.Client.App
             _goalIcon.style.unityBackgroundImageTintColor = targetColor;
             string robot = target.Robot.HasValue ? $"the {target.Robot.Value} robot" : "any robot";
             int best = Scratchpad.PracticeShortest;
-            _goalLabel.text = $"Get <b><color=#{ColorUtility.ToHtmlStringRGB(Lighter(targetColor))}>{robot}</color></b> to its target"
-                + (best > 0 ? $" in {best} moves" : "");
+            string color = ColorUtility.ToHtmlStringRGB(Lighter(targetColor));
+            // Compact: one short line beside the banner ("Red robot to its target in 6").
+            _goalLabel.text = Compact
+                ? $"<b><color=#{color}>{(target.Robot.HasValue ? $"{target.Robot.Value} robot" : "Any robot")}</color></b> to its target" + (best > 0 ? $" in {best}" : "")
+                : $"Get <b><color=#{color}>{robot}</color></b> to its target" + (best > 0 ? $" in {best} moves" : "");
 
             Color frame = theme.FrameColor(Session.Mode, target);
-            _banner.text = BannerText(Session);
+            _banner.text = Compact ? BannerText(Session).Replace("Practice board", "Practice").Replace("  ·  ", " · ") : BannerText(Session);
             _banner.style.backgroundColor = frame;
             _banner.style.color = theme.TextOn(frame);
 
@@ -970,7 +974,7 @@ namespace Ricochet.Client.App
             if (replay)
                 _replayPause.text = !Session.ReplayPaused && !Session.ReplayFinished ? "Pause" : Session.ReplayFinished ? "Again" : "Play";
 
-            if (BoardHidden)
+            if (BoardHidden || SheetCoversBoard)
             {
                 _boardTip.RemoveFromClassList("is-visible");
                 _boardOverlay.RemoveFromClassList("is-visible");
