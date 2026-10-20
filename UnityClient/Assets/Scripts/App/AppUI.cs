@@ -119,21 +119,22 @@ namespace Ricochet.Client.App
             _root = document.rootVisualElement;
             _root.pickingMode = PickingMode.Ignore;
 
-            // Tab picks robots, so UI Toolkit's own Tab focus cycling (through every button, then the text fields, where the
-            // board stops taking keys) is off; Tab only hops between the name and code fields while typing in one.
-            _root.RegisterCallback<NavigationMoveEvent>(OnTabNavigation, TrickleDown.TrickleDown);
+            // Tab picks robots and the arrows move them, so UI Toolkit's own keyboard navigation (focus moving from button to
+            // button, then into a text field, where the board stops taking keys) is off; Tab only hops between the name and
+            // code fields while typing in one.
+            _root.RegisterCallback<NavigationMoveEvent>(OnNavigationMove, TrickleDown.TrickleDown);
 
             Bind();
             Scratchpad.BoardArea = BoardAreaOnScreen;
             ScratchpadController.TypingInOtherUI = IsTyping;
         }
 
-        private void OnTabNavigation(NavigationMoveEvent e)
+        private void OnNavigationMove(NavigationMoveEvent e)
         {
-            if (e.direction != NavigationMoveEvent.Direction.Next && e.direction != NavigationMoveEvent.Direction.Previous)
-                return;
             _root.focusController.IgnoreEvent(e);
             e.StopPropagation();
+            if (e.direction != NavigationMoveEvent.Direction.Next && e.direction != NavigationMoveEvent.Direction.Previous)
+                return;
             if (HasFocus(_nameField))
                 _codeField.Focus();
             else if (HasFocus(_codeField))
