@@ -18,7 +18,7 @@ namespace Ricochet.Client.App
     /// <see cref="DailyController"/> and the board session; the camera fits the board into the stage's board area. The
     /// look is <c>UIToolkit/Resources/Ricochet/App.uss</c> (palette variables at the top).
     /// </summary>
-    public class AppUI : MonoBehaviour
+    public partial class AppUI : MonoBehaviour
     {
         private enum Screen { Home, Play, Practice, Lobby, Match, Daily }
 
@@ -108,6 +108,7 @@ namespace Ricochet.Client.App
             settings.screenMatchMode = PanelScreenMatchMode.MatchWidthOrHeight;
             settings.match = 0.5f;
             settings.clearColor = false;
+            _panelSettings = settings;
 
             var holder = new GameObject("UI Document");
             holder.SetActive(false);
@@ -125,8 +126,10 @@ namespace Ricochet.Client.App
             _root.RegisterCallback<NavigationMoveEvent>(OnNavigationMove, TrickleDown.TrickleDown);
 
             Bind();
+            InitLayout();
             Scratchpad.BoardArea = BoardAreaOnScreen;
             ScratchpadController.TypingInOtherUI = IsTyping;
+            ScratchpadController.PointerBlocked = PointerBlocked;
         }
 
         private void OnNavigationMove(NavigationMoveEvent e)
@@ -485,6 +488,7 @@ namespace Ricochet.Client.App
         {
             if (_root == null)
                 return;
+            ApplyLayout();
             // The palette's ground behind the board (the board view sets its own when it builds a board).
             if (Scratchpad.Camera != null)
                 Scratchpad.Camera.backgroundColor = Ground;
@@ -492,6 +496,7 @@ namespace Ricochet.Client.App
             ClosePopoversOnOutsideClick();
             GlideSide();
             Screen screen = Current;
+            ShowBoardVisibility();
             // Puzzle mode is the Practice side's: Play with friends and the lobby get plain random boards.
             Scratchpad.PlainPractice = screen == Screen.Play || screen == Screen.Lobby || screen == Screen.Match;
             _main.EnableInClassList("main--home", screen == Screen.Home);
@@ -502,6 +507,7 @@ namespace Ricochet.Client.App
             _navPlay.EnableInClassList("is-active", screen == Screen.Play || screen == Screen.Lobby || screen == Screen.Match);
             _navPractice.EnableInClassList("is-active", screen == Screen.Practice);
             _navSettings.EnableInClassList("is-active", _settings.ClassListContains("is-open"));
+            _topbarSettings.EnableInClassList("is-active", _settings.ClassListContains("is-open"));
             _profileButton.EnableInClassList("is-active", _profilePopover.ClassListContains("is-open"));
 
             ShowProfile();
@@ -563,9 +569,11 @@ namespace Ricochet.Client.App
             float s = PanelScale;
             var onPanel = new Vector2(position.x / s, (UnityEngine.Screen.height - position.y) / s);
             // The button that opened a popover toggles it by itself.
-            if (settings && !_settings.worldBound.Contains(onPanel) && !_navSettings.worldBound.Contains(onPanel))
+            if (settings && !_settings.worldBound.Contains(onPanel) && !_navSettings.worldBound.Contains(onPanel)
+                && !_topbarSettings.worldBound.Contains(onPanel))
                 ClosePopover(_settings);
-            if (profile && !_profilePopover.worldBound.Contains(onPanel) && !_profileButton.worldBound.Contains(onPanel))
+            if (profile && !_profilePopover.worldBound.Contains(onPanel) && !_profileButton.worldBound.Contains(onPanel)
+                && !_topbarAvatar.worldBound.Contains(onPanel))
                 ClosePopover(_profilePopover);
         }
 
@@ -915,6 +923,7 @@ namespace Ricochet.Client.App
                 if (field.value != name && !HasFocus(field))
                     field.SetValueWithoutNotify(name);
             _profileAvatar.text = name.Length > 0 ? name.Substring(0, 1).ToUpperInvariant() : "?";
+            _topbarAvatar.text = _profileAvatar.text;
         }
 
         private void ShowHome()
@@ -961,6 +970,12 @@ namespace Ricochet.Client.App
             if (replay)
                 _replayPause.text = !Session.ReplayPaused && !Session.ReplayFinished ? "Pause" : Session.ReplayFinished ? "Again" : "Play";
 
+            if (BoardHidden)
+            {
+                _boardTip.RemoveFromClassList("is-visible");
+                _boardOverlay.RemoveFromClassList("is-visible");
+                return;
+            }
             ShowTip();
             ShowOverlay();
         }
@@ -990,7 +1005,7 @@ namespace Ricochet.Client.App
             {
                 _overlayCaption.text = search;
                 _overlayNumber.text = "";
-                _overlayHint.text = "N or Esc to stop";
+                _overlayHint.text = Compact ? "Tap New to stop" : Touch ? "Tap New board to stop" : "N or Esc to stop";
             }
         }
 

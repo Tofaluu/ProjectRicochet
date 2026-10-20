@@ -72,6 +72,9 @@ namespace Ricochet.Client.Scratchpad
         /// <summary>Extra "the player is typing" check for a UI's text fields (keys then don't move robots).</summary>
         public static System.Func<bool> TypingInOtherUI { get; set; }
 
+        /// <summary>Set by the UI: whether a press at this screen position is on the UI (or the board is hidden), not the board.</summary>
+        public static System.Func<Vector2, bool> PointerBlocked { get; set; }
+
         private void Start()
         {
             if (_camera == null)
@@ -719,6 +722,8 @@ namespace Ricochet.Client.Scratchpad
 
             Vector3 world = _camera.ScreenToWorldPoint(pointer.position.ReadValue());
 
+            if (pointer.press.wasPressedThisFrame && PointerBlocked != null && PointerBlocked(pointer.position.ReadValue()))
+                return;
             if (pointer.press.wasPressedThisFrame)
             {
                 GridPos cell = BoardView.WorldToCell(world);

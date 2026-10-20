@@ -2,6 +2,20 @@
     <Style src="App.uss" />
     <ui:VisualElement name="app" class="app" picking-mode="Ignore">
 
+        <!-- Compact layout only (phones, tablets upright): brand, Settings and the profile; the nav becomes a bottom tab bar. -->
+        <ui:VisualElement name="topbar" class="topbar">
+            <ui:VisualElement class="brand-dots">
+                <ui:VisualElement class="dot dot--red" />
+                <ui:VisualElement class="dot dot--blue" />
+                <ui:VisualElement class="dot dot--green" />
+                <ui:VisualElement class="dot dot--yellow" />
+            </ui:VisualElement>
+            <ui:Label text="Ricochet" class="topbar-name" />
+            <ui:VisualElement class="spacer" />
+            <ui:Button name="topbar-settings" text="Settings" class="btn btn--small topbar-settings" />
+            <ui:Label name="topbar-avatar" text="?" class="avatar topbar-avatar" />
+        </ui:VisualElement>
+
         <ui:VisualElement name="nav" class="nav">
             <ui:VisualElement class="brand">
                 <ui:VisualElement class="brand-dots">
@@ -232,6 +246,12 @@
             <ui:Label name="overlay-caption" text="" class="overlay-caption" picking-mode="Ignore" />
             <ui:Label name="overlay-number" text="" class="overlay-number" picking-mode="Ignore" />
             <ui:Label name="overlay-hint" text="" class="overlay-hint" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <!-- A phone held sideways: too short for either layout. -->
+        <ui:VisualElement name="rotate-hint" class="rotate-hint">
+            <ui:Label text="Turn your phone upright to play" class="h2" style="-unity-text-align: middle-center;" />
+            <ui:Label text="Ricochet fits best in portrait on a phone." class="muted body" style="-unity-text-align: middle-center; margin-top: 8px;" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

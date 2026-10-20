@@ -8,8 +8,10 @@
       :root { --bg: #14161c; --text: #e8eaf0; --muted: #8b91a1; --accent: #3fb6a8; --track: #2a2e38; }
       html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
         font-family: system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
-      #unity-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
-        background: var(--bg); outline: none; }
+      /* 100dvh = the visible height: on phones and tablets 100vh also counts the area under the browser's toolbars,
+         which cut off the bottom of the game. */
+      #unity-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block;
+        background: var(--bg); outline: none; touch-action: none; }
       #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
         justify-content: center; gap: 14px; padding: 0 16px; text-align: center; }
       #loading h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: 0.02em; }
@@ -24,7 +26,7 @@
     <div id="loading">
       <h1>{{{ PRODUCT_NAME }}}</h1>
       <div id="bar"><div id="bar-fill"></div></div>
-      <p id="hint">Loading... Best on a desktop browser with a keyboard.</p>
+      <p id="hint">Loading...</p>
       <p id="error"></p>
     </div>
     <!-- The JavaScript SignalR client used by Plugins/WebGL/RicochetHub.jslib (MIT, see THIRD-PARTY-NOTICES.md). -->
