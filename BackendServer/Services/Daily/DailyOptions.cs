@@ -15,6 +15,12 @@ namespace BackendServer.Services
         /// <summary>Time to find a board of the day's length; after it, the longest found that isn't too long.</summary>
         public double SearchSeconds { get; set; } = 60;
 
+        /// <summary><see cref="SearchSeconds"/> for boards of <see cref="LongBoardMoves"/>+ moves (Sunday's), which are rare:
+        /// they're generated a day ahead in the background, so they can take their time.</summary>
+        public double LongSearchSeconds { get; set; } = 1800;
+
+        public const int LongBoardMoves = 16;
+
         /// <summary>Time the solver gets per candidate board (boards it gives up on are skipped).</summary>
         public double SolverTimeLimitSeconds { get; set; } = 5;
 

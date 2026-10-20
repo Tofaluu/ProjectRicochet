@@ -56,9 +56,9 @@ public class DailyTests
         time.Advance(TimeSpan.FromMinutes(2));
         DailyPuzzleInfo tuesday = await daily.GetDailyAsync(Alice, "Alice");
         Assert.Equal(2, tuesday.Number);
-        Assert.InRange(tuesday.ShortestLength, 5, 6);
-        Assert.Equal((5, 6), DailyService.Difficulty(DayOfWeek.Tuesday));
-        Assert.Equal((11, 13), DailyService.Difficulty(DayOfWeek.Sunday));
+        Assert.InRange(tuesday.ShortestLength, 6, 7);
+        Assert.Equal((6, 7), DailyService.Difficulty(DayOfWeek.Tuesday));
+        Assert.Equal((16, 17), DailyService.Difficulty(DayOfWeek.Sunday));
     }
 
     [Fact]
