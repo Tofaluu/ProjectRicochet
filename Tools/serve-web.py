@@ -1,6 +1,6 @@
 """Serves Builds/WebGL on http://localhost:<port> with the headers Caddy adds on the cloud server (Unity's
 files are pre-compressed). Lets the browser build talk to a local game server: an https page can't reach
-http://localhost, a localhost page can. Usage: python Tools/serve-web.py [port]"""
+http://localhost, a localhost page can. Usage: python Tools/serve-web.py [port] [host]"""
 import functools
 import http.server
 import os
@@ -32,7 +32,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+    # A second argument picks the address to listen on: 0.0.0.0 lets phones on the same Wi-Fi in (dev-session.sh --lan).
+    host = sys.argv[2] if len(sys.argv) > 2 else 'localhost'
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Builds', 'WebGL')
-    server = http.server.ThreadingHTTPServer(('localhost', port), functools.partial(Handler, directory=root))
-    print(f'Serving {os.path.normpath(root)} at http://localhost:{port}')
+    server = http.server.ThreadingHTTPServer((host, port), functools.partial(Handler, directory=root))
+    print(f'Serving {os.path.normpath(root)} at http://{host}:{port}')
     server.serve_forever()
