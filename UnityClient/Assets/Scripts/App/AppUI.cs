@@ -33,7 +33,7 @@ namespace Ricochet.Client.App
         private VisualElement _root;
         private Screen _chosen = Screen.Home;
 
-        private VisualElement _main, _boardArea, _boardOverlay, _goalIcon, _replayBar, _settings;
+        private VisualElement _main, _boardArea, _boardOverlay, _goalIcon, _replayBar, _settings, _profilePopover, _profileButton;
         private Label _goalLabel, _banner, _boardTip, _overlayCaption, _overlayNumber, _overlayHint;
         private Button _navHome, _navDaily, _navPlay, _navPractice, _navSettings;
         private Button _undo, _reset, _newBoard, _shortest, _replayPause, _replayBack, _replayForward;
@@ -55,7 +55,7 @@ namespace Ricochet.Client.App
         private float _scrollTarget, _scrollSetTo;
         private bool _scrollGliding;
         private const float WheelStep = 60f, GlideRate = 18f;
-        private TextField _nameField, _codeField;
+        private TextField _nameField, _codeField, _profileNameField;
         private readonly List<(Button Switch, Func<bool> IsOn)> _switches = new List<(Button, Func<bool>)>();
         private readonly List<(Label Value, Button Minus, Button Plus)> _steppers = new List<(Label, Button, Button)>();
 
@@ -134,11 +134,10 @@ namespace Ricochet.Client.App
                 return;
             _root.focusController.IgnoreEvent(e);
             e.StopPropagation();
-            if (!IsTyping())
-                return;
-            var focused = _root.focusController.focusedElement as VisualElement;
-            bool inName = focused == _nameField || focused?.GetFirstAncestorOfType<TextField>() == _nameField;
-            (inName ? _codeField : _nameField).Focus();
+            if (HasFocus(_nameField))
+                _codeField.Focus();
+            else if (HasFocus(_codeField))
+                _nameField.Focus();
         }
 
         private void Bind()
@@ -155,6 +154,7 @@ namespace Ricochet.Client.App
             _overlayHint = _root.Q<Label>("overlay-hint");
             _replayBar = _root.Q("replay-bar");
             _settings = _root.Q("settings");
+            _profilePopover = _root.Q("profile-popover");
             // The side panel scrolls smoothly: wheel and trackpad events move a target the panel glides to (the
             // ScrollView's own wheel handling jumps a fixed step per event, which stutters on a trackpad).
             _side = _root.Q<ScrollView>("side");
@@ -164,7 +164,9 @@ namespace Ricochet.Client.App
             _navDaily = Click("nav-daily", OpenDaily);
             _navPlay = Click("nav-play", () => Choose(Screen.Play));
             _navPractice = Click("nav-practice", () => Choose(Screen.Practice));
-            _navSettings = Click("nav-settings", () => _settings.EnableInClassList("is-open", !_settings.ClassListContains("is-open")));
+            _navSettings = Click("nav-settings", () => TogglePopover(_settings));
+            _profileButton = _root.Q("profile-button");
+            _profileButton.RegisterCallback<ClickEvent>(_ => TogglePopover(_profilePopover));
 
             _undo = Click("control-undo", () => Scratchpad.Perform(ControlAction.Undo));
             _reset = Click("control-reset", () => Scratchpad.Perform(ControlAction.Reset));
@@ -211,6 +213,15 @@ namespace Ricochet.Client.App
             _nameField = _root.Q<TextField>("play-name");
             _nameField.value = _game.PlayerName;
             _nameField.RegisterValueChangedCallback(e => _game.PlayerName = e.newValue);
+            // The same name from the profile popover, on any screen (both boxes stay in step via ShowProfile).
+            _profileNameField = _root.Q<TextField>("profile-name-field");
+            _profileNameField.value = _game.PlayerName;
+            _profileNameField.RegisterValueChangedCallback(e => _game.PlayerName = e.newValue);
+            _profileNameField.RegisterCallback<KeyDownEvent>(e =>
+            {
+                if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)
+                    ClosePopover(_profilePopover);
+            });
             _codeField = _root.Q<TextField>("play-code");
             // Lobby codes aren't case-sensitive; show them the way the lobby does.
             _codeField.RegisterValueChangedCallback(e =>
@@ -477,7 +488,7 @@ namespace Ricochet.Client.App
             if (Scratchpad.Camera != null)
                 Scratchpad.Camera.backgroundColor = Ground;
 
-            CloseSettingsOnOutsideClick();
+            ClosePopoversOnOutsideClick();
             GlideSide();
             Screen screen = Current;
             // Puzzle mode is the Practice side's: Play with friends and the lobby get plain random boards.
@@ -490,6 +501,7 @@ namespace Ricochet.Client.App
             _navPlay.EnableInClassList("is-active", screen == Screen.Play || screen == Screen.Lobby || screen == Screen.Match);
             _navPractice.EnableInClassList("is-active", screen == Screen.Practice);
             _navSettings.EnableInClassList("is-active", _settings.ClassListContains("is-open"));
+            _profileButton.EnableInClassList("is-active", _profilePopover.ClassListContains("is-open"));
 
             ShowProfile();
             ShowHome();
@@ -513,16 +525,34 @@ namespace Ricochet.Client.App
                 ShowStage();
         }
 
-        // The settings popover closes when the player clicks anywhere else (the board included) or presses Esc. Read
-        // from the Input System: clicks on the board never reach the UI.
-        private void CloseSettingsOnOutsideClick()
+        // The settings and profile popovers: one open at a time, closed by a click anywhere else (the board included) or
+        // Esc. Read from the Input System: clicks on the board never reach the UI.
+        private void TogglePopover(VisualElement popover)
         {
-            if (!_settings.ClassListContains("is-open"))
+            bool open = !popover.ClassListContains("is-open");
+            ClosePopover(_settings);
+            ClosePopover(_profilePopover);
+            popover.EnableInClassList("is-open", open);
+        }
+
+        // A closed popover gives up the focus too: a hidden text field holding it would keep the board from taking keys.
+        private void ClosePopover(VisualElement popover)
+        {
+            popover.RemoveFromClassList("is-open");
+            if (HasFocus(_profileNameField) && popover == _profilePopover)
+                _profileNameField.Blur();
+        }
+
+        private void ClosePopoversOnOutsideClick()
+        {
+            bool settings = _settings.ClassListContains("is-open"), profile = _profilePopover.ClassListContains("is-open");
+            if (!settings && !profile)
                 return;
             var keyboard = UnityEngine.InputSystem.Keyboard.current;
             if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
             {
-                _settings.RemoveFromClassList("is-open");
+                ClosePopover(_settings);
+                ClosePopover(_profilePopover);
                 return;
             }
             var pointer = UnityEngine.InputSystem.Pointer.current;
@@ -531,9 +561,11 @@ namespace Ricochet.Client.App
             Vector2 position = pointer.position.ReadValue();
             float s = PanelScale;
             var onPanel = new Vector2(position.x / s, (UnityEngine.Screen.height - position.y) / s);
-            // The Settings button toggles it by itself.
-            if (!_settings.worldBound.Contains(onPanel) && !_navSettings.worldBound.Contains(onPanel))
-                _settings.RemoveFromClassList("is-open");
+            // The button that opened a popover toggles it by itself.
+            if (settings && !_settings.worldBound.Contains(onPanel) && !_navSettings.worldBound.Contains(onPanel))
+                ClosePopover(_settings);
+            if (profile && !_profilePopover.worldBound.Contains(onPanel) && !_profileButton.worldBound.Contains(onPanel))
+                ClosePopover(_profilePopover);
         }
 
         // ---- Lobby (between matches, including the results) ----
@@ -877,9 +909,10 @@ namespace Ricochet.Client.App
         {
             string name = _game.PlayerName;
             _profileName.text = name.Length > 0 ? name : "Guest";
-            // A name set elsewhere (e.g. ?name= in the link) shows in the box too, unless the player is typing in it.
-            if (_nameField.value != name && !IsTyping())
-                _nameField.SetValueWithoutNotify(name);
+            // A name set elsewhere (the other box, ?name= in the link) shows in both boxes, except the one being typed in.
+            foreach (TextField field in new[] { _nameField, _profileNameField })
+                if (field.value != name && !HasFocus(field))
+                    field.SetValueWithoutNotify(name);
             _profileAvatar.text = name.Length > 0 ? name.Substring(0, 1).ToUpperInvariant() : "?";
         }
 
@@ -1035,6 +1068,12 @@ namespace Ricochet.Client.App
             Vector3 max = camera.WorldToScreenPoint(new Vector3(grid.Width + pad, grid.Height + pad));
             float s = PanelScale;
             return Rect.MinMaxRect(min.x / s, (UnityEngine.Screen.height - max.y) / s, max.x / s, (UnityEngine.Screen.height - min.y) / s);
+        }
+
+        private bool HasFocus(TextField field)
+        {
+            var focused = _root?.panel?.focusController?.focusedElement as VisualElement;
+            return focused != null && (focused == field || focused.GetFirstAncestorOfType<TextField>() == field);
         }
 
         // Typing in a text field: the board ignores the keys.

@@ -47,7 +47,10 @@
 .app .nav-item:hover { background-color: var(--panel); color: var(--text); }
 .app .nav-item.is-active { background-color: var(--panel-2); color: #ffffff; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
 .spacer { flex-grow: 1; }
-.profile { padding: 12px; margin-top: 6px; border-top-width: 1px; border-color: var(--panel-2); }
+.profile { padding-top: 6px; margin-top: 6px; border-top-width: 1px; border-color: var(--panel-2); }
+/* Opens the profile popover (name, guest note). */
+.profile-button { padding: 8px 12px; border-radius: 12px; }
+.profile-button:hover, .profile-button.is-active { background-color: var(--panel); }
 .profile-row { flex-direction: row; align-items: center; }
 .avatar { width: 34px; height: 34px; border-radius: 17px; background-color: #3b74e6; -unity-text-align: middle-center; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); color: #ffffff; }
 .profile-name { margin-left: 10px; flex-shrink: 1; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
@@ -190,6 +193,7 @@
 /* ---- Settings popover ---- */
 .popover { position: absolute; left: 248px; bottom: 24px; width: 290px; display: none; background-color: var(--panel); border-radius: 18px; padding: 16px 18px; border-width: 1px; border-color: var(--line); }
 .popover.is-open { display: flex; }
+.popover-note { margin-top: 6px; white-space: normal; }
 
 /* ---- The side panel's scrollbar: thin, dark, no arrow buttons ---- */
 .side .unity-scroller--vertical { width: 8px; margin-left: 6px; border-width: 0; background-color: rgba(0, 0, 0, 0); }

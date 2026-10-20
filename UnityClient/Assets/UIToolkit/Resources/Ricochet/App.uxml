@@ -19,11 +19,13 @@
             <ui:VisualElement class="spacer" />
             <ui:Button name="nav-settings" text="Settings" class="nav-item" />
             <ui:VisualElement class="profile">
-                <ui:VisualElement class="profile-row">
-                    <ui:Label name="profile-avatar" text="?" class="avatar" />
-                    <ui:Label name="profile-name" text="Guest" class="profile-name" />
+                <ui:VisualElement name="profile-button" class="profile-button">
+                    <ui:VisualElement class="profile-row">
+                        <ui:Label name="profile-avatar" text="?" class="avatar" />
+                        <ui:Label name="profile-name" text="Guest" class="profile-name" />
+                    </ui:VisualElement>
+                    <ui:Label text="Playing as a guest" class="profile-sub" />
                 </ui:VisualElement>
-                <ui:Label text="Playing as a guest" class="profile-sub" />
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -214,6 +216,15 @@
             <ui:Label text="SETTINGS" class="h3 gap-s" />
             <ui:VisualElement name="settings-list" />
             <ui:Label text="Palette: Indigo night (more palettes coming)" class="muted small" style="margin-top: 10px;" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="profile-popover" class="popover">
+            <ui:Label text="PROFILE" class="h3 gap-s" />
+            <ui:Label text="Your name" class="field-label" />
+            <ui:TextField name="profile-name-field" max-length="20" class="field" />
+            <ui:Label text="Shown in lobbies and on the daily leaderboard." class="muted small popover-note" />
+            <ui:Label text="Playing as a guest" class="setting-label" style="margin-top: 16px;" />
+            <ui:Label text="Your streak and daily results are saved in this browser. Accounts are coming later." class="muted small popover-note" />
         </ui:VisualElement>
 
         <ui:Label name="board-tip" text="Click a robot, then a dot to move it. Arrow keys and dragging work too." class="board-tip" picking-mode="Ignore" />
