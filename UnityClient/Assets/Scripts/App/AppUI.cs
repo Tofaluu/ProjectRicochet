@@ -801,7 +801,7 @@ namespace Ricochet.Client.App
                 : daily.IsPerfect ? "Perfect solve!" : solved ? $"Solved in {daily.BestMoves} moves" : "Today's puzzle";
             _dailyStats.style.display = loading || error ? DisplayStyle.None : DisplayStyle.Flex;
             _dailyMoves.text = solved ? $"{daily.BestMoves}/{daily.ShortestLength}" : $"{daily.ShortestLength}";
-            _dailyMovesLabel.text = solved ? "moves" : "moves possible";
+            _dailyMovesLabel.text = solved ? "moves" : "best possible";
             _dailyTime.text = DailyState.Clock(solved ? daily.BestSeconds : daily.Elapsed(now));
             _dailyStreak.text = daily.Streak.ToString();
             _dailyDetail.text = error ? daily.Error
