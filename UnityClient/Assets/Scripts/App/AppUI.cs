@@ -954,7 +954,7 @@ namespace Ricochet.Client.App
                 : $"Get <b><color=#{color}>{robot}</color></b> to its target" + (best > 0 ? $" in {best} moves" : "");
 
             Color frame = theme.FrameColor(Session.Mode, target);
-            _banner.text = Compact ? CompactBannerText(Session) : BannerText(Session);
+            _banner.text = BannerText(Session);
             _banner.style.backgroundColor = frame;
             _banner.style.color = theme.TextOn(frame);
 
@@ -1059,33 +1059,6 @@ namespace Ricochet.Client.App
                     int best = Scratchpad.PracticeShortest;
                     string verdict = best <= 0 ? "!" : moves <= best ? ": optimal!" : $"  ·  best is {best}";
                     return $"{board}  ·  solved in {moves}{verdict}";
-            }
-        }
-
-        // The compact layout's banner shares one line with the goal, so it stays short and never changes length much:
-        // the sheet's summary under the board already names the board (daily number and clock, match, timer), and the
-        // replay's pause state shows on the Pause / Play button.
-        private string CompactBannerText(BoardSession session)
-        {
-            int moves = session.Moves.Count;
-            switch (session.Mode)
-            {
-                case BoardMode.PlayerReplay:
-                case BoardMode.ShortestReplay:
-                    ReplaySegment replay = session.CurrentReplay;
-                    string who = replay.IsShortest ? "Shortest" : replay.Label;
-                    int step = session.ReplayFinished ? replay.Moves.Count : session.ReplayStep;
-                    return $"{who} · {step}/{replay.Moves.Count}";
-                case BoardMode.RoundOver:
-                    return (session.Title ?? "Round over").Replace("  ·  ", " · ");
-                default:
-                    if (session.IsSolved)
-                    {
-                        int best = Scratchpad.PracticeShortest;
-                        return best <= 0 ? $"Solved in {moves}!" : moves <= best ? $"Solved in {moves}: optimal!" : $"Solved in {moves} · best {best}";
-                    }
-                    string count = $"{moves} {(moves == 1 ? "move" : "moves")}";
-                    return session.Mode == BoardMode.Practice && session.Title == null ? $"Practice · {count}" : count;
             }
         }
 

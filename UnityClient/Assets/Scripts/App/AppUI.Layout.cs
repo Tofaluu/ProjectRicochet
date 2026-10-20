@@ -241,27 +241,60 @@ namespace Ricochet.Client.App
             switch (screen)
             {
                 case Screen.Practice:
-                    return PlayerSettings.PracticeExact ? $"Practice  ·  solve in {PlayerSettings.PracticeMoves}" : "Practice  ·  puzzle mode off";
+                    return BoardCounter(named: true) ?? "Practice";
                 case Screen.Daily:
                     DailyState daily = _daily.State;
                     if (daily.Number <= 0 || daily.Stage != DailyStage.Playing)
                         return "Daily puzzle";
-                    return daily.HasSolved
-                        ? $"Daily #{daily.Number}  ·  best {daily.BestMoves}/{daily.ShortestLength}  ·  {_dailyTime.text}"
-                        : $"Daily #{daily.Number}  ·  {_dailyTime.text}  ·  best possible {daily.ShortestLength}";
+                    string so = daily.HasSolved ? $"best {daily.BestMoves}/{daily.ShortestLength}" : _dailyTime.text;
+                    return Join($"Daily #{daily.Number}", so, BoardCounter(named: false));
                 case Screen.Match:
                     string value = _timerValue.text, caption = _timerCaption.text;
+                    if (caption == "NEXT BOARD")
+                        return Join(_matchTitle.text, value.Length == 0 ? "dealing" : $"starts in {value}");
+                    string counter = BoardCounter(named: true);
+                    if (caption == "ROUND OVER")
+                        return Join(_matchTitle.text, counter ?? "round over");
                     string when = value.Length == 0 ? caption.ToLowerInvariant()
                         : caption == "TIME LEFT" ? $"{value} left"
                         : caption == "TIME LIMIT" ? $"{value} to find one"
                         : $"{caption.ToLowerInvariant()} {value}";
-                    return $"{_matchTitle.text}  ·  {when}";
+                    return Join(when, counter);
                 case Screen.Lobby:
-                    return $"Lobby {_game.Match.LobbyCode}";
+                    return Join($"Lobby {_game.Match.LobbyCode}", BoardCounter(named: true));
                 case Screen.Play:
-                    return "Play with friends";
+                    return Join("Play with friends", BoardCounter(named: true));
                 default:
                     return "";
+            }
+        }
+
+        private static string Join(params string[] parts) => string.Join(" · ", System.Array.FindAll(parts, p => !string.IsNullOrEmpty(p)));
+
+        // The board's move counter for the sheet's summary (the compact layout has no banner): moves so far, the solve's
+        // verdict, or a replay's progress (named: says whose). Null when there's nothing to count.
+        private string BoardCounter(bool named)
+        {
+            BoardSession session = Session;
+            if (session.Round == null)
+                return null;
+            int moves = session.Moves.Count;
+            switch (session.Mode)
+            {
+                case BoardMode.PlayerReplay:
+                case BoardMode.ShortestReplay:
+                    ReplaySegment replay = session.CurrentReplay;
+                    int total = replay.Moves.Count;
+                    int step = session.ReplayFinished ? total : session.ReplayStep;
+                    string progress = step == 0 ? $"{total} {(total == 1 ? "move" : "moves")}" : $"move {step} of {total}";
+                    return named ? $"{(replay.IsShortest ? "Shortest" : replay.Label)} · {progress}" : progress;
+                case BoardMode.RoundOver:
+                    return null;
+                default:
+                    if (!session.IsSolved)
+                        return $"{moves} {(moves == 1 ? "move" : "moves")}";
+                    int best = Scratchpad.PracticeShortest;
+                    return best <= 0 ? $"Solved in {moves}!" : moves <= best ? $"Solved in {moves}: optimal!" : $"Solved in {moves} · best is {best}";
             }
         }
 
