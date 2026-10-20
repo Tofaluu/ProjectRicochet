@@ -97,7 +97,7 @@
 .card-icon { width: 44px; height: 44px; border-radius: 12px; background-color: var(--daily); margin-right: 12px; align-items: center; justify-content: center; }
 .card-icon-dot { width: 16px; height: 16px; border-radius: 8px; background-color: var(--on-daily); }
 .card-title { flex-grow: 1; }
-.pill { padding: 5px 12px; border-radius: 999px; font-size: 14px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.pill { padding: 5px 12px; border-radius: 8px; font-size: 14px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
 .pill--daily { background-color: var(--daily-soft); color: var(--daily-text); }
 .row { flex-direction: row; align-items: center; }
 .row--spread { justify-content: space-between; }
@@ -148,7 +148,7 @@
 .player-row.is-me { background-color: var(--panel-2); }
 .player-avatar { width: 34px; height: 34px; border-radius: 17px; margin-right: 12px; -unity-text-align: middle-center; font-size: 15px; color: #ffffff; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); flex-shrink: 0; }
 .player-name { font-size: 16px; margin-right: 8px; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
-.tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; margin-right: 4px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); flex-shrink: 0; }
+.tag { font-size: 12px; padding: 2px 8px; border-radius: 6px; margin-right: 4px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); flex-shrink: 0; }
 .tag--host { background-color: var(--panel-2); color: var(--muted); }
 .player-row.is-me .tag--host { background-color: var(--panel); }
 .tag--lead { background-color: var(--daily); color: var(--on-daily); }
