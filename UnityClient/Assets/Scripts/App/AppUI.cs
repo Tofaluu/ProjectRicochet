@@ -894,15 +894,18 @@ namespace Ricochet.Client.App
             _banner.style.backgroundColor = frame;
             _banner.style.color = theme.TextOn(frame);
 
+            // A controllable replay puts its buttons in this row in place of Undo and Shortest (both greyed during it,
+            // and the same as Reset / Again once it ends); the keys still work.
             bool practice = Session.IsPractice;
+            bool replay = Session.CanControlReplay;
+            _undo.style.display = !replay ? DisplayStyle.Flex : DisplayStyle.None;
             _newBoard.style.display = practice ? DisplayStyle.Flex : DisplayStyle.None;
-            _shortest.style.display = practice ? DisplayStyle.Flex : DisplayStyle.None;
+            _shortest.style.display = practice && !replay ? DisplayStyle.Flex : DisplayStyle.None;
             _undo.SetEnabled(Scratchpad.CanPerform(ControlAction.Undo));
             _reset.SetEnabled(Scratchpad.CanPerform(ControlAction.Reset));
             _newBoard.SetEnabled(Scratchpad.CanPerform(ControlAction.NewBoard));
             _shortest.SetEnabled(Scratchpad.CanPerform(ControlAction.Shortest));
 
-            bool replay = Session.CanControlReplay;
             _replayBar.style.display = replay ? DisplayStyle.Flex : DisplayStyle.None;
             if (replay)
                 _replayPause.text = !Session.ReplayPaused && !Session.ReplayFinished ? "Pause" : Session.ReplayFinished ? "Again" : "Play";

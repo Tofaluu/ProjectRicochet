@@ -35,14 +35,14 @@
                         <ui:Label name="goal-label" text="Get the robot to its target" class="goal-label" picking-mode="Ignore" />
                     </ui:VisualElement>
                     <ui:Label name="banner" text="Practice board" class="banner" picking-mode="Ignore" />
-                    <ui:VisualElement name="replay-bar" class="replay-bar">
-                        <ui:Button name="replay-pause" text="Pause" class="btn btn--small" />
-                        <ui:Button name="replay-back" text="&lt;" class="btn btn--small btn--square" />
-                        <ui:Button name="replay-forward" text="&gt;" class="btn btn--small btn--square" />
-                    </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement name="board-area" class="board-area" picking-mode="Ignore" />
                 <ui:VisualElement name="board-controls" class="board-controls">
+                    <ui:VisualElement name="replay-bar" class="replay-bar">
+                        <ui:Button name="replay-pause" text="Pause" class="btn" />
+                        <ui:Button name="replay-back" text="&lt;" class="btn btn--square" />
+                        <ui:Button name="replay-forward" text="&gt;" class="btn btn--square" />
+                    </ui:VisualElement>
                     <ui:Button name="control-undo" text="Undo  (Z)" class="btn" />
                     <ui:Button name="control-reset" text="Reset  (R)" class="btn" />
                     <ui:Button name="control-new" text="New board  (N)" class="btn" />
