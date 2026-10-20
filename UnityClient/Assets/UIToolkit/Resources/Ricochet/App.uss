@@ -166,8 +166,11 @@
 /* ---- Inputs ---- */
 .field { margin: 0; flex-grow: 1; }
 .app .field .unity-base-text-field__input {
-    height: 46px; padding: 0 14px; border-width: 1px; border-radius: 12px; border-color: var(--line);
+    height: auto; padding: 11px 14px; border-width: 1px; border-radius: 12px; border-color: var(--line);
     background-color: var(--input); color: var(--text); font-size: 17px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf");
+    /* Even padding instead of a fixed height: the cursor sits at the text line's top, so the line must be centred. */
+    /* The default theme's cursor is dark (made for light fields). */
+    --unity-cursor-color: var(--text); --unity-selection-color: rgba(106, 91, 224, 0.45);
 }
 .app .field:focus .unity-base-text-field__input { border-color: var(--action); }
 .app .field--code .unity-base-text-field__input { letter-spacing: 3px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
