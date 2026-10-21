@@ -7,8 +7,8 @@ namespace Ricochet.Client.Theme
     /// <summary>
     /// The player's choice of colours around the board (Settings > Palette). A palette changes the surroundings only:
     /// the UI's colours (App.uss defines each one's variables under <see cref="UssClass"/>), the ground behind the board
-    /// and the practice board's frame. The board itself, the robot colours and the frame colours that mean something
-    /// (the target's colour in a round, replay cream, shortest grey) stay the same in every palette.
+    /// and the frame around the player's own board (practice and rounds alike). The board itself, the robot colours and
+    /// the replay frames (a player's replay, the shortest) stay the same in every palette.
     /// </summary>
     public sealed class Palette
     {
@@ -18,24 +18,25 @@ namespace Ricochet.Client.Theme
         public Color Ground { get; }
         /// <summary>The palette's action colour (its swatch in the picker).</summary>
         public Color Accent { get; }
-        /// <summary>The practice board's frame and banner.</summary>
-        public Color PracticeFrame { get; }
+        /// <summary>The frame (and desktop banner) of the player's own board: practice and rounds.</summary>
+        public Color BoardFrame { get; }
         /// <summary>Light grounds: coloured text gets darkened instead of lightened to stay readable.</summary>
         public bool IsLight { get; }
         public string UssClass => "palette--" + Id;
 
-        private Palette(string id, string name, uint ground, uint accent, uint practiceFrame, bool isLight = false)
+        private Palette(string id, string name, uint ground, uint accent, uint boardFrame, bool isLight = false)
         {
             Id = id;
             Name = name;
             Ground = Rgb(ground);
             Accent = Rgb(accent);
-            PracticeFrame = Rgb(practiceFrame);
+            BoardFrame = Rgb(boardFrame);
             IsLight = isLight;
         }
 
         public static readonly Palette[] All =
         {
+            new Palette("toynight", "Toybox night", 0x1f1914, 0x26914f, 0xecdec1),
             new Palette("night", "Night table", 0x1c1713, 0x3b6fd9, 0x6b4423),
             new Palette("indigo", "Indigo night", 0x171a29, 0x6a5be0, 0x786bc7),
             new Palette("table", "Board game table", 0xefe6d3, 0x2f5fc4, 0x8a5a34, isLight: true),

@@ -1,33 +1,34 @@
 /* The app's look: palette colours as variables, Nunito throughout. */
 /* Palettes (Settings > Palette; Theme/Palette.cs lists them): AppUI puts .palette--<id> on #app. :root holds the default
-   (Night table) for anything outside #app. */
+   (Toybox night) for anything outside #app. */
 :root {
-    --bg: #1c1713;
-    --nav: #15110e;
-    --panel: #28211b;
-    --panel-2: #342b23;
-    --panel-hover: #3f342a;
-    --input: #1c1713;
-    --line: #4a3d31;
-    --text: #f3eadc;
-    --muted: #bba98f;
-    --nav-text: #d2c4ae;
-    --body: #e2d7c6;
-    --action: #3b6fd9;
-    --action-hover: #4d7fe6;
+    --bg: #1f1914;
+    --nav: #171210;
+    --panel: #2b231c;
+    --panel-2: #382e25;
+    --panel-hover: #43372c;
+    --input: #221b15;
+    --line: rgba(236, 222, 193, 0.35);
+    --text: #fbf0d9;
+    --muted: #c8b697;
+    --nav-text: #ddcdb0;
+    --body: #eadcc2;
+    --action: #26914f;
+    --action-hover: #2da35b;
     --on-action: #ffffff;
-    --daily: #efb02e;
-    --daily-hover: #f5bf4a;
-    --on-daily: #241c14;
-    --daily-tint: #2e2416;
-    --daily-border: #5a4526;
-    --daily-soft: #3d2f1b;
-    --daily-text: #ffcf6b;
+    --daily: #ffc233;
+    --daily-hover: #ffcd55;
+    --on-daily: #2b2117;
+    --daily-tint: #2f2517;
+    --daily-border: #f0b42e;
+    --daily-soft: #4b3a1a;
+    --daily-text: #ffd466;
     --good: #8fd9a8;
-    --shortest: #4d4439;
-    --rank-2: #cfc6b8;
+    --shortest: #4a4038;
+    --rank-2: #d4c6ad;
     --rank-3: #d9a07a;
-    --card-border: rgba(0, 0, 0, 0);
+    --card-border: rgba(236, 222, 193, 0.7);
+    --ink: #ecdec1;
 
     -unity-font: url("/Assets/Fonts/Nunito-Regular.ttf");
     -unity-font-definition: initial;
@@ -37,6 +38,35 @@
 
 .app { flex-grow: 1; flex-direction: row; color: var(--text); }
 
+.palette--toynight {
+    --bg: #1f1914;
+    --nav: #171210;
+    --panel: #2b231c;
+    --panel-2: #382e25;
+    --panel-hover: #43372c;
+    --input: #221b15;
+    --line: rgba(236, 222, 193, 0.35);
+    --text: #fbf0d9;
+    --muted: #c8b697;
+    --nav-text: #ddcdb0;
+    --body: #eadcc2;
+    --action: #26914f;
+    --action-hover: #2da35b;
+    --on-action: #ffffff;
+    --daily: #ffc233;
+    --daily-hover: #ffcd55;
+    --on-daily: #2b2117;
+    --daily-tint: #2f2517;
+    --daily-border: #f0b42e;
+    --daily-soft: #4b3a1a;
+    --daily-text: #ffd466;
+    --good: #8fd9a8;
+    --shortest: #4a4038;
+    --rank-2: #d4c6ad;
+    --rank-3: #d9a07a;
+    --card-border: rgba(236, 222, 193, 0.7);
+    --ink: #ecdec1;
+}
 .palette--night {
     --bg: #1c1713;
     --nav: #15110e;
@@ -206,7 +236,16 @@
     --card-border: rgba(242, 240, 230, 0.25);
 }
 
-/* Palette touches beyond colour: Toybox's thick ink outlines and press-down buttons, a soft edge on Table and Chalkboard cards. */
+/* Palette touches beyond colour: Toybox's thick ink outlines and press-down buttons, a soft edge on Table and Chalkboard cards.
+   Toybox night: cream ink lines weighted by importance (bold on the main buttons, softer on cards, faint on the rest), with a
+   black bottom edge standing in for the press-down shadow (USS has no box-shadow). */
+.app.palette--toynight .card, .app.palette--toynight .popover, .app.palette--toynight .sheet-head { border-width: 2px; border-color: var(--card-border); }
+.app.palette--toynight .sheet-head { border-bottom-width: 0; }
+.app.palette--toynight .card--daily { border-color: var(--daily-border); }
+.app.palette--toynight .btn { border-width: 2px; border-bottom-width: 5px; border-color: rgba(236, 222, 193, 0.45); border-bottom-color: #000000; }
+.app.palette--toynight .btn--primary, .app.palette--toynight .btn--daily { border-width: 3px; border-bottom-width: 6px; border-color: var(--ink); border-bottom-color: #000000; }
+.app.palette--toynight .btn:active { border-bottom-width: 2px; }
+.app.palette--toynight .btn--ghost { border-bottom-width: 2px; border-bottom-color: rgba(236, 222, 193, 0.45); }
 .app.palette--table .card, .app.palette--chalk .card { border-width: 1px; border-color: var(--card-border); }
 .app.palette--toybox .card, .app.palette--toybox .popover, .app.palette--toybox .sheet-head { border-width: 3px; border-color: var(--card-border); }
 .app.palette--table .card--daily, .app.palette--chalk .card--daily, .app.palette--toybox .card--daily { border-color: var(--daily-border); }
@@ -388,7 +427,7 @@
 .popover-note { margin-top: 6px; white-space: normal; }
 .palette-label { margin-top: 12px; margin-bottom: 8px; }
 .swatches { flex-direction: row; justify-content: space-between; }
-.app .swatch { width: 36px; height: 36px; margin: 0; padding: 0; border-radius: 9px; border-width: 2px; border-color: var(--line); align-items: center; justify-content: center; }
+.app .swatch { width: 32px; height: 32px; margin: 0; padding: 0; border-radius: 9px; border-width: 2px; border-color: var(--line); align-items: center; justify-content: center; }
 .app .swatch.is-active { border-width: 3px; border-color: var(--text); }
 .swatch-dot { width: 14px; height: 14px; border-radius: 4px; }
 
