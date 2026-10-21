@@ -1,5 +1,8 @@
-<!-- IL2CPP builds (browser): keep the wire DTOs whole. Newtonsoft fills them by reflection, so their
-     constructors and property setters look unused to the code stripper. -->
+<!-- IL2CPP builds (browser), stripped at High: keep what's only reached by reflection. Newtonsoft fills the wire DTOs
+     (SharedLogic and the client's own) by reflection, so their constructors and property setters look unused to the
+     code stripper, and Newtonsoft itself resolves contracts by reflection. -->
 <linker>
   <assembly fullname="SharedLogic" preserve="all" />
+  <assembly fullname="Ricochet.Client" preserve="all" />
+  <assembly fullname="Newtonsoft.Json" preserve="all" />
 </linker>

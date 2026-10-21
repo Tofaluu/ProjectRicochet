@@ -52,8 +52,12 @@ dotnet test RicochetGame.sln
 dotnet run --project BackendServer --launch-profile http
 ```
 
-Then open `UnityClient/` in Unity, open `Assets/Scenes/Scratchpad.unity`, tick "Show Server Field" on the
-`LobbyUI` object, press Play and join with server `localhost:5022` and any lobby code.
+To play against the local server in a browser, build the client once with `Tools/build-web.sh` (Unity
+closed), then run `Tools/dev-session.sh`. It starts the server, serves the build and prints the address to open
+(`http://localhost:8080/?server=http://localhost:5022&lobby=DEV`). Open it in two tabs to play against yourself.
+
+In the Unity Editor, open `Assets/Scenes/Scratchpad.unity` and press Play. The Editor uses the cloud server
+unless it's started with `-server http://localhost:5022`.
 
 ## License
 

@@ -63,29 +63,15 @@ namespace Ricochet.Client.App
         private BoardSession Session => _game.Scratchpad.Session;
         private GameTheme Theme => _game.Scratchpad.View.Theme;
 
-        // ---- Start-up: the new UI replaces the old side panel and IMGUI overlays ----
+        // ---- Start-up: the scene holds the network and the board; the UI and its controllers are made here ----
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            var network = FindFirstObjectByType<NetworkManager>();
-            var scratchpad = FindFirstObjectByType<ScratchpadController>();
+            var network = FindAnyObjectByType<NetworkManager>();
+            var scratchpad = FindAnyObjectByType<ScratchpadController>();
             if (network == null || scratchpad == null)
                 return;
-
-            // The old UI, until it's deleted: its panel (switched off before its Start, so it never auto-joins) and the
-            // board's IMGUI overlay.
-            var legacy = FindFirstObjectByType<UI.LobbyUI>();
-            if (legacy != null)
-            {
-                Canvas canvas = legacy.GetComponentInParent<Canvas>();
-                legacy.gameObject.SetActive(false);
-                if (canvas != null)
-                    canvas.rootCanvas.gameObject.SetActive(false);
-            }
-            var overlay = scratchpad.GetComponent<BoardOverlay>();
-            if (overlay != null)
-                overlay.enabled = false;
 
             var app = new GameObject("App");
             var game = app.AddComponent<GameController>();

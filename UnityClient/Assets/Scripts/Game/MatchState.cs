@@ -46,7 +46,7 @@ namespace Ricochet.Client.Game
     /// <summary>
     /// This player's view of the lobby, match and round, built from the server's messages, plus the
     /// decisions that follow from it (what the vote means, whether a solution is sent, the messages to
-    /// show). Plain C#: views (<c>LobbyUI</c>) read it and decide how it looks. Times are passed in
+    /// show). Plain C#: views (<c>App/AppUI</c>) read it and decide how it looks. Times are passed in
     /// (seconds on any steady clock), so this has no Unity dependency and is unit-tested.
     /// </summary>
     public sealed class MatchState

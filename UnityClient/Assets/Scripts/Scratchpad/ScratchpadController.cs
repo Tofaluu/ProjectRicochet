@@ -5,9 +5,7 @@ using Ricochet.Client.Board;
 using Ricochet.Client.Game;
 using SharedLogic;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
-using UnityEngine.UI;
 
 namespace Ricochet.Client.Scratchpad
 {
@@ -26,7 +24,7 @@ namespace Ricochet.Client.Scratchpad
     /// <summary>
     /// Drives the <see cref="BoardSession"/> the player sees: input, replay timing, offline boards and
     /// hints, and the camera. The state lives in <see cref="Session"/>; <see cref="BoardView"/> draws the
-    /// board and <see cref="BoardOverlay"/> what's around it.
+    /// board and the UI (App/AppUI) what's around it.
     /// </summary>
     /// <remarks>
     /// Controls: click a robot (or 1-4 / Tab) to select it, arrows / WASD or drag to move,
@@ -47,7 +45,6 @@ namespace Ricochet.Client.Scratchpad
         private bool _dragging;
         private Vector3 _dragStart;
         private Coroutine _replay;
-        private BoardOverlay _overlay;
         private int _lastTick;
         // Where the selected robot would stop in each direction (indexed by Direction), for the move dots.
         private readonly GridPos?[] _previewStops = new GridPos?[4];
@@ -60,12 +57,9 @@ namespace Ricochet.Client.Scratchpad
 
         /// <summary>The player's own move just solved the board (raised before the slide plays), with the move count.</summary>
         public event System.Action<int> Solved;
-        /// <summary>The UI panel on the right; the camera keeps the board clear of it.</summary>
-        public RectTransform SidePanel { get; set; }
-
         /// <summary>
-        /// Where on screen the board should be fitted (pixels, origin bottom-left), set by a UI that reserves an area for
-        /// it; null = the old layout (between the overlay card and <see cref="SidePanel"/>).
+        /// Where on screen the board should be fitted (pixels, origin bottom-left), set by the UI, which reserves an area
+        /// for it; null = the whole screen.
         /// </summary>
         public System.Func<Rect> BoardArea { get; set; }
 
@@ -79,7 +73,6 @@ namespace Ricochet.Client.Scratchpad
         {
             if (_camera == null)
                 _camera = Camera.main;
-            _overlay = GetComponent<BoardOverlay>();
             if (Session.Round == null)
                 NewBoard();
         }
@@ -700,17 +693,8 @@ namespace Ricochet.Client.Scratchpad
             if (keyboard.hKey.wasPressedThisFrame) Perform(ControlAction.Shortest);
         }
 
-        // Typing a name into an input field shouldn't also move robots.
-        private static bool IsTypingInUI()
-        {
-            if (TypingInOtherUI != null && TypingInOtherUI())
-                return true;
-            EventSystem eventSystem = EventSystem.current;
-            if (eventSystem == null || eventSystem.currentSelectedGameObject == null)
-                return false;
-            InputField field = eventSystem.currentSelectedGameObject.GetComponent<InputField>();
-            return field != null && field.isFocused;
-        }
+        // Typing in the UI (a name, a lobby code) shouldn't also move robots.
+        private static bool IsTypingInUI() => TypingInOtherUI != null && TypingInOtherUI();
 
         // Press on a robot to select it; release after dragging to move it in the drag's main direction.
         // Pressing one of the move dots moves there. Pointer covers both mouse and touch.
@@ -753,8 +737,7 @@ namespace Ricochet.Client.Scratchpad
             }
         }
 
-        // Fits the board (plus room for the banner above it) into the screen area between the overlay card
-        // on the left and the side panel on the right.
+        // Fits the board into the area the UI reserves for it.
         private void FrameCamera()
         {
             if (_camera == null)
@@ -762,46 +745,15 @@ namespace Ricochet.Client.Scratchpad
 
             float width = Session.Round.Grid.Width;
             float height = Session.Round.Grid.Height;
-            if (BoardArea != null)
-            {
-                // Fit the board and its frame into the area, centred.
-                Rect area = BoardArea();
-                const float pad = 0.45f;
-                float ppu = Mathf.Max(1f, Mathf.Min(area.width / (width + 2f * pad), area.height / (height + 2f * pad)));
-                _camera.orthographic = true;
-                _camera.orthographicSize = _camera.pixelHeight / ppu / 2f;
-                _camera.transform.position = new Vector3(
-                    width / 2f + (_camera.pixelWidth / 2f - area.center.x) / ppu,
-                    height / 2f + (_camera.pixelHeight / 2f - area.center.y) / ppu, -10f);
-                return;
-            }
-            // Extra room above the board for the banner (see BoardOverlay).
-            const float margin = 0.6f;
-            const float bottom = 0.8f;
-            const float top = 2f;
-
-            float screenWidth = _camera.pixelWidth;
-            float left = _overlay != null ? _overlay.LeftInsetPixels : 0f;
-            float right = SidePanel != null && SidePanel.gameObject.activeInHierarchy ? screenWidth - PanelLeftPixels() : 0f;
-            // In a very narrow window, let the card overlap the board rather than shrink the board to nothing.
-            if (screenWidth - left - right < screenWidth * 0.45f)
-                left = 0f;
-            float free = Mathf.Max(1f, screenWidth - left - right);
-            float pixelsPerUnit = Mathf.Min(free / (width + 2f * margin), _camera.pixelHeight / (height + top + bottom));
-
+            // Fit the board and its frame into the UI's area (or the whole screen), centred.
+            Rect area = BoardArea != null ? BoardArea() : new Rect(0f, 0f, _camera.pixelWidth, _camera.pixelHeight);
+            const float pad = 0.45f;
+            float ppu = Mathf.Max(1f, Mathf.Min(area.width / (width + 2f * pad), area.height / (height + 2f * pad)));
             _camera.orthographic = true;
-            _camera.orthographicSize = _camera.pixelHeight / pixelsPerUnit / 2f;
-            // Centre the board in the free area instead of the screen.
-            float offset = (left - right) / 2f / pixelsPerUnit;
-            _camera.transform.position = new Vector3(width / 2f - offset, height / 2f + (top - bottom) / 2f, -10f);
-        }
-
-        // The panel's left edge in screen pixels (the canvas is screen-space overlay).
-        private float PanelLeftPixels()
-        {
-            var corners = new Vector3[4];
-            SidePanel.GetWorldCorners(corners);
-            return corners[0].x - 16f;
+            _camera.orthographicSize = _camera.pixelHeight / ppu / 2f;
+            _camera.transform.position = new Vector3(
+                width / 2f + (_camera.pixelWidth / 2f - area.center.x) / ppu,
+                height / 2f + (_camera.pixelHeight / 2f - area.center.y) / ppu, -10f);
         }
     }
 }

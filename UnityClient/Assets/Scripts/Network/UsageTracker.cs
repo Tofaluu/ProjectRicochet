@@ -10,7 +10,7 @@ namespace Ricochet.Client.Network
     /// the server's <c>/api/events</c>, with the device's guest id, so the developer can see whether people come back.
     /// Fire and forget: failures are ignored. A device marked internal (<c>?internal=1</c> once in the browser,
     /// <c>-internal</c> on the desktop, always in the Editor; <c>?internal=0</c> unmarks it) still reports, flagged,
-    /// and the stats leave it out. Added by <c>LobbyUI</c>.
+    /// and the stats leave it out. Added by <c>AppUI</c> at start-up.
     /// </summary>
     public class UsageTracker : MonoBehaviour
     {

@@ -23,6 +23,8 @@ namespace Ricochet.Editor
             PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.WebGL, Il2CppCodeGeneration.OptimizeSize);
             PlayerSettings.WebGL.decompressionFallback = false;
             PlayerSettings.WebGL.dataCaching = true;
+            // High stripping: drops unused engine and package code from the download (link.xml keeps what reflection needs).
+            PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.WebGL, ManagedStrippingLevel.High);
             Build(BuildTarget.WebGL, "../Builds/WebGL");
         }
 
@@ -31,6 +33,8 @@ namespace Ricochet.Editor
             // No "Made with Unity" splash: optional since Unity 6, Personal licence included. The game starts on our
             // own loading page instead.
             PlayerSettings.SplashScreen.show = false;
+            // Also leave the Unity logo out: with it on, its 2.7 MB texture ships even though the splash never shows.
+            PlayerSettings.SplashScreen.showUnityLogo = false;
             var options = new BuildPlayerOptions
             {
                 scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray(),
