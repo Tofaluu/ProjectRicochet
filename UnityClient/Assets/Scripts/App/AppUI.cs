@@ -891,6 +891,14 @@ namespace Ricochet.Client.App
                     var square = new VisualElement();
                     square.AddToClassList("square");
                     square.style.backgroundColor = Theme.RobotColor(move.Robot);
+                    // Which way the robot went: Direction runs clockwise from Up, a quarter turn each.
+                    var arrow = new VisualElement();
+                    arrow.AddToClassList("square-arrow");
+                    arrow.style.backgroundImage = new StyleBackground(ShapeSprites.Arrow);
+                    arrow.style.unityBackgroundImageTintColor = move.Robot == RobotColor.Yellow
+                        ? new Color(0.11f, 0.11f, 0.16f, 0.85f) : new Color(1f, 1f, 1f, 0.95f);
+                    arrow.style.rotate = new Rotate(90f * (int)move.Direction);
+                    square.Add(arrow);
                     _dailySquares.Add(square);
                 }
             }

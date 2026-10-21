@@ -52,6 +52,9 @@ namespace Ricochet.Client.Board
             }
         }
 
+        /// <summary>An arrow pointing up (rotate it for the other directions): a shaft under a triangular head.</summary>
+        public static Sprite Arrow => Get("arrow", () => FromSdf(ArrowShape));
+
         /// <summary>
         /// A white rounded square for IMGUI backgrounds, with corners of <paramref name="radiusPixels"/>:
         /// use it with <c>GUIStyle.border</c> set to the same radius, tinted by <c>GUI.backgroundColor</c>.
@@ -98,6 +101,17 @@ namespace Ricochet.Client.Board
         {
             Vector2 q = new Vector2(Mathf.Abs(p.x), Mathf.Abs(p.y)) - new Vector2(1f - radius, 1f - radius);
             return new Vector2(Mathf.Max(q.x, 0f), Mathf.Max(q.y, 0f)).magnitude + Mathf.Min(Mathf.Max(q.x, q.y), 0f) - radius;
+        }
+
+        private static float ArrowShape(Vector2 p)
+        {
+            // Shaft: a box from the bottom up into the head.
+            Vector2 q = new Vector2(Mathf.Abs(p.x) - 0.17f, Mathf.Abs(p.y + 0.3f) - 0.45f);
+            float shaft = Mathf.Max(q.x, q.y);
+            // Head: tip at the top, base across the middle (edges from the tip to (+-0.6, 0)).
+            float side = (0.75f * Mathf.Abs(p.x) + 0.6f * (p.y - 0.8f)) / 0.96f;
+            float head = Mathf.Max(side, -p.y);
+            return Mathf.Min(shaft, head);
         }
 
         private static float Triangle(Vector2 p)

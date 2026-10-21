@@ -57,6 +57,11 @@ namespace Ricochet.Client.Board
         private Transform _content;
         private SpriteRenderer _selectionRing;
         private SpriteRenderer _targetGlow;
+        private float _targetGlowFrom;
+        // A new board's target glows brighter and wider for a few seconds (a few slow beats, fading back to the usual glow),
+        // so the eye finds it before the player starts thinking.
+        private const float IntroGlowSeconds = 3f;
+        private const int IntroGlowBeats = 3;
         private Target _target;
         private RobotColor _selected;
         private bool _hasSelection;
@@ -158,6 +163,7 @@ namespace Ricochet.Client.Board
                     Color glow = color;
                     glow.a = 0.55f;
                     _targetGlow = CreateSprite("Target Glow", ShapeSprites.SoftCircle, glow, CellCenter(target.Position), new Vector2(1.5f, 1.5f), TargetGlowOrder);
+                    _targetGlowFrom = Time.time;
                     CreateSprite("Active Target", symbol, color, CellCenter(target.Position), new Vector2(0.66f, 0.66f), TargetOrder);
                 }
                 else
@@ -312,7 +318,18 @@ namespace Ricochet.Client.Board
             if (_targetGlow != null)
             {
                 float pulse = 1f + 0.12f * Mathf.Sin(time * 3f);
-                _targetGlow.transform.localScale = new Vector3(1.5f * pulse, 1.5f * pulse, 1f);
+                float age = time - _targetGlowFrom, boost = 0f;
+                if (age < IntroGlowSeconds)
+                {
+                    // Beats from 0 up to 1 and back, each a little weaker than the last.
+                    float beat = 0.5f - 0.5f * Mathf.Cos(age / IntroGlowSeconds * IntroGlowBeats * 2f * Mathf.PI);
+                    boost = beat * Mathf.SmoothStep(0f, 1f, 1f - age / IntroGlowSeconds * 0.6f);
+                }
+                float size = 1.5f * pulse + 2.6f * boost;
+                _targetGlow.transform.localScale = new Vector3(size, size, 1f);
+                Color glow = _targetGlow.color;
+                glow.a = 0.55f + 0.45f * boost;
+                _targetGlow.color = glow;
             }
             UpdateParticles(time);
             for (int i = _pendingSounds.Count - 1; i >= 0; i--)
