@@ -217,6 +217,13 @@ namespace Ricochet.Client.App
                     ClosePopover(_profilePopover);
             });
             _codeField = _root.Q<TextField>("play-code");
+            // A click puts the caret where it lands: UI Toolkit selects all the text on focus and on mouse-up by default,
+            // which flashed as a highlight.
+            foreach (TextField field in new[] { _nameField, _profileNameField, _codeField })
+            {
+                field.selectAllOnFocus = false;
+                field.selectAllOnMouseUp = false;
+            }
             // Lobby codes aren't case-sensitive; show them the way the lobby does.
             _codeField.RegisterValueChangedCallback(e =>
             {
