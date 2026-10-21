@@ -113,6 +113,7 @@ namespace Ricochet.Client.App
             _root.RegisterCallback<NavigationMoveEvent>(OnNavigationMove, TrickleDown.TrickleDown);
 
             Bind();
+            _root.Query<Button>(className: "btn").ForEach(AddShadow);
             InitLayout();
             ApplyPalette();
             Palette.Changed += ApplyPalette;
@@ -272,6 +273,7 @@ namespace Ricochet.Client.App
             foreach ((Button swatch, Palette palette) in _swatches)
                 swatch.EnableInClassList("is-active", palette == current);
             _paletteLabel.text = $"Palette: {current.Name}";
+            _root.Query<Button>(className: "btn").ForEach(b => b.MarkDirtyRepaint());
             Scratchpad.View?.RefreshFrame();
         }
 
@@ -349,6 +351,8 @@ namespace Ricochet.Client.App
             var plus = new Button { text = "+" };
             minus.AddToClassList("btn");
             plus.AddToClassList("btn");
+            AddShadow(minus);
+            AddShadow(plus);
             var value = new Label();
             value.AddToClassList("mini-stepper-value");
             minus.clicked += () => { EditSettings(s => set(s, Step(get(s), -step, min, max))); minus.Blur(); };
@@ -403,6 +407,37 @@ namespace Ricochet.Client.App
             return button;
         }
 
+        // A press-down shadow under the button in palettes that have one (Toybox night): the button's rounded bottom
+        // edge repeated a few pixels lower, drawn as the band between the two (USS has no box-shadow; a child element
+        // would change how the button is sized).
+        private const float PressShadowDepth = 4f;
+
+        private static void AddShadow(Button button) => button.generateVisualContent += DrawPressShadow;
+
+        private static void DrawPressShadow(MeshGenerationContext context)
+        {
+            if (!Palette.Current.PressShadow)
+                return;
+            VisualElement element = context.visualElement;
+            float w = element.layout.width, h = element.layout.height, d = PressShadowDepth;
+            float r = Mathf.Min(element.resolvedStyle.borderBottomLeftRadius, w / 2f, h / 2f);
+            if (w <= 0f || h <= 0f)
+                return;
+            Painter2D painter = context.painter2D;
+            painter.fillColor = Color.black;
+            painter.BeginPath();
+            painter.MoveTo(new Vector2(0f, h - r));
+            painter.Arc(new Vector2(r, h - r), r, Angle.Degrees(180f), Angle.Degrees(90f), ArcDirection.CounterClockwise);
+            painter.LineTo(new Vector2(w - r, h));
+            painter.Arc(new Vector2(w - r, h - r), r, Angle.Degrees(90f), Angle.Degrees(0f), ArcDirection.CounterClockwise);
+            painter.LineTo(new Vector2(w, h - r + d));
+            painter.Arc(new Vector2(w - r, h - r + d), r, Angle.Degrees(0f), Angle.Degrees(90f), ArcDirection.Clockwise);
+            painter.LineTo(new Vector2(r, h + d));
+            painter.Arc(new Vector2(r, h - r + d), r, Angle.Degrees(90f), Angle.Degrees(180f), ArcDirection.Clockwise);
+            painter.ClosePath();
+            painter.Fill();
+        }
+
         private static VisualElement AddRow(VisualElement parent)
         {
             var row = new VisualElement();
@@ -441,6 +476,7 @@ namespace Ricochet.Client.App
                 b.AddToClassList("btn");
                 b.AddToClassList("btn--small");
                 b.AddToClassList("btn--square");
+                AddShadow(b);
             }
             var value = new Label();
             value.AddToClassList("stepper-value");
@@ -675,6 +711,7 @@ namespace Ricochet.Client.App
             var button = new Button { text = label };
             button.AddToClassList("btn");
             button.AddToClassList("solution-btn");
+            AddShadow(button);
             if (segment.IsShortest)
                 button.AddToClassList("solution-btn--shortest");
             button.clicked += () =>

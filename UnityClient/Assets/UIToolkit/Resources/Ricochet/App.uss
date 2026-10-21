@@ -237,15 +237,13 @@
 }
 
 /* Palette touches beyond colour: Toybox's thick ink outlines and press-down buttons, a soft edge on Table and Chalkboard cards.
-   Toybox night: cream ink lines weighted by importance (bold on the main buttons, softer on cards, faint on the rest), with a
-   black bottom edge standing in for the press-down shadow (USS has no box-shadow). */
+   Toybox night: cream ink lines weighted by importance (bold on the main buttons, softer on cards, faint on the rest); the
+   buttons' black press-down shadow is drawn by AppUI (Palette.PressShadow). */
 .app.palette--toynight .card, .app.palette--toynight .popover, .app.palette--toynight .sheet-head { border-width: 2px; border-color: var(--card-border); }
 .app.palette--toynight .sheet-head { border-bottom-width: 0; }
 .app.palette--toynight .card--daily { border-color: var(--daily-border); }
-.app.palette--toynight .btn { border-width: 2px; border-bottom-width: 5px; border-color: rgba(236, 222, 193, 0.45); border-bottom-color: #000000; }
-.app.palette--toynight .btn--primary, .app.palette--toynight .btn--daily { border-width: 3px; border-bottom-width: 6px; border-color: var(--ink); border-bottom-color: #000000; }
-.app.palette--toynight .btn:active { border-bottom-width: 2px; }
-.app.palette--toynight .btn--ghost { border-bottom-width: 2px; border-bottom-color: rgba(236, 222, 193, 0.45); }
+.app.palette--toynight .btn { border-width: 2px; border-color: rgba(236, 222, 193, 0.45); }
+.app.palette--toynight .btn--primary, .app.palette--toynight .btn--daily { border-width: 3px; border-color: var(--ink); }
 .app.palette--table .card, .app.palette--chalk .card { border-width: 1px; border-color: var(--card-border); }
 .app.palette--toybox .card, .app.palette--toybox .popover, .app.palette--toybox .sheet-head { border-width: 3px; border-color: var(--card-border); }
 .app.palette--table .card--daily, .app.palette--chalk .card--daily, .app.palette--toybox .card--daily { border-color: var(--daily-border); }
