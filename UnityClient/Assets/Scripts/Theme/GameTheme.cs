@@ -36,7 +36,7 @@ namespace Ricochet.Client.Theme
 
         [Header("What the board shows (frame + banner)")]
         [Tooltip("Replays are neutral so they never look like a target colour.")]
-        [SerializeField] private Color _playerReplay = new Color(0.40f, 0.52f, 0.78f);
+        [SerializeField] private Color _playerReplay = new Color(0.95f, 0.92f, 0.85f);
         [SerializeField] private Color _shortestReplay = new Color(0.55f, 0.56f, 0.62f);
         [SerializeField] private Color _roundOver = new Color(0.30f, 0.31f, 0.39f);
         [Tooltip("Highlighted panel text (the feedback line).")]
@@ -110,14 +110,15 @@ namespace Ricochet.Client.Theme
 
         /// <summary>
         /// The frame/banner colour for what the board shows: the player's own board (practice or a round) in the palette's
-        /// frame colour, replays in neutral shades of their own (playing vs watching; the target shows on the board itself).
+        /// frame colour, replays in shades of their own (playing vs watching; the target shows on the board itself), which a
+        /// palette may replace where they'd clash.
         /// </summary>
         public Color FrameColor(BoardMode mode, Target target)
         {
             switch (mode)
             {
-                case BoardMode.PlayerReplay: return _playerReplay;
-                case BoardMode.ShortestReplay: return _shortestReplay;
+                case BoardMode.PlayerReplay: return Palette.Current.ReplayFrame ?? _playerReplay;
+                case BoardMode.ShortestReplay: return Palette.Current.ShortestFrame ?? _shortestReplay;
                 case BoardMode.RoundOver: return _roundOver;
                 default: return Palette.Current.BoardFrame;
             }

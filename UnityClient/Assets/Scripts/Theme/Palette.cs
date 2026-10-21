@@ -10,8 +10,8 @@ namespace Ricochet.Client.Theme
     /// <summary>
     /// The player's choice of colours around the board (Settings > Palette). A palette changes the surroundings only:
     /// the UI's colours (App.uss defines each one's variables under <see cref="UssClass"/>), the ground behind the board
-    /// and the frame around the player's own board (practice and rounds alike). The board itself, the robot colours and
-    /// the replay frames (a player's replay, the shortest) stay the same in every palette.
+    /// and the board's frames: around the player's own board (practice and rounds alike) and, where the defaults clash, around
+    /// replays. The board itself and the robot colours stay the same in every palette.
     /// </summary>
     public sealed class Palette
     {
@@ -23,13 +23,18 @@ namespace Ricochet.Client.Theme
         public Color Accent { get; }
         /// <summary>The frame (and desktop banner) of the player's own board: practice and rounds.</summary>
         public Color BoardFrame { get; }
+        /// <summary>The frame while watching a player's replay, if not the theme's (cream: Toybox night's own board is cream).</summary>
+        public Color? ReplayFrame { get; }
+        /// <summary>The frame while the shortest solution plays, if not the theme's grey.</summary>
+        public Color? ShortestFrame { get; }
         /// <summary>Light grounds: coloured text gets darkened instead of lightened to stay readable.</summary>
         public bool IsLight { get; }
         /// <summary>Buttons get a black press-down shadow under them (drawn by AppUI).</summary>
         public bool PressShadow { get; }
         public string UssClass => "palette--" + Id;
 
-        private Palette(string id, string name, uint ground, uint accent, uint boardFrame, bool isLight = false, bool pressShadow = false)
+        private Palette(string id, string name, uint ground, uint accent, uint boardFrame, bool isLight = false, bool pressShadow = false,
+            uint? replayFrame = null, uint? shortestFrame = null)
         {
             Id = id;
             Name = name;
@@ -38,11 +43,14 @@ namespace Ricochet.Client.Theme
             BoardFrame = Rgb(boardFrame);
             IsLight = isLight;
             PressShadow = pressShadow;
+            ReplayFrame = replayFrame.HasValue ? Rgb(replayFrame.Value) : (Color?)null;
+            ShortestFrame = shortestFrame.HasValue ? Rgb(shortestFrame.Value) : (Color?)null;
         }
 
         public static readonly Palette[] All =
         {
-            new Palette("toynight", "Toybox night", 0x1f1914, 0x26914f, 0xecdec1, pressShadow: true),
+            new Palette("toynight", "Toybox night", 0x1f1914, 0x26914f, 0xecdec1, pressShadow: true,
+                replayFrame: 0xb9783a, shortestFrame: 0x8a8178), // caramel and a warm grey: watching, in the palette's own tones
             new Palette("night", "Night table", 0x1c1713, 0x3b6fd9, 0x6b4423),
             new Palette("indigo", "Indigo night", 0x171a29, 0x6a5be0, 0x786bc7),
             new Palette("table", "Board game table", 0xefe6d3, 0x2f5fc4, 0x8a5a34, isLight: true),
