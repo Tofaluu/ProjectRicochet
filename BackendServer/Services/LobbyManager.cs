@@ -33,7 +33,7 @@ namespace BackendServer.Services
         public double CountdownSeconds { get; set; } = 3;
 
         /// <summary>Seconds per move when replaying the winner's solution.</summary>
-        public double ReplayStepSeconds { get; set; } = 1;
+        public double ReplayStepSeconds { get; set; } = 0.8;
 
         /// <summary>Seconds per move when replaying the shortest solution after a longer winning one. Alone (nobody solved it) it uses ReplayStepSeconds.</summary>
         public double ShortestReplayStepSeconds { get; set; } = 0.6;

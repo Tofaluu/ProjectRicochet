@@ -30,6 +30,11 @@ namespace Ricochet.Client.App
         private GameController _game;
         private DailyController _daily;
         private VisualElement _root;
+        private VisualElement _leavePopover;
+        private Label _leaveTitle, _leaveBody;
+        private Button _leaveConfirm;
+        // Where a nav tab clicked in a lobby was going: asked first (the leave popover), done once the lobby is left.
+        private Action _askedToGo, _afterLeave;
         private Label _paletteLabel;
         private readonly List<(Button, Palette)> _swatches = new List<(Button, Palette)>();
         private Screen _chosen = Screen.Home;
@@ -149,6 +154,11 @@ namespace Ricochet.Client.App
             _replayBar = _root.Q("replay-bar");
             _settings = _root.Q("settings");
             _profilePopover = _root.Q("profile-popover");
+            _leavePopover = _root.Q("leave-popover");
+            _leaveTitle = _root.Q<Label>("leave-title");
+            _leaveBody = _root.Q<Label>("leave-body");
+            _leaveConfirm = Click("leave-confirm", ConfirmLeave);
+            Click("leave-stay", () => ClosePopover(_leavePopover));
             // The side panel scrolls smoothly: wheel and trackpad events move a target the panel glides to (the
             // ScrollView's own wheel handling jumps a fixed step per event, which stutters on a trackpad).
             _side = _root.Q<ScrollView>("side");
@@ -533,6 +543,13 @@ namespace Ricochet.Client.App
 
         private void Choose(Screen screen)
         {
+            if (_game.Match.InLobby)
+            {
+                // Play with friends is the lobby itself; the other tabs mean leaving it, so ask first.
+                if (screen != Screen.Play)
+                    AskToLeave(() => Choose(screen));
+                return;
+            }
             _chosen = screen;
             if (_daily.State.IsActive)
                 _daily.Close(backToPractice: true);
@@ -541,8 +558,41 @@ namespace Ricochet.Client.App
         private void OpenDaily()
         {
             if (_game.Match.InLobby)
+            {
+                AskToLeave(OpenDaily);
                 return;
+            }
             _daily.Open();
+        }
+
+        private void AskToLeave(Action then)
+        {
+            _askedToGo = then;
+            bool match = _game.Match.Stage != MatchStage.BetweenMatches;
+            string code = _game.Match.LobbyCode;
+            _leaveTitle.text = match ? "Leave the match?" : $"Leave lobby {code}?";
+            _leaveBody.text = match ? $"You'll lose your seat and score in lobby {code}." : "You can come back with the code while the lobby is open.";
+            _leaveConfirm.text = match ? "Leave match" : "Leave lobby";
+            ClosePopover(_settings);
+            ClosePopover(_profilePopover);
+            _leavePopover.AddToClassList("is-open");
+        }
+
+        private void ConfirmLeave()
+        {
+            ClosePopover(_leavePopover);
+            _afterLeave = _askedToGo;
+            _game.Leave();
+        }
+
+        // After leaving (the lobby state catches up a moment later): go where the tab was going.
+        private void GoAfterLeaving()
+        {
+            if (_afterLeave == null || _game.Match.InLobby)
+                return;
+            Action go = _afterLeave;
+            _afterLeave = null;
+            go();
         }
 
         private Screen Current => _game.Match.InLobby ? (_game.Match.Stage == MatchStage.BetweenMatches ? Screen.Lobby : Screen.Match)
@@ -560,6 +610,7 @@ namespace Ricochet.Client.App
                 Scratchpad.Camera.backgroundColor = Palette.Current.Ground;
 
             ClosePopoversOnOutsideClick();
+            GoAfterLeaving();
             GlideSide();
             Screen screen = Current;
             ShowBoardVisibility();
@@ -606,6 +657,7 @@ namespace Ricochet.Client.App
             bool open = !popover.ClassListContains("is-open");
             ClosePopover(_settings);
             ClosePopover(_profilePopover);
+            ClosePopover(_leavePopover);
             popover.EnableInClassList("is-open", open);
         }
 
@@ -620,13 +672,15 @@ namespace Ricochet.Client.App
         private void ClosePopoversOnOutsideClick()
         {
             bool settings = _settings.ClassListContains("is-open"), profile = _profilePopover.ClassListContains("is-open");
-            if (!settings && !profile)
+            bool leave = _leavePopover.ClassListContains("is-open");
+            if (!settings && !profile && !leave)
                 return;
             var keyboard = UnityEngine.InputSystem.Keyboard.current;
             if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
             {
                 ClosePopover(_settings);
                 ClosePopover(_profilePopover);
+                ClosePopover(_leavePopover);
                 return;
             }
             var pointer = UnityEngine.InputSystem.Pointer.current;
@@ -642,6 +696,9 @@ namespace Ricochet.Client.App
             if (profile && !_profilePopover.worldBound.Contains(onPanel) && !_profileButton.worldBound.Contains(onPanel)
                 && !_topbarAvatar.worldBound.Contains(onPanel))
                 ClosePopover(_profilePopover);
+            // (A nav tab clicked meanwhile asks again on its own.)
+            if (leave && !_leavePopover.worldBound.Contains(onPanel))
+                ClosePopover(_leavePopover);
         }
 
         // ---- Lobby (between matches, including the results) ----

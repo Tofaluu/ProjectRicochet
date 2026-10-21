@@ -252,6 +252,15 @@
             <ui:Label text="Your streak and daily results are saved in this browser. Accounts are coming later." class="muted small popover-note" />
         </ui:VisualElement>
 
+        <ui:VisualElement name="leave-popover" class="popover popover--leave">
+            <ui:Label name="leave-title" class="h2" />
+            <ui:Label name="leave-body" class="muted small popover-note gap-m" />
+            <ui:VisualElement class="row">
+                <ui:Button name="leave-stay" text="Stay" class="btn btn--primary grow" />
+                <ui:Button name="leave-confirm" text="Leave" class="btn grow leave-confirm" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
         <ui:Label name="board-tip" text="Click a robot, then a dot to move it. Arrow keys and dragging work too." class="board-tip" picking-mode="Ignore" />
         <ui:VisualElement name="board-overlay" class="board-overlay" picking-mode="Ignore">
             <ui:Label name="overlay-caption" text="" class="overlay-caption" picking-mode="Ignore" />

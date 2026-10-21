@@ -423,6 +423,9 @@
 .popover { position: absolute; left: 248px; bottom: 24px; width: 290px; display: none; background-color: var(--panel); border-radius: 18px; padding: 16px 18px; border-width: 1px; border-color: var(--line); }
 .popover.is-open { display: flex; }
 .popover-note { margin-top: 6px; white-space: normal; }
+/* Asks before a nav tab leaves the lobby: next to the nav, near the top. */
+.popover--leave { top: 90px; bottom: auto; }
+.app .leave-confirm { margin-left: 10px; }
 .palette-label { margin-top: 12px; margin-bottom: 8px; }
 .swatches { flex-direction: row; justify-content: space-between; }
 .app .swatch { width: 32px; height: 32px; margin: 0; padding: 0; border-radius: 9px; border-width: 2px; border-color: var(--line); align-items: center; justify-content: center; }
