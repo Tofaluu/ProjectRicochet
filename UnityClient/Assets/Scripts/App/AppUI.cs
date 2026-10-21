@@ -26,11 +26,12 @@ namespace Ricochet.Client.App
         private static readonly RobotColor[] AvatarColors = { RobotColor.Blue, RobotColor.Red, RobotColor.Green, RobotColor.Yellow };
 
         // The palette's ground, behind the board (the camera's clear colour).
-        private static readonly Color Ground = new Color32(0x17, 0x1a, 0x29, 0xff);
 
         private GameController _game;
         private DailyController _daily;
         private VisualElement _root;
+        private Label _paletteLabel;
+        private readonly List<(Button, Palette)> _swatches = new List<(Button, Palette)>();
         private Screen _chosen = Screen.Home;
 
         private VisualElement _main, _boardArea, _boardOverlay, _goalIcon, _replayBar, _settings, _profilePopover, _profileButton;
@@ -113,6 +114,8 @@ namespace Ricochet.Client.App
 
             Bind();
             InitLayout();
+            ApplyPalette();
+            Palette.Changed += ApplyPalette;
             Scratchpad.BoardArea = BoardAreaOnScreen;
             ScratchpadController.TypingInOtherUI = IsTyping;
             ScratchpadController.PointerBlocked = PointerBlocked;
@@ -237,6 +240,39 @@ namespace Ricochet.Client.App
             AddSwitch(AddRow(settingsList), "Sound  (M)", () => !PlayerSettings.Muted, () => PlayerSettings.Muted = !PlayerSettings.Muted);
             AddSwitch(AddRow(settingsList), "Move dots", () => PlayerSettings.MovePreview, () => PlayerSettings.MovePreview = !PlayerSettings.MovePreview);
             AddSwitch(AddRow(settingsList), "Big burst", () => PlayerSettings.BigBurst, () => PlayerSettings.BigBurst = !PlayerSettings.BigBurst);
+
+            // The palette picker: a swatch per palette (its ground with its action colour inside).
+            _paletteLabel = _root.Q<Label>("palette-label");
+            VisualElement paletteList = _root.Q("palette-list");
+            foreach (Palette palette in Palette.All)
+            {
+                var swatch = new Button { tooltip = palette.Name };
+                swatch.AddToClassList("swatch");
+                swatch.style.backgroundColor = palette.Ground;
+                var dot = new VisualElement();
+                dot.AddToClassList("swatch-dot");
+                dot.style.backgroundColor = palette.Accent;
+                swatch.Add(dot);
+                swatch.clicked += () =>
+                {
+                    Palette.Select(palette);
+                    swatch.Blur();
+                };
+                paletteList.Add(swatch);
+                _swatches.Add((swatch, palette));
+            }
+        }
+
+        // Re-colours everything for the current palette: the UI's variables (a class on #app), the swatches, the board's frame.
+        private void ApplyPalette()
+        {
+            Palette current = Palette.Current;
+            foreach (Palette palette in Palette.All)
+                _app.EnableInClassList(palette.UssClass, palette == current);
+            foreach ((Button swatch, Palette palette) in _swatches)
+                swatch.EnableInClassList("is-active", palette == current);
+            _paletteLabel.text = $"Palette: {current.Name}";
+            Scratchpad.View?.RefreshFrame();
         }
 
         private void BindLobby()
@@ -477,7 +513,7 @@ namespace Ricochet.Client.App
             ApplyLayout();
             // The palette's ground behind the board (the board view sets its own when it builds a board).
             if (Scratchpad.Camera != null)
-                Scratchpad.Camera.backgroundColor = Ground;
+                Scratchpad.Camera.backgroundColor = Palette.Current.Ground;
 
             ClosePopoversOnOutsideClick();
             GlideSide();
@@ -933,7 +969,7 @@ namespace Ricochet.Client.App
             _goalIcon.style.unityBackgroundImageTintColor = targetColor;
             string robot = target.Robot.HasValue ? $"the {target.Robot.Value} robot" : "any robot";
             int best = Scratchpad.PracticeShortest;
-            string color = ColorUtility.ToHtmlStringRGB(Lighter(targetColor));
+            string color = ColorUtility.ToHtmlStringRGB(Readable(targetColor));
             // Compact: one short line beside the banner ("Red robot to its target in 6").
             _goalLabel.text = Compact
                 ? $"<b><color=#{color}>{(target.Robot.HasValue ? $"{target.Robot.Value} robot" : "Any robot")}</color></b> to its target" + (best > 0 ? $" in {best}" : "")
@@ -1048,7 +1084,8 @@ namespace Ricochet.Client.App
             }
         }
 
-        private static Color Lighter(Color color) => Color.Lerp(color, Color.white, 0.25f);
+        // A robot colour as text: lightened on dark grounds, darkened on light ones (yellow on cream is unreadable otherwise).
+        private static Color Readable(Color color) => Palette.Current.IsLight ? Color.Lerp(color, Color.black, 0.4f) : Color.Lerp(color, Color.white, 0.25f);
 
         // ---- Geometry: the panel (UI units, y down) vs the screen (pixels, y up) ----
 

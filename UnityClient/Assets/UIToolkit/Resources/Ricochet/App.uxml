@@ -239,7 +239,8 @@
         <ui:VisualElement name="settings" class="popover">
             <ui:Label text="SETTINGS" class="h3 gap-s" />
             <ui:VisualElement name="settings-list" />
-            <ui:Label text="Palette: Indigo night (more palettes coming)" class="muted small" style="margin-top: 10px;" />
+            <ui:Label name="palette-label" class="setting-label palette-label" />
+            <ui:VisualElement name="palette-list" class="swatches" />
         </ui:VisualElement>
 
         <ui:VisualElement name="profile-popover" class="popover">

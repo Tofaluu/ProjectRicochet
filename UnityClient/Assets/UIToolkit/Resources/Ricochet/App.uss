@@ -1,5 +1,71 @@
-/* The app's look: the Indigo night palette as variables (a palette picker swaps these), Nunito throughout. */
+/* The app's look: palette colours as variables, Nunito throughout. */
+/* Palettes (Settings > Palette; Theme/Palette.cs lists them): AppUI puts .palette--<id> on #app. :root holds the default
+   (Night table) for anything outside #app. */
 :root {
+    --bg: #1c1713;
+    --nav: #15110e;
+    --panel: #28211b;
+    --panel-2: #342b23;
+    --panel-hover: #3f342a;
+    --input: #1c1713;
+    --line: #4a3d31;
+    --text: #f3eadc;
+    --muted: #bba98f;
+    --nav-text: #d2c4ae;
+    --body: #e2d7c6;
+    --action: #3b6fd9;
+    --action-hover: #4d7fe6;
+    --on-action: #ffffff;
+    --daily: #efb02e;
+    --daily-hover: #f5bf4a;
+    --on-daily: #241c14;
+    --daily-tint: #2e2416;
+    --daily-border: #5a4526;
+    --daily-soft: #3d2f1b;
+    --daily-text: #ffcf6b;
+    --good: #8fd9a8;
+    --shortest: #4d4439;
+    --rank-2: #cfc6b8;
+    --rank-3: #d9a07a;
+    --card-border: rgba(0, 0, 0, 0);
+
+    -unity-font: url("/Assets/Fonts/Nunito-Regular.ttf");
+    -unity-font-definition: initial;
+    color: var(--text);
+    font-size: 15px;
+}
+
+.app { flex-grow: 1; flex-direction: row; color: var(--text); }
+
+.palette--night {
+    --bg: #1c1713;
+    --nav: #15110e;
+    --panel: #28211b;
+    --panel-2: #342b23;
+    --panel-hover: #3f342a;
+    --input: #1c1713;
+    --line: #4a3d31;
+    --text: #f3eadc;
+    --muted: #bba98f;
+    --nav-text: #d2c4ae;
+    --body: #e2d7c6;
+    --action: #3b6fd9;
+    --action-hover: #4d7fe6;
+    --on-action: #ffffff;
+    --daily: #efb02e;
+    --daily-hover: #f5bf4a;
+    --on-daily: #241c14;
+    --daily-tint: #2e2416;
+    --daily-border: #5a4526;
+    --daily-soft: #3d2f1b;
+    --daily-text: #ffcf6b;
+    --good: #8fd9a8;
+    --shortest: #4d4439;
+    --rank-2: #cfc6b8;
+    --rank-3: #d9a07a;
+    --card-border: rgba(0, 0, 0, 0);
+}
+.palette--indigo {
     --bg: #171a29;
     --nav: #12141f;
     --panel: #1f2336;
@@ -9,6 +75,8 @@
     --line: #3a4060;
     --text: #ecebf5;
     --muted: #a3a6bf;
+    --nav-text: #c4c6da;
+    --body: #d7d8e6;
     --action: #6a5be0;
     --action-hover: #7a6cf0;
     --on-action: #ffffff;
@@ -20,14 +88,137 @@
     --daily-soft: #3a3022;
     --daily-text: #ffcf6b;
     --good: #8fd9a8;
-
-    -unity-font: url("/Assets/Fonts/Nunito-Regular.ttf");
-    -unity-font-definition: initial;
-    color: var(--text);
-    font-size: 15px;
+    --shortest: #4a4f66;
+    --rank-2: #c9ccdd;
+    --rank-3: #d9a07a;
+    --card-border: rgba(0, 0, 0, 0);
+}
+.palette--table {
+    --bg: #efe6d3;
+    --nav: #e4d7bf;
+    --panel: #fbf6ec;
+    --panel-2: #eadfca;
+    --panel-hover: #e0d2b8;
+    --input: #f5eddd;
+    --line: #c9b99c;
+    --text: #2b2117;
+    --muted: #6a5a45;
+    --nav-text: #4f4232;
+    --body: #3d3226;
+    --action: #2f5fc4;
+    --action-hover: #3a6bd2;
+    --on-action: #ffffff;
+    --daily: #e4a11b;
+    --daily-hover: #eeb03a;
+    --on-daily: #2b2117;
+    --daily-tint: #fbf0d6;
+    --daily-border: #e6c886;
+    --daily-soft: #f4dfae;
+    --daily-text: #7a5208;
+    --good: #2e7d4f;
+    --shortest: #d9d0bf;
+    --rank-2: #6a6f80;
+    --rank-3: #9a5a2e;
+    --card-border: #e2d5bc;
+}
+.palette--toybox {
+    --bg: #fff4dc;
+    --nav: #ffe7b8;
+    --panel: #ffffff;
+    --panel-2: #f3ecdd;
+    --panel-hover: #ebe1cc;
+    --input: #fffaf0;
+    --line: #2b2117;
+    --text: #2b2117;
+    --muted: #5f5244;
+    --nav-text: #4a3e31;
+    --body: #3a2f24;
+    --action: #1f7a44;
+    --action-hover: #258a4e;
+    --on-action: #ffffff;
+    --daily: #ffc233;
+    --daily-hover: #ffcd55;
+    --on-daily: #2b2117;
+    --daily-tint: #fff0c9;
+    --daily-border: #2b2117;
+    --daily-soft: #ffe08a;
+    --daily-text: #6b4500;
+    --good: #1f7a44;
+    --shortest: #e6dccb;
+    --rank-2: #5f5244;
+    --rank-3: #9a5a2e;
+    --card-border: #2b2117;
+}
+.palette--teal {
+    --bg: #0f2427;
+    --nav: #0b1c1e;
+    --panel: #153238;
+    --panel-2: #1c3f45;
+    --panel-hover: #234b52;
+    --input: #0f2427;
+    --line: #2d575d;
+    --text: #e8f3f0;
+    --muted: #a4c6c0;
+    --nav-text: #c3dcd8;
+    --body: #d3e6e2;
+    --action: #f2a33a;
+    --action-hover: #f6b252;
+    --on-action: #1d1405;
+    --daily: #ffd166;
+    --daily-hover: #ffda80;
+    --on-daily: #1d1405;
+    --daily-tint: #1d3533;
+    --daily-border: #4d5a3a;
+    --daily-soft: #2f3d2c;
+    --daily-text: #ffd98a;
+    --good: #8fd9a8;
+    --shortest: #3c5357;
+    --rank-2: #c3d3d0;
+    --rank-3: #d9a07a;
+    --card-border: rgba(0, 0, 0, 0);
+}
+.palette--chalk {
+    --bg: #22302a;
+    --nav: #1a2520;
+    --panel: #2a3b33;
+    --panel-2: #34483f;
+    --panel-hover: #3e554a;
+    --input: #22302a;
+    --line: #4f6a5d;
+    --text: #f2f0e6;
+    --muted: #b9c4b8;
+    --nav-text: #d4dbd2;
+    --body: #e0e3da;
+    --action: #3a6fd8;
+    --action-hover: #4a7fe6;
+    --on-action: #ffffff;
+    --daily: #f0c24b;
+    --daily-hover: #f5cf68;
+    --on-daily: #1f1a10;
+    --daily-tint: #2f3b2c;
+    --daily-border: #7d6a3a;
+    --daily-soft: #3a4632;
+    --daily-text: #ffd970;
+    --good: #9fe0b4;
+    --shortest: #45574f;
+    --rank-2: #c9d0c6;
+    --rank-3: #d9a07a;
+    --card-border: rgba(242, 240, 230, 0.25);
 }
 
-.app { flex-grow: 1; flex-direction: row; }
+/* Palette touches beyond colour: Toybox's thick ink outlines and press-down buttons, a soft edge on Table and Chalkboard cards. */
+.app.palette--table .card, .app.palette--chalk .card { border-width: 1px; border-color: var(--card-border); }
+.app.palette--toybox .card, .app.palette--toybox .popover, .app.palette--toybox .sheet-head { border-width: 3px; border-color: var(--card-border); }
+.app.palette--table .card--daily, .app.palette--chalk .card--daily, .app.palette--toybox .card--daily { border-color: var(--daily-border); }
+.app.palette--toybox .sheet-head { border-bottom-width: 0; }
+.app.palette--toybox .btn { border-width: 2px; border-bottom-width: 5px; border-color: var(--line); }
+.app.palette--toybox .btn:active { border-bottom-width: 2px; }
+.app.palette--toybox .btn--ghost { border-bottom-width: 2px; }
+.app.palette--toybox .switch { border-width: 2px; border-color: var(--line); }
+.app.palette--toybox .switch-knob { margin-left: 2px; }
+.app.palette--toybox .switch.is-on .switch-knob { margin-left: 24px; }
+.app.palette--toybox .stat, .app.palette--toybox .stepper { border-width: 2px; border-color: var(--line); }
+
 
 /* ---- Navigation ---- */
 .nav { width: 232px; flex-shrink: 0; background-color: var(--nav); padding: 24px 16px; }
@@ -41,11 +232,11 @@
 .brand-name { font-size: 26px; margin-left: 10px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
 .app .nav-item {
     height: 46px; margin: 0 0 6px 0; padding: 0 12px; border-width: 0; border-radius: 12px;
-    background-color: rgba(0, 0, 0, 0); color: #c4c6da; font-size: 16px; -unity-text-align: middle-left;
+    background-color: rgba(0, 0, 0, 0); color: var(--nav-text); font-size: 16px; -unity-text-align: middle-left;
     -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf");
 }
 .app .nav-item:hover { background-color: var(--panel); color: var(--text); }
-.app .nav-item.is-active { background-color: var(--panel-2); color: #ffffff; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.app .nav-item.is-active { background-color: var(--panel-2); color: var(--text); -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
 .spacer { flex-grow: 1; }
 .profile { padding-top: 6px; margin-top: 6px; border-top-width: 1px; border-color: var(--panel-2); }
 /* Opens the profile popover (name, guest note). */
@@ -89,7 +280,7 @@
 .h1 { font-size: 34px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); white-space: normal; }
 .h2 { font-size: 22px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); white-space: normal; }
 .h3 { font-size: 13px; color: var(--muted); letter-spacing: 1px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
-.body { font-size: 16px; white-space: normal; color: #d7d8e6; }
+.body { font-size: 16px; white-space: normal; color: var(--body); }
 .muted { color: var(--muted); white-space: normal; }
 .small { font-size: 14px; }
 
@@ -138,9 +329,9 @@
 .lb-row { flex-direction: row; align-items: center; padding: 7px 8px; border-radius: 10px; }
 .lb-row.is-me { background-color: var(--panel-2); }
 .lb-rank { width: 28px; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); color: var(--muted); }
-.lb-rank--1 { color: #ffcf6b; }
-.lb-rank--2 { color: #c9ccdd; }
-.lb-rank--3 { color: #d9a07a; }
+.lb-rank--1 { color: var(--daily-text); }
+.lb-rank--2 { color: var(--rank-2); }
+.lb-rank--3 { color: var(--rank-3); }
 .lb-name { flex-grow: 1; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-moves { width: 40px; font-size: 15px; -unity-text-align: middle-right; }
 .lb-time { width: 56px; font-size: 15px; color: var(--muted); -unity-text-align: middle-right; }
@@ -161,7 +352,7 @@
 .timer-value { font-size: 44px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
 .timer-value.is-bumped { color: var(--good); }
 .app .solution-btn { margin-bottom: 8px; -unity-text-align: middle-left; }
-.app .solution-btn--shortest { background-color: #4a4f66; }
+.app .solution-btn--shortest { background-color: var(--shortest); }
 .mini-stepper { flex-direction: row; align-items: center; flex-shrink: 0; margin-left: 10px; }
 .mini-stepper-value { min-width: 74px; font-size: 16px; -unity-text-align: middle-center; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
 .app .mini-stepper .btn { width: 36px; height: 36px; padding: 0; border-radius: 10px; font-size: 18px; }
@@ -194,6 +385,11 @@
 .popover { position: absolute; left: 248px; bottom: 24px; width: 290px; display: none; background-color: var(--panel); border-radius: 18px; padding: 16px 18px; border-width: 1px; border-color: var(--line); }
 .popover.is-open { display: flex; }
 .popover-note { margin-top: 6px; white-space: normal; }
+.palette-label { margin-top: 12px; margin-bottom: 8px; }
+.swatches { flex-direction: row; justify-content: space-between; }
+.app .swatch { width: 36px; height: 36px; margin: 0; padding: 0; border-radius: 9px; border-width: 2px; border-color: var(--line); align-items: center; justify-content: center; }
+.app .swatch.is-active { border-width: 3px; border-color: var(--text); }
+.swatch-dot { width: 14px; height: 14px; border-radius: 4px; }
 
 /* ---- The side panel's scrollbar: thin, dark, no arrow buttons ---- */
 .side .unity-scroller--vertical { width: 8px; margin-left: 6px; border-width: 0; background-color: rgba(0, 0, 0, 0); }

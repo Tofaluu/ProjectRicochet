@@ -53,7 +53,7 @@ namespace Ricochet.Client.Board
         private readonly Dictionary<RobotColor, RobotVisual> _robots = new Dictionary<RobotColor, RobotVisual>();
         private readonly List<Particle> _particles = new List<Particle>();
         private BoardMode _mode;
-        private SpriteRenderer _frame;
+        private SpriteRenderer _frame, _plateShadow;
         private Transform _content;
         private SpriteRenderer _selectionRing;
         private SpriteRenderer _targetGlow;
@@ -99,7 +99,7 @@ namespace Ricochet.Client.Board
             _hasSelection = false;
 
             if (Camera.main != null)
-                Camera.main.backgroundColor = Colors.Background;
+                Camera.main.backgroundColor = Palette.Current.Ground;
 
             GridState grid = round.Grid;
             _target = round.Target;
@@ -109,7 +109,7 @@ namespace Ricochet.Client.Board
 
             // The board: a soft shadow, the coloured frame (what the board shows), then the grout tiles sit in.
             float frameSize = 2f * (FrameThickness + WallThickness / 2f);
-            CreateRounded("Plate Shadow", 0.6f, Colors.Shadow, centre + new Vector3(0.15f, -0.3f),
+            _plateShadow = CreateRounded("Plate Shadow", 0.6f, PlateShadowColor, centre + new Vector3(0.15f, -0.3f),
                 new Vector2(width + frameSize + 0.3f, height + frameSize + 0.3f), PlateShadowOrder);
             _frame = CreateRounded("Frame", 0.45f, Colors.FrameColor(_mode, _target), centre, new Vector2(width + frameSize, height + frameSize), FrameOrder);
             CreateRounded("Grout", 0.12f, Colors.Grout, centre, new Vector2(width + WallThickness, height + WallThickness), GroutOrder);
@@ -272,6 +272,26 @@ namespace Ricochet.Client.Board
             _mode = mode;
             if (_frame != null)
                 _frame.color = Colors.FrameColor(mode, _target);
+        }
+
+        /// <summary>Re-colours the frame and the board's shadow (the palette changed).</summary>
+        public void RefreshFrame()
+        {
+            ShowMode(_mode);
+            if (_plateShadow != null)
+                _plateShadow.color = PlateShadowColor;
+        }
+
+        // The shadow under the board: fainter on light palettes, where the full one reads as a grey slab.
+        private Color PlateShadowColor
+        {
+            get
+            {
+                Color shadow = Colors.Shadow;
+                if (Palette.Current.IsLight)
+                    shadow.a *= 0.4f;
+                return shadow;
+            }
         }
 
         private void Update()

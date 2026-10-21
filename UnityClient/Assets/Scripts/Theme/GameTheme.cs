@@ -35,8 +35,6 @@ namespace Ricochet.Client.Theme
         [SerializeField] private Color _anyRobot = new Color(0.61f, 0.36f, 0.90f);
 
         [Header("What the board shows (frame + banner)")]
-        [Tooltip("Offline practice. During a round the frame takes the target's colour instead.")]
-        [SerializeField] private Color _ownBoard = new Color(0.47f, 0.42f, 0.78f);
         [Tooltip("Replays are neutral so they never look like a target colour.")]
         [SerializeField] private Color _playerReplay = new Color(0.95f, 0.92f, 0.85f);
         [SerializeField] private Color _shortestReplay = new Color(0.55f, 0.56f, 0.62f);
@@ -111,7 +109,7 @@ namespace Ricochet.Client.Theme
         public Color TargetColor(Target target) => target.Robot.HasValue ? RobotColor(target.Robot.Value) : _anyRobot;
 
         /// <summary>
-        /// The frame/banner colour for what the board shows: practice indigo, a live round in the target's
+        /// The frame/banner colour for what the board shows: practice in the palette's frame colour, a live round in the target's
         /// colour, neutral shades for replays (colour = playing, neutral = watching).
         /// </summary>
         public Color FrameColor(BoardMode mode, Target target)
@@ -122,7 +120,7 @@ namespace Ricochet.Client.Theme
                 case BoardMode.PlayerReplay: return _playerReplay;
                 case BoardMode.ShortestReplay: return _shortestReplay;
                 case BoardMode.RoundOver: return _roundOver;
-                default: return _ownBoard;
+                default: return Palette.Current.PracticeFrame;
             }
         }
 

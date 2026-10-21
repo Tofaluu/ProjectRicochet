@@ -15,6 +15,7 @@ namespace Ricochet.Client.Board
         private const string MovePreviewPrefKey = "Ricochet.MovePreview";
         private const string PracticeExactPrefKey = "Ricochet.PracticeExact";
         private const string PracticeMovesPrefKey = "Ricochet.PracticeMoves";
+        private const string PalettePrefKey = "Ricochet.Palette";
         // A typical board's length (the median of random boards).
         public const int DefaultPracticeMoves = 6;
 
@@ -55,6 +56,17 @@ namespace Ricochet.Client.Board
             set
             {
                 PlayerPrefs.SetInt(PracticeMovesPrefKey, Mathf.Clamp(value, MatchSettings.MinMinMoves, MatchSettings.MaxMinMoves));
+                PlayerPrefs.Save();
+            }
+        }
+
+        /// <summary>The chosen palette's id (see <c>Theme.Palette</c>); empty = the default.</summary>
+        public static string Palette
+        {
+            get => PlayerPrefs.GetString(PalettePrefKey, "");
+            set
+            {
+                PlayerPrefs.SetString(PalettePrefKey, value);
                 PlayerPrefs.Save();
             }
         }
