@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{{ PRODUCT_NAME }}}</title>
     <style>
-      :root { --bg: #14161c; --text: #e8eaf0; --muted: #8b91a1; --accent: #3fb6a8; --track: #2a2e38; }
+      /* The default palette (Toybox night); the script below swaps in the player's own palette, which the game saves. */
+      :root { --bg: #1f1914; --text: #f6eedd; --muted: #a0998d; --accent: #26914f; --track: #3f3932; }
       html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
         font-family: system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
       /* 100dvh = the visible height: on phones and tablets 100vh also counts the area under the browser's toolbars,
@@ -20,6 +21,15 @@
       #bar-fill { width: 0; height: 100%; background: var(--accent); transition: width 0.2s; }
       #error { display: none; color: #f07a7a; max-width: 480px; }
     </style>
+    <script>
+      // The palette the player picked last visit (saved by the game: Theme/Palette.cs, Plugins/WebGL/Viewport.jslib).
+      try {
+        var saved = JSON.parse(localStorage.getItem("ricochet.loadingColors") || "null");
+        for (var key in saved)
+          if (/^#[0-9a-f]{6}$/i.test(saved[key]))
+            document.documentElement.style.setProperty("--" + key, saved[key]);
+      } catch (e) { }
+    </script>
   </head>
   <body>
     <canvas id="unity-canvas" tabindex="-1"></canvas>

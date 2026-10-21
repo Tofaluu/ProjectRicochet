@@ -1,4 +1,7 @@
 using System;
+#if UNITY_WEBGL && !UNITY_EDITOR
+using System.Runtime.InteropServices;
+#endif
 using Ricochet.Client.Board;
 using UnityEngine;
 
@@ -65,6 +68,25 @@ namespace Ricochet.Client.Theme
             _current = palette;
             PlayerSettings.Palette = palette.Id;
             Changed?.Invoke();
+        }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern void Ricochet_SaveLoadingColors(string json);
+#endif
+
+        /// <summary>
+        /// Browser builds: saves this palette's colours where the loading page (WebGLTemplates/Ricochet/index.html) finds
+        /// them on the next visit, so the page shown while the game downloads matches the game.
+        /// </summary>
+        public void RememberForLoadingPage()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            Color text = IsLight ? Rgb(0x2b2117) : Rgb(0xf6eedd);
+            string Hex(Color c) => "#" + ColorUtility.ToHtmlStringRGB(c);
+            Ricochet_SaveLoadingColors($"{{\"bg\":\"{Hex(Ground)}\",\"text\":\"{Hex(text)}\",\"muted\":\"{Hex(Color.Lerp(Ground, text, 0.6f))}\"," +
+                $"\"accent\":\"{Hex(Accent)}\",\"track\":\"{Hex(Color.Lerp(Ground, text, 0.15f))}\"}}");
+#endif
         }
 
         private static Palette Find(string id) => Array.Find(All, p => p.Id == id);

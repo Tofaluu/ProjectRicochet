@@ -273,6 +273,7 @@ namespace Ricochet.Client.App
             foreach ((Button swatch, Palette palette) in _swatches)
                 swatch.EnableInClassList("is-active", palette == current);
             _paletteLabel.text = $"Palette: {current.Name}";
+            current.RememberForLoadingPage();
             _root.Query<Button>(className: "btn").ForEach(b => b.MarkDirtyRepaint());
             Scratchpad.View?.RefreshFrame();
         }
