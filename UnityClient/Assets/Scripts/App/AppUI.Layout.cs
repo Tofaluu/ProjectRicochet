@@ -53,7 +53,9 @@ namespace Ricochet.Client.App
         private bool Touch { get; set; }
 
         // The board isn't on screen: compact Home, or the rotate notice.
-        private bool BoardHidden => _layout == Layout.Rotate || (_layout == Layout.Compact && Current == Screen.Home);
+        // The daily screen hides the board until today's puzzle is on it (no flash of the practice board while it loads).
+        private bool BoardHidden => _layout == Layout.Rotate || (_layout == Layout.Compact && Current == Screen.Home)
+            || (Current == Screen.Daily && !_daily.ShowingBoard);
 
         private void InitLayout()
         {
@@ -162,6 +164,8 @@ namespace Ricochet.Client.App
         // Compact Home and the rotate notice hide the board: the camera stops drawing it (just the background).
         private void ShowBoardVisibility()
         {
+            // The goal line and controls wait with the board on the daily screen.
+            _stage.style.visibility = Current == Screen.Daily && !_daily.ShowingBoard ? Visibility.Hidden : Visibility.Visible;
             Camera camera = Scratchpad.Camera;
             if (camera == null || BoardHidden == _boardCulled)
                 return;

@@ -128,5 +128,20 @@ namespace ClientLogic.Tests
             daily.Close();
             Assert.False(daily.IsActive);
         }
+
+        [Fact]
+        public void Reopening_TodaysLoadedPuzzle_UntilMidnight()
+        {
+            var daily = new DailyState();
+            Assert.False(daily.CanReopen(0f)); // nothing loaded yet
+            daily.OnLoaded(Info(bestMoves: 9), now: 100f);
+            daily.Close();
+            Assert.True(daily.CanReopen(200f));
+            daily.Reopen();
+            Assert.Equal(DailyStage.Playing, daily.Stage);
+            Assert.Equal(9, daily.BestMoves);
+            Assert.Equal(130, daily.Elapsed(200f), 3); // the clock carried on
+            Assert.False(daily.CanReopen(100f + 3600f)); // midnight: fetch the new one
+        }
     }
 }

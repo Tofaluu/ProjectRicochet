@@ -119,6 +119,16 @@ namespace Ricochet.Client.Game
                 Rank = leaderboard.MyRank;
         }
 
+        /// <summary>Today's puzzle is already loaded (opened earlier this visit), so it can be shown again without the server.</summary>
+        public bool CanReopen(float now) => Round != null && Number > 0 && UntilNext(now) > 0;
+
+        /// <summary>Back to today's loaded puzzle (see <see cref="CanReopen"/>): the clock and best carry on.</summary>
+        public void Reopen()
+        {
+            Stage = DailyStage.Playing;
+            Error = null;
+        }
+
         public void Close()
         {
             Stage = DailyStage.Off;

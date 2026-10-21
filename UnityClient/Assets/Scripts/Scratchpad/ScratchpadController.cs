@@ -313,6 +313,34 @@ namespace Ricochet.Client.Scratchpad
         /// <summary>A finished board from the match history, as a practice board to look at and try.</summary>
         public void ShowHistoryBoard(RoundSetup round) => Show(round, practice: true);
 
+        /// <summary>A board put aside while another screen borrows the board (the daily puzzle), to bring back as it was.</summary>
+        public sealed class SavedBoard
+        {
+            internal RoundSetup Round;
+            internal bool Practice;
+            internal int Seed, Shortest;
+            internal List<Move> Moves;
+        }
+
+        /// <summary>The board shown and the player's moves on it (null while a practice board is still being searched for).</summary>
+        public SavedBoard SaveBoard() => Session.Round == null || _search != null ? null : new SavedBoard
+        {
+            Round = Session.Round,
+            Practice = Session.IsPractice,
+            Seed = Session.Seed,
+            Shortest = _shownShortest,
+            Moves = Session.IsReplaying || Session.IsSolved ? new List<Move>() : new List<Move>(Session.Moves),
+        };
+
+        /// <summary>Shows a saved board again, robots where the player left them.</summary>
+        public void RestoreBoard(SavedBoard saved)
+        {
+            Show(saved.Round, saved.Practice, saved.Seed);
+            _shownShortest = saved.Shortest;
+            if (saved.Moves.Count > 0)
+                Apply(() => Session.Restore(saved.Moves));
+        }
+
         /// <summary>The daily puzzle's board: played like a round (no new board or hint), from the join screen.</summary>
         public void ShowDaily(RoundSetup round) => Show(round, practice: false);
 

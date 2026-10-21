@@ -25,6 +25,9 @@ namespace Ricochet.Client.App
         private const string NumberPrefKey = "Ricochet.DailyNumber";
 
         private GameController _game;
+        // The practice board the daily puzzle took over (brought back on leaving), and the player's daily attempt (brought
+        // back on returning), so switching screens shows the right board at once instead of a fresh one.
+        private ScratchpadController.SavedBoard _practice, _attempt;
         private string _notice;
         private float _noticeUntil;
 
@@ -40,6 +43,9 @@ namespace Ricochet.Client.App
         private ScratchpadController Scratchpad => _game.Scratchpad;
         private NetworkManager Network => _game.Network;
         private bool OnDailyBoard => State.Stage == DailyStage.Playing && Scratchpad.Session.Round == State.Round;
+
+        /// <summary>The daily puzzle's board is on screen (false while it loads or failed: the board stays hidden then).</summary>
+        public bool ShowingBoard => OnDailyBoard;
 
         public void Init(GameController game)
         {
@@ -59,6 +65,18 @@ namespace Ricochet.Client.App
         {
             if (State.Stage == DailyStage.Loading)
                 return;
+            if (!State.IsActive)
+                _practice = Scratchpad.SaveBoard();
+            // Opened earlier this visit: show it straight away (the server already started the clock).
+            if (!State.IsActive && State.CanReopen(Time.time))
+            {
+                State.Reopen();
+                UsageTracker.Track("daily_open");
+                ShowBoard(_attempt != null && _attempt.Round == State.Round ? _attempt : null);
+                if (State.HasSolved)
+                    RefreshLeaderboard();
+                return;
+            }
             State.BeginLoading();
             try
             {
@@ -69,13 +87,10 @@ namespace Ricochet.Client.App
                 State.OnLoaded(info, Time.time);
                 Remember();
                 UsageTracker.Track("daily_open");
-                Scratchpad.ShowDaily(State.Round);
+                _attempt = null;
+                ShowBoard(null);
                 if (State.HasSolved)
                     RefreshLeaderboard();
-                // Already perfect: show how, then the board stays on the solved position (locked: nothing to improve).
-                if (State.IsPerfect && State.BestSolution.Length > 0)
-                    Scratchpad.PlayReplays(new[] { new ReplaySegment("Your solution", State.BestSolution, 0.6f) }, 0.5f,
-                        lockUntilNextBoard: true, controllable: true); // their own solution: pause and step freely
             }
             catch (Exception e)
             {
@@ -83,14 +98,38 @@ namespace Ricochet.Client.App
             }
         }
 
+        // Today's board: the player's attempt as they left it, or from the start. Already perfect: their solution plays,
+        // then the board stays on the solved position (locked: nothing to improve).
+        private void ShowBoard(ScratchpadController.SavedBoard attempt)
+        {
+            if (State.IsPerfect && State.BestSolution.Length > 0)
+            {
+                Scratchpad.ShowDaily(State.Round);
+                Scratchpad.PlayReplays(new[] { new ReplaySegment("Your solution", State.BestSolution, 0.6f) }, 0.5f,
+                    lockUntilNextBoard: true, controllable: true); // their own solution: pause and step freely
+            }
+            else if (attempt != null)
+                Scratchpad.RestoreBoard(attempt);
+            else
+                Scratchpad.ShowDaily(State.Round);
+        }
+
         public void Close(bool backToPractice)
         {
             bool wasOnBoard = OnDailyBoard;
+            if (wasOnBoard)
+                _attempt = Scratchpad.SaveBoard();
             State.Close();
             if (wasOnBoard)
                 Scratchpad.Session.Title = null;
             if (backToPractice)
-                Scratchpad.PlayOffline();
+            {
+                if (_practice != null)
+                    Scratchpad.RestoreBoard(_practice);
+                else
+                    Scratchpad.PlayOffline();
+            }
+            _practice = null;
         }
 
         public void CopyResult()
