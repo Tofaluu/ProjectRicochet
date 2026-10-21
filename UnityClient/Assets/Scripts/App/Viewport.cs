@@ -16,7 +16,29 @@ namespace Ricochet.Client.App
 
         [DllImport("__Internal")]
         private static extern int Ricochet_TouchPrimary();
+
+        [DllImport("__Internal")]
+        private static extern float Ricochet_VisibleTop();
+
+        [DllImport("__Internal")]
+        private static extern float Ricochet_VisibleHeight();
 #endif
+
+        /// <summary>
+        /// The part of the screen not covered by an on-screen keyboard, in CSS pixels from the top (false where unknown:
+        /// outside browsers, or browsers without the visualViewport API).
+        /// </summary>
+        public static bool VisibleArea(out float top, out float height)
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            top = Ricochet_VisibleTop();
+            height = Ricochet_VisibleHeight();
+            return height > 0f;
+#else
+            top = height = 0f;
+            return false;
+#endif
+        }
 
         /// <summary>The main pointer is a finger (phones, tablets), not a mouse: from the browser's (pointer: coarse).</summary>
         public static bool TouchPrimary

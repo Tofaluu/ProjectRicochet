@@ -14,6 +14,18 @@ mergeInto(LibraryManager.library, {
     return (navigator.maxTouchPoints > 0 && !mq('(pointer: fine)').matches) ? 1 : 0;
   },
 
+  // The part of the page the on-screen keyboard leaves visible (CSS pixels from the top): the canvas keeps its size when the
+  // keyboard opens, only the visual viewport shrinks (and may pan). -1 without the visualViewport API.
+  Ricochet_VisibleTop: function () {
+    var v = window.visualViewport;
+    return v ? v.offsetTop : -1;
+  },
+
+  Ricochet_VisibleHeight: function () {
+    var v = window.visualViewport;
+    return v ? v.height : -1;
+  },
+
   // The palette's colours for the loading page (index.html reads them on the next visit, before the game starts).
   Ricochet_SaveLoadingColors: function (json) {
     try { localStorage.setItem('ricochet.loadingColors', UTF8ToString(json)); } catch (e) { }

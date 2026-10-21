@@ -211,6 +211,8 @@ namespace Ricochet.Client.App
             _profileName = _root.Q<Label>("profile-name");
             Click("home-daily-play", OpenDaily);
             Click("home-play", () => Choose(Screen.Play));
+            Click("home-practice-open", () => Choose(Screen.Practice));
+            _root.Q("daily-icon-star").style.backgroundImage = new StyleBackground(ShapeSprites.TargetSymbol(RobotColor.Yellow));
             Click("play-create", () => _game.CreateLobby(_nameField.value));
             Click("play-join", () => _game.Join(_codeField.value, _nameField.value));
 
@@ -646,6 +648,7 @@ namespace Ricochet.Client.App
             }
 
             ShowSheet(screen);
+            KeepFieldAboveKeyboard();
             if (Session.Round != null)
                 ShowStage();
         }

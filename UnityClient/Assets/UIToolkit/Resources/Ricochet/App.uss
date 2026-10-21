@@ -326,7 +326,7 @@
 .card--daily { background-color: var(--daily-tint); border-width: 1px; border-color: var(--daily-border); }
 .card-head { flex-direction: row; align-items: center; margin-bottom: 14px; }
 .card-icon { width: 44px; height: 44px; border-radius: 12px; background-color: var(--daily); margin-right: 12px; align-items: center; justify-content: center; }
-.card-icon-dot { width: 16px; height: 16px; border-radius: 8px; background-color: var(--on-daily); }
+.card-icon-star { width: 26px; height: 26px; -unity-background-scale-mode: scale-to-fit; -unity-background-image-tint-color: var(--on-daily); }
 .card-title { flex-grow: 1; }
 .pill { padding: 5px 12px; border-radius: 8px; font-size: 14px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
 .pill--daily { background-color: var(--daily-soft); color: var(--daily-text); }
@@ -462,6 +462,10 @@
 /* The panel under the sheet's head: opaque, since it slides up over the board. */
 .app--compact .side { position: absolute; background-color: var(--bg); padding-top: 12px; }
 .rotate-hint { display: none; }
+/* Only in the compact layout (e.g. the home practice card's button: on desktop the board is right there). */
+.compact-only { display: none; }
+.app--compact .compact-only { display: flex; }
+.app .home-practice-open { margin-top: 14px; }
 .app--compact { flex-direction: column; }
 .app--compact .topbar { display: flex; flex-direction: row; align-items: center; flex-shrink: 0; padding: 8px 12px; background-color: var(--nav); }
 .topbar-name { font-size: 20px; margin-left: 8px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }

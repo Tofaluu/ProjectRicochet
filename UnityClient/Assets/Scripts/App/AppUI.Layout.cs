@@ -179,6 +179,42 @@ namespace Ricochet.Client.App
                 camera.cullingMask = _cameraMask;
         }
 
+        // ---- On-screen keyboards ----
+
+        // Phones: the keyboard covers the bottom of the page (the canvas keeps its size), which can hide the text field being
+        // typed in (the lobby code sits low in the panel). While one has the focus, the panel scrolls it above the keyboard,
+        // with room added under the panel's content to scroll that far.
+        private void KeepFieldAboveKeyboard()
+        {
+            TextField field = HasFocus(_codeField) ? _codeField : HasFocus(_nameField) ? _nameField : null;
+            float covered = 0f, visibleTop = 0f, visibleBottom = 0f;
+            if (Compact && field != null && Viewport.VisibleArea(out float topCss, out float heightCss))
+            {
+                float perCss = Viewport.PixelRatio / PanelScale; // panel units per CSS pixel
+                visibleTop = topCss * perCss;
+                visibleBottom = (topCss + heightCss) * perCss;
+                covered = Mathf.Max(0f, _root.layout.height - visibleBottom);
+            }
+            if (covered < 40f)
+            {
+                _side.contentContainer.style.paddingBottom = StyleKeyword.Null;
+                return;
+            }
+            _side.contentContainer.style.paddingBottom = covered;
+            if (_scrollGliding)
+                return;
+            const float margin = 20f;
+            Rect box = field.worldBound;
+            float delta = box.yMax > visibleBottom - margin ? box.yMax - (visibleBottom - margin)
+                : box.yMin < visibleTop + margin ? box.yMin - (visibleTop + margin) : 0f;
+            if (Mathf.Abs(delta) < 2f)
+                return;
+            float max = Mathf.Max(0f, _side.contentContainer.layout.height - _side.contentViewport.layout.height);
+            _scrollTarget = Mathf.Clamp(_side.scrollOffset.y + delta, 0f, max);
+            _scrollSetTo = _side.scrollOffset.y;
+            _scrollGliding = true;
+        }
+
         // ---- The compact sheet ----
 
         private static bool SheetUpByDefault(Screen screen) => screen == Screen.Home || screen == Screen.Play || screen == Screen.Lobby;

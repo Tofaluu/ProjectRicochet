@@ -74,7 +74,7 @@
 
                     <ui:VisualElement class="card card--daily">
                         <ui:VisualElement class="card-head">
-                            <ui:VisualElement class="card-icon"><ui:VisualElement class="card-icon-dot" /></ui:VisualElement>
+                            <ui:VisualElement class="card-icon"><ui:VisualElement name="daily-icon-star" class="card-icon-star" /></ui:VisualElement>
                             <ui:VisualElement class="card-title">
                                 <ui:Label name="home-daily-title" text="Daily Puzzle" class="h2" />
                                 <ui:Label text="New every day at midnight (Eastern)" class="muted small" />
@@ -97,9 +97,10 @@
 
                     <ui:VisualElement class="card">
                         <ui:Label text="Practice" class="h2 gap-s" />
-                        <ui:Label text="Play on the board here any time. Puzzle mode deals boards that need exactly this many moves." class="muted body gap-m" />
+                        <ui:Label text="Play on a practice board any time. Puzzle mode deals boards that need exactly this many moves." class="muted body gap-m" />
                         <ui:VisualElement name="home-puzzle-row" class="setting-row gap-s" />
                         <ui:VisualElement name="home-stepper-slot" />
+                        <ui:Button name="home-practice-open" text="Open the practice board" class="btn compact-only home-practice-open" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
