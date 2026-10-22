@@ -60,6 +60,18 @@ namespace ClientLogic.Tests
         }
 
         [Fact]
+        public void Undo_SelectsTheRobotItMovesBack()
+        {
+            BoardSession board = Loaded();
+            Play(board, Shortest);
+            Move last = Shortest[Shortest.Length - 1];
+            board.Select((RobotColor)(((int)last.Robot + 1) % Robot.Count));
+
+            Assert.True(board.Undo());
+            Assert.Equal(last.Robot, board.Selected);
+        }
+
+        [Fact]
         public void Replay_LocksTheBoardUntilTheNextOne()
         {
             BoardSession board = Loaded();

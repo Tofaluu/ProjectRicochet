@@ -223,7 +223,7 @@ namespace Ricochet.Client.Board
                 _moveDots[i] = CreateSprite("Move Dot", ShapeSprites.Circle, Color.white, Vector3.zero, new Vector2(0.34f, 0.34f), GhostOrder);
                 _moveDots[i].enabled = false;
             }
-            _selectionRing = CreateSprite("Selection", ShapeSprites.DashedRing(0.1f, 12), Colors.Selection, Vector3.zero, new Vector2(1f, 1f), SelectionOrder);
+            _selectionRing = CreateSprite("Selection", ShapeSprites.DashedRing(0.09f, 18), Colors.Selection, Vector3.zero, new Vector2(1f, 1f), SelectionOrder);
 
             foreach (RobotColor color in AllRobots)
                 _robots[color] = CreateRobot(color, robots[color], round.Target.Robot == color);

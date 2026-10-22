@@ -150,6 +150,8 @@ namespace Ricochet.Client.Game
                 return false;
             Robots = _history[_history.Count - 1];
             _history.RemoveAt(_history.Count - 1);
+            // The robot sliding back is selected again, so the next move picks up where that one was.
+            Selected = _moves[_moves.Count - 1].Robot;
             _moves.RemoveAt(_moves.Count - 1);
             IsSolved = false;
             return true;

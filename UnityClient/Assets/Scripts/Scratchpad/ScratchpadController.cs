@@ -588,7 +588,10 @@ namespace Ricochet.Client.Scratchpad
                 return;
             }
             if (Session.Undo())
+            {
+                _boardView.ShowSelection(Session.Selected); // the robot sliding back
                 _boardView.ShowRobots(Session.Robots, instant: false, quiet: true); // slides back along its path
+            }
         }
 
         // The practice hint's solution is still on the board: snap back to the start (no diagonal slides)

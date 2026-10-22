@@ -39,18 +39,16 @@ namespace Ricochet.Client.Board
         });
 
         /// <summary>
-        /// A ring of <paramref name="dashes"/> rounded dashes (about half of it dashes, half gaps) whose band is
-        /// <paramref name="width"/> of the radius.
+        /// A ring of <paramref name="dashes"/> square-ended dashes (half of it dashes, half gaps, like a CSS dashed border)
+        /// whose band is <paramref name="width"/> of the radius.
         /// </summary>
         public static Sprite DashedRing(float width, int dashes) => Get("dashed" + width + "x" + dashes, () => FromSdf(p =>
         {
             float radius = 1f - width / 2f, r = p.magnitude;
             float turn = Mathf.Atan2(p.y, p.x) / (2f * Mathf.PI) * dashes;
             float along = Mathf.Abs(turn - Mathf.Floor(turn) - 0.5f);        // 0 = a dash's middle, 0.5 = the gap's
-            const float core = 0.16f;                                         // half a dash's straight part (of a dash + gap)
-            float arc = Mathf.Max(0f, (along - core) * 2f * Mathf.PI / dashes * r);
-            float across = Mathf.Abs(r - radius);
-            return Mathf.Sqrt(arc * arc + across * across) - width / 2f;      // capsules: rounded dash ends
+            float arc = (along - 0.25f) * 2f * Mathf.PI / dashes * r;         // distance past the dash's end, along the ring
+            return Mathf.Max(arc, Mathf.Abs(r - radius) - width / 2f);
         }));
 
         /// <summary>The symbol marking a target for <paramref name="robot"/> (null = the any-robot target).</summary>
