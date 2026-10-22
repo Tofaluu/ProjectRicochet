@@ -50,6 +50,8 @@ namespace Ricochet.Client.Board
 
         // Target symbols' outlines grow them by this much of their half-size.
         private const float OutlineGrow = 0.22f;
+        // The selection ring's turning speed, in degrees per second (a turn every 6 s).
+        private const float SelectionTurnSpeed = 60f;
         // How much bigger an Ink eye's outline is than the eye.
         private const float EyeRimGrow = 0.06f;
 
@@ -221,7 +223,7 @@ namespace Ricochet.Client.Board
                 _moveDots[i] = CreateSprite("Move Dot", ShapeSprites.Circle, Color.white, Vector3.zero, new Vector2(0.34f, 0.34f), GhostOrder);
                 _moveDots[i].enabled = false;
             }
-            _selectionRing = CreateSprite("Selection", ShapeSprites.Ring(0.16f), Colors.Selection, Vector3.zero, new Vector2(1f, 1f), SelectionOrder);
+            _selectionRing = CreateSprite("Selection", ShapeSprites.DashedRing(0.1f, 12), Colors.Selection, Vector3.zero, new Vector2(1f, 1f), SelectionOrder);
 
             foreach (RobotColor color in AllRobots)
                 _robots[color] = CreateRobot(color, robots[color], round.Target.Robot == color);
@@ -364,14 +366,15 @@ namespace Ricochet.Client.Board
 
             if (_selectionRing != null && _robots.TryGetValue(_selected, out RobotVisual selected))
             {
-                // A slightly darker shade of the selected robot's own colour, gently pulsing.
-                // Ink: an ink ring with a little gap around the robot's own outline.
+                // A slowly turning dashed ring in a slightly darker shade of the selected robot's colour (Ink: in ink), with a
+                // gap of board around the robot, centred on the piece as drawn (a wooden pawn's edge sits a little low).
                 bool ink = Style.Kind == BoardKind.Ink;
                 Transform ring = _selectionRing.transform;
-                ring.localPosition = selected.Root.localPosition;
-                float pulse = (ink ? 1.16f : 1.06f) * (1f + 0.05f * Mathf.Sin(time * 6f)) * BurstScale(selected, time);
-                ring.localScale = new Vector3(pulse, pulse, 1f);
-                _selectionRing.color = ink ? BoardStyle.Ink : Color.Lerp(selected.Color, Colors.Selection, 0.2f);
+                ring.localPosition = selected.Root.localPosition + new Vector3(0f, Style.Kind == BoardKind.Wood ? -0.0225f : 0f);
+                float size = (ink ? 1.18f : 1.12f) * BurstScale(selected, time);
+                ring.localScale = new Vector3(size, size, 1f);
+                ring.localRotation = Quaternion.Euler(0f, 0f, -SelectionTurnSpeed * time);
+                _selectionRing.color = ink ? BoardStyle.Ink : Color.Lerp(selected.Color, Color.black, 0.15f);
             }
             if (_targetGlow != null)
             {
