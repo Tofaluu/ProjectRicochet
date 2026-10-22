@@ -58,7 +58,7 @@ public class DailyTests
         Assert.Equal(2, tuesday.Number);
         Assert.InRange(tuesday.ShortestLength, 6, 7);
         Assert.Equal((6, 7), DailyService.Difficulty(DayOfWeek.Tuesday));
-        Assert.Equal((16, 17), DailyService.Difficulty(DayOfWeek.Sunday));
+        Assert.Equal((15, 16), DailyService.Difficulty(DayOfWeek.Sunday));
     }
 
     [Fact]

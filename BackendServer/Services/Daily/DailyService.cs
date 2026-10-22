@@ -47,8 +47,8 @@ namespace BackendServer.Services
             DayOfWeek.Wednesday => (8, 9),
             DayOfWeek.Thursday => (10, 11),
             DayOfWeek.Friday => (12, 13),
-            DayOfWeek.Saturday => (14, 15),
-            _ => (16, 17),
+            DayOfWeek.Saturday => (13, 14),
+            _ => (15, 16),
         };
 
         private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
@@ -197,7 +197,7 @@ namespace BackendServer.Services
             max = Math.Max(min, _options.MaxMoves ?? max);
             int seed = _options.Seed.HasValue ? _options.Seed.Value * 10007 + number : Random.Shared.Next();
             var search = new BoardSearch(min, new Random(seed), TimeSpan.FromSeconds(_options.SolverTimeLimitSeconds), max);
-            // 16+ move boards (Sunday) take ~10-70 s to find on the dev PC and longer on the server; there's a day to spare.
+            // 15+ move boards (Sunday) can take a minute or more to find on the server; there's a day to spare.
             var budget = TimeSpan.FromSeconds(min >= DailyOptions.LongBoardMoves ? _options.LongSearchSeconds : _options.SearchSeconds);
             var clock = Stopwatch.StartNew();
             while (!search.Step(noTimeLimit: clock.Elapsed >= budget && search.Longest == null))

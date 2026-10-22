@@ -19,7 +19,7 @@ namespace BackendServer.Services
         /// they're generated a day ahead in the background, so they can take their time.</summary>
         public double LongSearchSeconds { get; set; } = 1800;
 
-        public const int LongBoardMoves = 16;
+        public const int LongBoardMoves = 15;
 
         /// <summary>Time the solver gets per candidate board (boards it gives up on are skipped).</summary>
         public double SolverTimeLimitSeconds { get; set; } = 5;
