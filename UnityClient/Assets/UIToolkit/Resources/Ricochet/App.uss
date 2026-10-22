@@ -431,6 +431,9 @@
 .app .swatch { width: 32px; height: 32px; margin: 0; padding: 0; border-radius: 9px; border-width: 2px; border-color: var(--line); align-items: center; justify-content: center; }
 .app .swatch.is-active { border-width: 3px; border-color: var(--text); }
 .swatch-dot { width: 14px; height: 14px; border-radius: 4px; }
+/* Boards: fewer swatches, kept together at the start. */
+.app .board-swatches { justify-content: flex-start; }
+.app .board-swatches .swatch { margin-right: 10px; }
 
 /* ---- The side panel's scrollbar: thin, dark, no arrow buttons ---- */
 .side .unity-scroller--vertical { width: 8px; margin-left: 6px; border-width: 0; background-color: rgba(0, 0, 0, 0); }

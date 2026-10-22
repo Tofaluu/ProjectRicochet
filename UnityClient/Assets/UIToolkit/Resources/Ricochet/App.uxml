@@ -242,6 +242,8 @@
             <ui:VisualElement name="settings-list" />
             <ui:Label name="palette-label" class="setting-label palette-label" />
             <ui:VisualElement name="palette-list" class="swatches" />
+            <ui:Label name="board-style-label" class="setting-label palette-label" />
+            <ui:VisualElement name="board-style-list" class="swatches board-swatches" />
         </ui:VisualElement>
 
         <ui:VisualElement name="profile-popover" class="popover">

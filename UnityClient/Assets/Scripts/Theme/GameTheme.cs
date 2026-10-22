@@ -6,7 +6,8 @@ namespace Ricochet.Client.Theme
 {
     /// <summary>
     /// Every colour the game draws with, in one asset (<c>Assets/Settings/GameTheme.asset</c>), so the look
-    /// can be swapped without touching game code. Views without a theme assigned use these defaults.
+    /// can be swapped without touching game code. Views without a theme assigned use these defaults. The board's tiles and
+    /// walls come from the player's <see cref="BoardStyle"/>.
     /// </summary>
     [CreateAssetMenu(menuName = "Ricochet/Game Theme", fileName = "GameTheme")]
     public class GameTheme : ScriptableObject
@@ -14,11 +15,6 @@ namespace Ricochet.Client.Theme
         [Header("Board")]
         [Tooltip("Behind the board (the camera's clear colour).")]
         [SerializeField] private Color _background = new Color(0.12f, 0.13f, 0.19f);
-        [SerializeField] private Color _tileA = new Color(0.96f, 0.93f, 0.87f);
-        [SerializeField] private Color _tileB = new Color(0.93f, 0.89f, 0.82f);
-        [Tooltip("The gaps between tiles.")]
-        [SerializeField] private Color _grout = new Color(0.80f, 0.75f, 0.66f);
-        [SerializeField] private Color _wall = new Color(0.23f, 0.21f, 0.31f);
         [Tooltip("Drop shadows under the board, walls and robots (alpha = strength).")]
         [SerializeField] private Color _shadow = new Color(0.05f, 0.04f, 0.10f, 0.35f);
         [Tooltip("Puffs where a robot hits a wall.")]
@@ -68,7 +64,6 @@ namespace Ricochet.Client.Theme
         [SerializeField] private Color _countdownText = Color.white;
 
         public Color Background => _background;
-        public Color Grout => _grout;
         public Color Shadow => _shadow;
         public Color Dust => _dust;
         public Font Font => _font != null ? _font : BuiltInFont;
@@ -82,9 +77,6 @@ namespace Ricochet.Client.Theme
         public Color SecondaryButton => _secondaryButton;
         public Color DangerButton => _dangerButton;
         public Color ButtonText => _buttonText;
-        public Color TileA => _tileA;
-        public Color TileB => _tileB;
-        public Color Wall => _wall;
         public Color Selection => _selection;
         public Color BannerText => _bannerText;
         public Color HighlightText => _highlightText;
@@ -109,18 +101,20 @@ namespace Ricochet.Client.Theme
         public Color TargetColor(Target target) => target.Robot.HasValue ? RobotColor(target.Robot.Value) : _anyRobot;
 
         /// <summary>
-        /// The frame/banner colour for what the board shows: the player's own board (practice or a round) in the palette's
-        /// frame colour, replays in shades of their own (playing vs watching; the target shows on the board itself), which a
-        /// palette may replace where they'd clash.
+        /// The frame/banner colour for what the board shows: the player's own board (practice or a round) in the board style's
+        /// frame (wood: walnut) or else the palette's, replays in shades of their own (playing vs watching; the target shows on
+        /// the board itself), which a palette may replace where they'd clash with its own frame.
         /// </summary>
         public Color FrameColor(BoardMode mode, Target target)
         {
             switch (mode)
             {
-                case BoardMode.PlayerReplay: return Palette.Current.ReplayFrame ?? _playerReplay;
+                case BoardMode.PlayerReplay:
+                    // A style with its own frame (walnut) watches in the plain cream: the palette's replacement is for its frame.
+                    return BoardStyle.Current.Frame.HasValue ? _playerReplay : Palette.Current.ReplayFrame ?? _playerReplay;
                 case BoardMode.ShortestReplay: return Palette.Current.ShortestFrame ?? _shortestReplay;
                 case BoardMode.RoundOver: return _roundOver;
-                default: return Palette.Current.BoardFrame;
+                default: return BoardStyle.Current.Frame ?? Palette.Current.BoardFrame;
             }
         }
 

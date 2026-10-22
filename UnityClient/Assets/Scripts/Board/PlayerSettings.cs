@@ -16,6 +16,7 @@ namespace Ricochet.Client.Board
         private const string PracticeExactPrefKey = "Ricochet.PracticeExact";
         private const string PracticeMovesPrefKey = "Ricochet.PracticeMoves";
         private const string PalettePrefKey = "Ricochet.Palette";
+        private const string BoardStylePrefKey = "Ricochet.BoardStyle";
         // A typical board's length (the median of random boards).
         public const int DefaultPracticeMoves = 6;
 
@@ -67,6 +68,17 @@ namespace Ricochet.Client.Board
             set
             {
                 PlayerPrefs.SetString(PalettePrefKey, value);
+                PlayerPrefs.Save();
+            }
+        }
+
+        /// <summary>The chosen board style's id (see <c>Theme.BoardStyle</c>); empty = the default.</summary>
+        public static string BoardStyle
+        {
+            get => PlayerPrefs.GetString(BoardStylePrefKey, "");
+            set
+            {
+                PlayerPrefs.SetString(BoardStylePrefKey, value);
                 PlayerPrefs.Save();
             }
         }

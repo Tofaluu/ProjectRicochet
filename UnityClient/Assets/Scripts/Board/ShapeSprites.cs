@@ -39,16 +39,40 @@ namespace Ricochet.Client.Board
         });
 
         /// <summary>The symbol marking a target for <paramref name="robot"/> (null = the any-robot target).</summary>
-        public static Sprite TargetSymbol(RobotColor? robot)
+        public static Sprite TargetSymbol(RobotColor? robot) => Get(SymbolName(robot), () => FromSdf(SymbolSdf(robot)));
+
+        /// <summary>
+        /// An outline for <see cref="TargetSymbol"/>: the symbol grown by <paramref name="grow"/> (of its half-size) on every
+        /// side. Draw it (1 + grow) times the symbol's size, under the symbol, in the outline colour.
+        /// </summary>
+        public static Sprite TargetOutline(RobotColor? robot, float grow) =>
+            Get(SymbolName(robot) + "-outline" + grow, () =>
+            {
+                Func<Vector2, float> sdf = SymbolSdf(robot);
+                return FromSdf(p => sdf(p * (1f + grow)) - grow);
+            });
+
+        /// <summary>Wood grain: faint wavy lines across a square, tinted by the renderer (rotate it for the other direction).</summary>
+        public static Sprite Grain => Get("grain", () => FromAlpha(p =>
+        {
+            float v = (p.y + 1f) * 3.5f + 0.12f * Mathf.Sin(p.x * 2.3f + p.y * 1.7f);
+            return Mathf.Clamp01(1f - Mathf.Abs(v - Mathf.Round(v)) / 0.09f);
+        }));
+
+        private static string SymbolName(RobotColor? robot) =>
+            !robot.HasValue ? "vortex" : robot.Value == RobotColor.Red ? "diamond" : robot.Value == RobotColor.Blue ? "circle-symbol"
+            : robot.Value == RobotColor.Green ? "triangle" : "star";
+
+        private static Func<Vector2, float> SymbolSdf(RobotColor? robot)
         {
             if (!robot.HasValue)
-                return Get("vortex", () => FromSdf(Vortex));
+                return Vortex;
             switch (robot.Value)
             {
-                case RobotColor.Red: return Get("diamond", () => FromSdf(p => (Mathf.Abs(p.x) + Mathf.Abs(p.y)) * 0.75f - 0.75f));
-                case RobotColor.Blue: return Get("circle-symbol", () => FromSdf(p => p.magnitude - 0.8f));
-                case RobotColor.Green: return Get("triangle", () => FromSdf(Triangle));
-                default: return Get("star", () => FromSdf(Star));
+                case RobotColor.Red: return p => (Mathf.Abs(p.x) + Mathf.Abs(p.y)) * 0.75f - 0.75f;
+                case RobotColor.Blue: return p => p.magnitude - 0.8f;
+                case RobotColor.Green: return Triangle;
+                default: return Star;
             }
         }
 

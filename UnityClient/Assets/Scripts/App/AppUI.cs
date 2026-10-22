@@ -37,6 +37,8 @@ namespace Ricochet.Client.App
         private Action _askedToGo, _afterLeave;
         private Label _paletteLabel;
         private readonly List<(Button, Palette)> _swatches = new List<(Button, Palette)>();
+        private Label _boardStyleLabel;
+        private readonly List<(Button, BoardStyle)> _boardSwatches = new List<(Button, BoardStyle)>();
         private Screen _chosen = Screen.Home;
 
         private VisualElement _main, _boardArea, _boardOverlay, _goalIcon, _replayBar, _settings, _profilePopover, _profileButton;
@@ -122,6 +124,12 @@ namespace Ricochet.Client.App
             InitLayout();
             ApplyPalette();
             Palette.Changed += ApplyPalette;
+            ShowBoardStyle();
+            BoardStyle.Changed += () =>
+            {
+                ShowBoardStyle();
+                Scratchpad.View?.Restyle();
+            };
             Scratchpad.BoardArea = BoardAreaOnScreen;
             ScratchpadController.TypingInOtherUI = IsTyping;
             ScratchpadController.PointerBlocked = PointerBlocked;
@@ -281,6 +289,41 @@ namespace Ricochet.Client.App
                 paletteList.Add(swatch);
                 _swatches.Add((swatch, palette));
             }
+
+            // The board picker: a swatch per board style (its tiles with its walls' colour inside; two tones: the second tone,
+            // edged in the walls' colour).
+            _boardStyleLabel = _root.Q<Label>("board-style-label");
+            VisualElement boardList = _root.Q("board-style-list");
+            foreach (BoardStyle style in BoardStyle.All)
+            {
+                var swatch = new Button { tooltip = style.Name };
+                swatch.AddToClassList("swatch");
+                swatch.style.backgroundColor = style.TileA;
+                var dot = new VisualElement();
+                dot.AddToClassList("swatch-dot");
+                bool twoTone = style.TileB != style.TileA;
+                dot.style.backgroundColor = twoTone ? style.TileB : style.Wall;
+                if (twoTone)
+                {
+                    dot.style.borderTopWidth = dot.style.borderBottomWidth = dot.style.borderLeftWidth = dot.style.borderRightWidth = 2f;
+                    dot.style.borderTopColor = dot.style.borderBottomColor = dot.style.borderLeftColor = dot.style.borderRightColor = style.Wall;
+                }
+                swatch.Add(dot);
+                swatch.clicked += () =>
+                {
+                    BoardStyle.Select(style);
+                    swatch.Blur();
+                };
+                boardList.Add(swatch);
+                _boardSwatches.Add((swatch, style));
+            }
+        }
+
+        private void ShowBoardStyle()
+        {
+            foreach ((Button swatch, BoardStyle style) in _boardSwatches)
+                swatch.EnableInClassList("is-active", style == BoardStyle.Current);
+            _boardStyleLabel.text = $"Board: {BoardStyle.Current.Name}";
         }
 
         // Re-colours everything for the current palette: the UI's variables (a class on #app), the swatches, the board's frame.

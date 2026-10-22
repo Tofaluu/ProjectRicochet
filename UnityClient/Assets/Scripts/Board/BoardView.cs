@@ -10,34 +10,48 @@ namespace Ricochet.Client.Board
     /// Draws a <see cref="RoundSetup"/> with code-drawn shapes (<see cref="ShapeSprites"/>) and animates it:
     /// robots slide, squash against walls with a puff of dust, and the target robot reaching the target
     /// bursts and chimes. Cell (x, y) covers world space [x, x+1] x [y, y+1], so the board's bottom-left
-    /// corner is the world origin. Only displays state; the rules live in <see cref="GameRules"/>.
+    /// corner is the world origin. Only displays state; the rules live in <see cref="GameRules"/>. The player's
+    /// <see cref="BoardStyle"/> decides how the board and its pieces are drawn (wood, ink or paper).
     /// </summary>
     public class BoardView : MonoBehaviour
     {
-        private const float WallThickness = 0.16f;
         /// <summary>Width of the coloured frame around the board, in cells.</summary>
         public const float FrameThickness = 0.3f;
 
         // Back to front.
-        private const int PlateShadowOrder = -5;
-        private const int FrameOrder = -4;
-        private const int GroutOrder = -3;
-        private const int TileOrder = -2;
-        private const int BlockOrder = 0;
+        private const int PlateShadowOrder = -8;
+        private const int FrameOrder = -7;
+        private const int GroutOrder = -6;
+        private const int TileOrder = -5;
+        private const int GrainOrder = -4;
+        private const int TargetTintOrder = -3;
+        private const int BlockShadowOrder = -2;
+        private const int BlockOrder = -1;
+        private const int BlockTopOrder = 0;
         private const int TargetGlowOrder = 1;
-        private const int TargetOrder = 2;
-        private const int WallShadowOrder = 3;
-        private const int WallOrder = 4;
-        private const int GhostOrder = 5;
-        private const int RobotShadowOrder = 6;
-        private const int HaloOrder = 7;
-        private const int SelectionOrder = 8;
-        private const int RimOrder = 9;
-        private const int BodyOrder = 10;
-        private const int HighlightOrder = 11;
-        private const int EyeOrder = 12;
-        private const int PupilOrder = 13;
-        private const int EffectOrder = 14;
+        private const int TargetOutlineOrder = 2;
+        private const int TargetOrder = 3;
+        private const int WallShadowOrder = 4;
+        private const int WallOrder = 5;
+        private const int WallTopOrder = 6;
+        private const int GhostOrder = 7;
+        private const int RobotShadowOrder = 8;
+        private const int HaloOrder = 9;
+        private const int SelectionOrder = 10;
+        private const int RimOrder = 11;
+        private const int BodyOrder = 12;
+        private const int BodyTopOrder = 13;
+        private const int BandOrder = 14;
+        private const int HeadOrder = 15;
+        private const int EyeRimOrder = 16;
+        private const int EyeOrder = 17;
+        private const int PupilOrder = 18;
+        private const int EffectOrder = 19;
+
+        // Target symbols' outlines grow them by this much of their half-size.
+        private const float OutlineGrow = 0.22f;
+        // How much bigger an Ink eye's outline is than the eye.
+        private const float EyeRimGrow = 0.06f;
 
         private const float ShakeSeconds = 0.3f;
 
@@ -75,6 +89,11 @@ namespace Ricochet.Client.Board
         public static GridPos WorldToCell(Vector3 world) => new GridPos(Mathf.FloorToInt(world.x), Mathf.FloorToInt(world.y));
 
         private GameTheme Colors => GameTheme.OrDefault(_theme);
+        private static BoardStyle Style => BoardStyle.Current;
+        private static float WallThickness => Style.Kind == BoardKind.Paper ? 0.15f : 0.2f;
+        // The board shown and where its robots stand, to redraw it in another style (Restyle).
+        private RoundSetup _round;
+        private RobotPositions _shownRobots;
         /// <summary>The board's colours (for UI that matches it, e.g. the frame colour of a mode).</summary>
         public GameTheme Theme => Colors;
 
@@ -102,6 +121,7 @@ namespace Ricochet.Client.Board
             _particles.Clear();
             _pendingSounds.Clear();
             _hasSelection = false;
+            _round = round;
 
             if (Camera.main != null)
                 Camera.main.backgroundColor = Palette.Current.Ground;
@@ -111,13 +131,17 @@ namespace Ricochet.Client.Board
             Color activeColor = Colors.TargetColor(round.Target);
             int width = grid.Width, height = grid.Height;
             var centre = new Vector3(width / 2f, height / 2f);
+            BoardStyle style = Style;
 
-            // The board: a soft shadow, the coloured frame (what the board shows), then the grout tiles sit in.
+            // The board: its shadow, the coloured frame (what the board shows), then the grout the tiles sit in.
             float frameSize = 2f * (FrameThickness + WallThickness / 2f);
-            _plateShadow = CreateRounded("Plate Shadow", 0.6f, PlateShadowColor, centre + new Vector3(0.15f, -0.3f),
-                new Vector2(width + frameSize + 0.3f, height + frameSize + 0.3f), PlateShadowOrder);
-            _frame = CreateRounded("Frame", 0.45f, Colors.FrameColor(_mode, _target), centre, new Vector2(width + frameSize, height + frameSize), FrameOrder);
-            CreateRounded("Grout", 0.12f, Colors.Grout, centre, new Vector2(width + WallThickness, height + WallThickness), GroutOrder);
+            var plate = new Vector2(width + frameSize, height + frameSize);
+            _plateShadow = style.Kind == BoardKind.Ink
+                // Ink: a hard press-down shadow straight below, like the Toybox buttons'.
+                ? CreateRounded("Plate Shadow", 0.45f, PlateShadowColor, centre + new Vector3(0f, -0.35f), plate, PlateShadowOrder)
+                : CreateRounded("Plate Shadow", 0.6f, PlateShadowColor, centre + new Vector3(0.15f, -0.3f), plate + new Vector2(0.3f, 0.3f), PlateShadowOrder);
+            _frame = CreateRounded("Frame", 0.45f, Colors.FrameColor(_mode, _target), centre, plate, FrameOrder);
+            CreateRounded("Grout", 0.12f, style.Grout, centre, new Vector2(width + WallThickness, height + WallThickness), GroutOrder);
 
             GridPos blockMin = new GridPos(width, height), blockMax = new GridPos(-1, -1);
             for (int x = 0; x < width; x++)
@@ -132,8 +156,17 @@ namespace Ricochet.Client.Board
                     }
                     else
                     {
-                        Color tile = (x + y) % 2 == 0 ? Colors.TileA : Colors.TileB;
-                        CreateRounded("Tile", 0.1f, tile, CellCenter(pos), new Vector2(0.9f, 0.9f), TileOrder);
+                        // Tiles fill their cell but for a hairline, so the grout shows as thin lines (wood: grooves).
+                        Color tile = (x + y) % 2 == 0 ? style.TileA : style.TileB;
+                        CreateRounded("Tile", 0.03f, tile, CellCenter(pos), new Vector2(0.96f, 0.96f), TileOrder);
+                        if (style.Kind == BoardKind.Wood)
+                        {
+                            // Grain; one-tone wood turns it every other tile like parquet, so the board isn't one flat sheet.
+                            SpriteRenderer grain = CreateSprite("Grain", ShapeSprites.Grain, new Color(0.43f, 0.24f, 0.08f, 0.1f),
+                                CellCenter(pos), new Vector2(0.96f, 0.96f), GrainOrder);
+                            if (style.TileA == style.TileB && (x + y) % 2 == 1)
+                                grain.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                        }
                     }
 
                     Walls walls = grid.GetWalls(pos);
@@ -157,19 +190,29 @@ namespace Ricochet.Client.Board
             {
                 Target target = grid.Targets[i];
                 Color color = Colors.TargetColor(target);
-                Sprite symbol = ShapeSprites.TargetSymbol(target.Robot);
+                Vector3 at = CellCenter(target.Position);
                 if (i == round.TargetIndex)
                 {
                     Color glow = color;
                     glow.a = 0.55f;
-                    _targetGlow = CreateSprite("Target Glow", ShapeSprites.SoftCircle, glow, CellCenter(target.Position), new Vector2(1.5f, 1.5f), TargetGlowOrder);
+                    _targetGlow = CreateSprite("Target Glow", ShapeSprites.SoftCircle, glow, at, new Vector2(1.5f, 1.5f), TargetGlowOrder);
                     _targetGlowFrom = Time.time;
-                    CreateSprite("Active Target", symbol, color, CellCenter(target.Position), new Vector2(0.66f, 0.66f), TargetOrder);
+                    // Its tile takes on the target's colour.
+                    Color tint = color;
+                    tint.a = style.Kind == BoardKind.Wood ? 0.28f : style.Kind == BoardKind.Ink ? 0.22f : 0.16f;
+                    CreateRounded("Target Tile", 0.08f, tint, at, new Vector2(0.96f, 0.96f), TargetTintOrder);
+                    Color outline = style.Kind == BoardKind.Wood ? new Color(0.25f, 0.13f, 0.05f)
+                        : style.Kind == BoardKind.Ink ? BoardStyle.Ink : Color.white;
+                    CreateSymbol(target, color, outline, at, 0.66f);
                 }
                 else
                 {
-                    color.a = 0.5f;
-                    CreateSprite("Target", symbol, color, CellCenter(target.Position), new Vector2(0.4f, 0.4f), TargetOrder);
+                    // The others: smaller and faded into the tile, so the active one stands out.
+                    Color faded = Color.Lerp(color, style.TileA, style.Kind == BoardKind.Ink ? 0.3f : 0.4f);
+                    Color ink = BoardStyle.Ink;
+                    Color? outline = style.Kind == BoardKind.Wood ? new Color(0.27f, 0.15f, 0.05f, 0.5f)
+                        : style.Kind == BoardKind.Ink ? new Color(ink.r, ink.g, ink.b, 0.45f) : (Color?)null;
+                    CreateSymbol(target, faded, outline, at, 0.44f);
                 }
             }
 
@@ -192,6 +235,7 @@ namespace Ricochet.Client.Board
         /// </summary>
         public void ShowRobots(RobotPositions robots, bool instant, bool quiet = false)
         {
+            _shownRobots = robots;
             foreach (KeyValuePair<RobotColor, RobotVisual> pair in _robots)
             {
                 RobotVisual robot = pair.Value;
@@ -257,7 +301,7 @@ namespace Ricochet.Client.Board
         public void ShowMovePreview(RobotColor robot, GridPos?[] stops)
         {
             // Neutral and dark (like chess.com's): a robot-coloured dot would look like a target (blue = circle).
-            Color color = Colors.Wall;
+            Color color = Style.Wall;
             color.a = 0.3f;
             for (int i = 0; i < _moveDots.Length; i++)
             {
@@ -280,6 +324,16 @@ namespace Ricochet.Client.Board
                 _frame.color = Colors.FrameColor(mode, _target);
         }
 
+        /// <summary>Redraws the board in the current <see cref="BoardStyle"/> (the player picked another), keeping where things are.</summary>
+        public void Restyle()
+        {
+            if (_round == null)
+                return;
+            float glowFrom = _targetGlowFrom; // a new board's intro glow doesn't start over
+            Build(_round, _shownRobots);
+            _targetGlowFrom = glowFrom;
+        }
+
         /// <summary>Re-colours the frame and the board's shadow (the palette changed).</summary>
         public void RefreshFrame()
         {
@@ -288,11 +342,13 @@ namespace Ricochet.Client.Board
                 _plateShadow.color = PlateShadowColor;
         }
 
-        // The shadow under the board: fainter on light palettes, where the full one reads as a grey slab.
+        // The shadow under the board: fainter on light palettes, where the full one reads as a grey slab (Ink: a hard black one).
         private Color PlateShadowColor
         {
             get
             {
+                if (Style.Kind == BoardKind.Ink)
+                    return new Color(0f, 0f, 0f, Palette.Current.IsLight ? 0.85f : 1f);
                 Color shadow = Colors.Shadow;
                 if (Palette.Current.IsLight)
                     shadow.a *= 0.4f;
@@ -309,11 +365,13 @@ namespace Ricochet.Client.Board
             if (_selectionRing != null && _robots.TryGetValue(_selected, out RobotVisual selected))
             {
                 // A slightly darker shade of the selected robot's own colour, gently pulsing.
+                // Ink: an ink ring with a little gap around the robot's own outline.
+                bool ink = Style.Kind == BoardKind.Ink;
                 Transform ring = _selectionRing.transform;
                 ring.localPosition = selected.Root.localPosition;
-                float pulse = (1f + 0.05f * Mathf.Sin(time * 6f)) * BurstScale(selected, time);
+                float pulse = (ink ? 1.16f : 1.06f) * (1f + 0.05f * Mathf.Sin(time * 6f)) * BurstScale(selected, time);
                 ring.localScale = new Vector3(pulse, pulse, 1f);
-                _selectionRing.color = Color.Lerp(selected.Color, Colors.Selection, 0.2f);
+                _selectionRing.color = ink ? BoardStyle.Ink : Color.Lerp(selected.Color, Colors.Selection, 0.2f);
             }
             if (_targetGlow != null)
             {
@@ -356,6 +414,10 @@ namespace Ricochet.Client.Board
             public Transform Body;
             public Transform[] Eyes;
             public Transform[] Pupils;
+            // Ink outlines around the eyes (null = none), and the face's layout for the style.
+            public Transform[] EyeRims;
+            public Vector3[] EyeAt;
+            public Vector2 EyeSize, PupilSize, LookShift;
             public SpriteRenderer Halo;
             public Color Color;
             public Vector3 Destination;
@@ -413,7 +475,7 @@ namespace Ricochet.Client.Board
 
         private static readonly Vector3[] EyeOffsets = { new Vector3(-0.13f, 0.03f), new Vector3(0.13f, 0.03f) };
 
-        // A glossy round piece with a face: shadow, (halo if it's the target robot), rim, body, shine, eyes.
+        // A round piece with a face, in the board style's look: shadow, (halo if it's the target robot), body, eyes.
         private RobotVisual CreateRobot(RobotColor color, GridPos cell, bool isTargetRobot)
         {
             Color fill = Colors.RobotColor(color);
@@ -423,11 +485,21 @@ namespace Ricochet.Client.Board
                 Color = fill,
                 Destination = CellCenter(cell),
                 NextBlink = Time.time + Random.Range(1.5f, 5f),
+                EyeAt = EyeOffsets,
+                EyeSize = new Vector2(0.22f, 0.25f),
+                PupilSize = new Vector2(0.11f, 0.13f),
+                LookShift = new Vector2(0.05f, 0.055f),
             };
             robot.Root.SetParent(_content, false);
             robot.Root.localPosition = robot.Destination;
 
-            CreateSprite("Shadow", ShapeSprites.SoftCircle, Colors.Shadow, new Vector3(0.05f, -0.16f), new Vector2(0.95f, 0.6f), RobotShadowOrder, robot.Root);
+            BoardKind kind = Style.Kind;
+            Color ink = BoardStyle.Ink;
+            if (kind == BoardKind.Ink)
+                CreateSprite("Shadow", ShapeSprites.Circle, ink, new Vector3(0f, -0.08f), new Vector2(0.9f, 0.9f), RobotShadowOrder, robot.Root);
+            else
+                CreateSprite("Shadow", ShapeSprites.SoftCircle, kind == BoardKind.Paper ? new Color(0.14f, 0.19f, 0.35f, 0.35f) : Colors.Shadow,
+                    new Vector3(0.05f, -0.16f), new Vector2(0.95f, 0.6f), RobotShadowOrder, robot.Root);
             if (isTargetRobot)
             {
                 Color halo = fill;
@@ -437,17 +509,45 @@ namespace Ricochet.Client.Board
 
             robot.Body = new GameObject("Body").transform;
             robot.Body.SetParent(robot.Root, false);
-            CreateSprite("Rim", ShapeSprites.Circle, Color.Lerp(fill, Color.black, 0.35f), Vector3.zero, new Vector2(0.86f, 0.86f), RimOrder, robot.Body);
-            CreateSprite("Fill", ShapeSprites.Circle, fill, new Vector3(0f, 0.015f), new Vector2(0.76f, 0.76f), BodyOrder, robot.Body);
-            CreateSprite("Shine", ShapeSprites.Circle, new Color(1f, 1f, 1f, 0.45f), new Vector3(-0.17f, 0.2f), new Vector2(0.26f, 0.16f), HighlightOrder, robot.Body)
-                .transform.localRotation = Quaternion.Euler(0, 0, 35);
+            Color pupil = new Color(0.12f, 0.1f, 0.18f);
+            switch (kind)
+            {
+                case BoardKind.Wood:
+                    // A painted wooden pawn seen from above: its dark edge (the thickness), the base, a band, a lighter head with the face.
+                    CreateSprite("Edge", ShapeSprites.Circle, Color.Lerp(fill, Color.black, 0.35f), new Vector3(0f, -0.045f), new Vector2(0.9f, 0.9f), RimOrder, robot.Body);
+                    CreateSprite("Fill", ShapeSprites.Circle, fill, Vector3.zero, new Vector2(0.9f, 0.9f), BodyOrder, robot.Body);
+                    CreateSprite("Band", ShapeSprites.Circle, Color.Lerp(fill, Color.black, 0.2f), new Vector3(0f, 0.03f), new Vector2(0.7f, 0.7f), BandOrder, robot.Body);
+                    CreateSprite("Head", ShapeSprites.Circle, Color.Lerp(fill, Color.white, 0.18f), new Vector3(0f, 0.03f), new Vector2(0.6f, 0.6f), HeadOrder, robot.Body);
+                    robot.EyeAt = new[] { new Vector3(-0.095f, 0.05f), new Vector3(0.095f, 0.05f) };
+                    robot.EyeSize = new Vector2(0.15f, 0.175f);
+                    robot.PupilSize = new Vector2(0.075f, 0.09f);
+                    robot.LookShift = new Vector2(0.035f, 0.04f);
+                    pupil = new Color(0.16f, 0.09f, 0.03f);
+                    break;
+                case BoardKind.Ink:
+                    // Flat colour in a thick ink outline, shaded along the bottom, on a hard ink shadow (the Toybox buttons' look).
+                    CreateSprite("Rim", ShapeSprites.Circle, ink, Vector3.zero, new Vector2(0.9f, 0.9f), RimOrder, robot.Body);
+                    CreateSprite("Shade", ShapeSprites.Circle, Color.Lerp(fill, Color.black, 0.22f), Vector3.zero, new Vector2(0.76f, 0.76f), BodyOrder, robot.Body);
+                    CreateSprite("Fill", ShapeSprites.Circle, fill, new Vector3(0f, 0.035f), new Vector2(0.7f, 0.7f), BodyTopOrder, robot.Body);
+                    robot.EyeRims = new Transform[2];
+                    pupil = ink;
+                    break;
+                default:
+                    // A sticker: the colour inside a white border.
+                    CreateSprite("Rim", ShapeSprites.Circle, Color.white, Vector3.zero, new Vector2(0.9f, 0.9f), RimOrder, robot.Body);
+                    CreateSprite("Fill", ShapeSprites.Circle, fill, Vector3.zero, new Vector2(0.72f, 0.72f), BodyOrder, robot.Body);
+                    pupil = Style.Wall;
+                    break;
+            }
 
             robot.Eyes = new Transform[2];
             robot.Pupils = new Transform[2];
             for (int i = 0; i < 2; i++)
             {
-                robot.Eyes[i] = CreateSprite("Eye", ShapeSprites.Circle, Color.white, EyeOffsets[i], new Vector2(0.18f, 0.2f), EyeOrder, robot.Body).transform;
-                robot.Pupils[i] = CreateSprite("Pupil", ShapeSprites.Circle, new Color(0.12f, 0.1f, 0.18f), EyeOffsets[i], new Vector2(0.09f, 0.1f), PupilOrder, robot.Body).transform;
+                if (robot.EyeRims != null)
+                    robot.EyeRims[i] = CreateSprite("Eye Rim", ShapeSprites.Circle, ink, robot.EyeAt[i], robot.EyeSize, EyeRimOrder, robot.Body).transform;
+                robot.Eyes[i] = CreateSprite("Eye", ShapeSprites.Circle, Color.white, robot.EyeAt[i], robot.EyeSize, EyeOrder, robot.Body).transform;
+                robot.Pupils[i] = CreateSprite("Pupil", ShapeSprites.Circle, pupil, robot.EyeAt[i], robot.PupilSize, PupilOrder, robot.Body).transform;
             }
             return robot;
         }
@@ -530,11 +630,14 @@ namespace Ricochet.Client.Board
             bool blinking = time > robot.NextBlink;
             if (time > robot.NextBlink + 0.12f)
                 robot.NextBlink = time + Random.Range(2.5f, 6f);
+            float eyeHeight = blinking ? robot.EyeSize.y * 0.12f : robot.EyeSize.y;
             for (int i = 0; i < 2; i++)
             {
-                robot.Eyes[i].localScale = new Vector3(0.22f, blinking ? 0.03f : 0.25f, 1f);
-                robot.Pupils[i].localScale = new Vector3(0.11f, blinking ? 0.01f : 0.13f, 1f);
-                robot.Pupils[i].localPosition = EyeOffsets[i] + new Vector3(robot.Look.x * 0.05f, robot.Look.y * 0.055f);
+                robot.Eyes[i].localScale = new Vector3(robot.EyeSize.x, eyeHeight, 1f);
+                robot.Pupils[i].localScale = new Vector3(robot.PupilSize.x, blinking ? robot.PupilSize.y * 0.08f : robot.PupilSize.y, 1f);
+                robot.Pupils[i].localPosition = robot.EyeAt[i] + new Vector3(robot.Look.x * robot.LookShift.x, robot.Look.y * robot.LookShift.y);
+                if (robot.EyeRims != null)
+                    robot.EyeRims[i].localScale = new Vector3(robot.EyeSize.x + EyeRimGrow, eyeHeight + EyeRimGrow, 1f);
             }
         }
 
@@ -881,22 +984,68 @@ namespace Ricochet.Client.Board
             return grid.IsInBounds(neighbour) && grid.IsEnclosed(pos) && grid.IsEnclosed(neighbour);
         }
 
+        // Wood: a lighter top face on the walnut, so walls read as raised fences.
+        private static readonly Color WalnutTop = new Color(0.49f, 0.3f, 0.15f);
+
         private void CreateWall(Vector3 center, Vector2 size)
         {
-            CreateRounded("Wall Shadow", WallThickness / 2f, Colors.Shadow, center + new Vector3(0.03f, -0.06f), size, WallShadowOrder);
-            CreateRounded("Wall", WallThickness / 2f, Colors.Wall, center, size, WallOrder);
+            float radius = WallThickness / 2f;
+            switch (Style.Kind)
+            {
+                case BoardKind.Wood:
+                    Color shadow = Colors.Shadow;
+                    shadow.a = 0.45f;
+                    CreateRounded("Wall Shadow", radius, shadow, center + new Vector3(0.03f, -0.08f), size, WallShadowOrder);
+                    CreateRounded("Wall", radius * 0.6f, Style.Wall, center, size, WallOrder);
+                    CreateRounded("Wall Top", radius * 0.5f, WalnutTop, center + new Vector3(0f, 0.025f), size - new Vector2(0.07f, 0.07f), WallTopOrder);
+                    break;
+                case BoardKind.Ink:
+                    Color ink = BoardStyle.Ink;
+                    CreateRounded("Wall Shadow", radius, new Color(ink.r, ink.g, ink.b, 0.25f), center + new Vector3(0f, -0.08f), size, WallShadowOrder);
+                    CreateRounded("Wall", radius, ink, center, size, WallOrder);
+                    break;
+                default:
+                    CreateRounded("Wall", radius, Style.Wall, center, size, WallOrder);
+                    break;
+            }
         }
 
-        // The walled-off centre: a raised block in the active target's colour showing its symbol.
+        // The walled-off centre: a raised block showing the active target's symbol (wood: walnut with the symbol in its
+        // colour; ink and paper: a block in its colour with a white symbol).
         private void CreateCentreBlock(GridPos min, GridPos max, Target target, Color color)
         {
             var size = new Vector2(max.X - min.X + 1, max.Y - min.Y + 1);
             var centre = new Vector3(min.X + size.x / 2f, min.Y + size.y / 2f);
-            CreateRounded("Block Shadow", 0.25f, Colors.Shadow, centre + new Vector3(0.06f, -0.12f), size - new Vector2(0.1f, 0.1f), BlockOrder);
-            CreateRounded("Block", 0.25f, Color.Lerp(color, Color.black, 0.25f), centre, size - new Vector2(0.14f, 0.14f), BlockOrder);
-            CreateRounded("Block Top", 0.2f, color, centre + new Vector3(0f, 0.04f), size - new Vector2(0.34f, 0.34f), BlockOrder);
-            CreateSprite("Block Symbol", ShapeSprites.TargetSymbol(target.Robot), new Color(1f, 1f, 1f, 0.9f),
-                centre + new Vector3(0f, 0.04f), new Vector2(0.9f, 0.9f), TargetOrder);
+            Color ink = BoardStyle.Ink;
+            switch (Style.Kind)
+            {
+                case BoardKind.Wood:
+                    CreateRounded("Block Shadow", 0.25f, Colors.Shadow, centre + new Vector3(0.06f, -0.12f), size - new Vector2(0.1f, 0.1f), BlockShadowOrder);
+                    CreateRounded("Block", 0.25f, Style.Wall, centre, size - new Vector2(0.14f, 0.14f), BlockOrder);
+                    CreateRounded("Block Top", 0.2f, WalnutTop, centre + new Vector3(0f, 0.04f), size - new Vector2(0.3f, 0.3f), BlockTopOrder);
+                    CreateSymbol(target, color, null, centre + new Vector3(0f, 0.04f), 0.9f);
+                    break;
+                case BoardKind.Ink:
+                    CreateRounded("Block Shadow", 0.25f, ink, centre + new Vector3(0f, -0.12f), size - new Vector2(0.14f, 0.14f), BlockShadowOrder);
+                    CreateRounded("Block", 0.25f, ink, centre, size - new Vector2(0.14f, 0.14f), BlockOrder);
+                    CreateRounded("Block Top", 0.18f, color, centre, size - new Vector2(0.38f, 0.38f), BlockTopOrder);
+                    CreateSymbol(target, Color.white, ink, centre, 0.9f);
+                    break;
+                default:
+                    CreateRounded("Block", 0.2f, Style.Wall, centre, size - new Vector2(0.14f, 0.14f), BlockOrder);
+                    CreateRounded("Block Top", 0.14f, color, centre, size - new Vector2(0.3f, 0.3f), BlockTopOrder);
+                    CreateSymbol(target, Color.white, null, centre, 0.9f);
+                    break;
+            }
+        }
+
+        // A target symbol, with an outline under it when given.
+        private void CreateSymbol(Target target, Color fill, Color? outline, Vector3 at, float size)
+        {
+            if (outline.HasValue)
+                CreateSprite("Target Outline", ShapeSprites.TargetOutline(target.Robot, OutlineGrow), outline.Value, at,
+                    Vector2.one * size * (1f + OutlineGrow), TargetOutlineOrder);
+            CreateSprite("Target", ShapeSprites.TargetSymbol(target.Robot), fill, at, Vector2.one * size, TargetOrder);
         }
 
         private SpriteRenderer CreateRounded(string name, float radius, Color color, Vector3 position, Vector2 size, int order)
