@@ -233,11 +233,13 @@ namespace Ricochet.Client.Board
         /// <summary>
         /// Slides robots towards their new cells (or jumps there if <paramref name="instant"/>). A
         /// <paramref name="quiet"/> slide (undo, a replay stepped back) ends without the bump: no thud, dust,
-        /// squash or target burst.
+        /// squash or target burst. An instant jump with <paramref name="popIn"/> (a reset) pops the robots that move
+        /// in at their new cells, one after another, instead of having them just appear there.
         /// </summary>
-        public void ShowRobots(RobotPositions robots, bool instant, bool quiet = false)
+        public void ShowRobots(RobotPositions robots, bool instant, bool quiet = false, bool popIn = false)
         {
             _shownRobots = robots;
+            int popped = 0;
             foreach (KeyValuePair<RobotColor, RobotVisual> pair in _robots)
             {
                 RobotVisual robot = pair.Value;
@@ -271,7 +273,11 @@ namespace Ricochet.Client.Board
                     robot.Moving = false;
                     robot.Root.localPosition = destination;
                     if (instant && delta != Vector3.zero)
+                    {
                         robot.Landings.Clear(); // a jump (reset, a new replay) leaves no landings to rewind
+                        if (popIn)
+                            robot.PoppedInAt = Time.time + PopInStagger * popped++;
+                    }
                     continue;
                 }
                 robot.Moving = true;
@@ -451,7 +457,7 @@ namespace Ricochet.Client.Board
             public Vector2 LookAtSlideStart;
         }
 
-        private const float SwellSeconds = 0.1f, PopInSeconds = 0.3f;
+        private const float SwellSeconds = 0.1f, PopInSeconds = 0.3f, PopInStagger = 0.06f;
 
         // The robot's overall size around the big burst (1 = normal).
         private static float BurstScale(RobotVisual robot, float time)
@@ -471,6 +477,8 @@ namespace Ricochet.Client.Board
             float p = (time - robot.PoppedInAt) / PopInSeconds;
             if (p >= 1f)
                 return 1f;
+            if (p <= 0f)
+                return 0f; // waiting for its turn to pop in
             // Back in with a little overshoot (ease-out-back).
             p -= 1f;
             return 1f + 2.70158f * p * p * p + 1.70158f * p * p;

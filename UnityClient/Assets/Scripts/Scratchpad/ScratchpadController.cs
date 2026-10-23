@@ -91,7 +91,7 @@ namespace Ricochet.Client.Scratchpad
         public void PlayOffline() => NewBoard();
 
         /// <summary>Puts the robots back at the round's start and clears the move list (same as pressing R).</summary>
-        public void ResetToStart() => Apply(Session.Reset);
+        public void ResetToStart() => Apply(Session.Reset, popIn: true);
 
         /// <summary>Dims the board under a countdown until the next board arrives (<see cref="LoadRound"/>).</summary>
         public void ShowCountdown(float seconds, string caption)
@@ -542,11 +542,11 @@ namespace Ricochet.Client.Scratchpad
         }
 
         // Runs a change to the session, then shows where the robots ended up.
-        private void Apply(System.Action change)
+        private void Apply(System.Action change, bool popIn = false)
         {
             change();
             _boardView.ShowSelection(Session.Selected);
-            _boardView.ShowRobots(Session.Robots, instant: true);
+            _boardView.ShowRobots(Session.Robots, instant: true, popIn: popIn);
         }
 
         private void Select(RobotColor robot)
