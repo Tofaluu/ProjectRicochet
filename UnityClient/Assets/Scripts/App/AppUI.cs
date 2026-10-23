@@ -42,7 +42,7 @@ namespace Ricochet.Client.App
         private Screen _chosen = Screen.Home;
 
         private VisualElement _main, _boardArea, _boardOverlay, _goalIcon, _replayBar, _settings, _profilePopover, _profileButton;
-        private Label _goalLabel, _banner, _boardTip, _overlayCaption, _overlayNumber, _overlayHint;
+        private Label _goalLabel, _goalMeasure, _banner, _boardTip, _overlayCaption, _overlayNumber, _overlayHint;
         private Button _navHome, _navDaily, _navPlay, _navPractice, _navSettings;
         private Button _undo, _reset, _newBoard, _shortest, _replayPause, _replayBack, _replayForward;
         private readonly Dictionary<Screen, VisualElement> _screens = new Dictionary<Screen, VisualElement>();
@@ -154,6 +154,12 @@ namespace Ricochet.Client.App
             _boardOverlay = _root.Q("board-overlay");
             _goalIcon = _root.Q("goal-icon");
             _goalLabel = _root.Q<Label>("goal-label");
+            // A hidden copy of the goal sized to its text, to tell whether the full sentence fits (GoalFits).
+            _goalMeasure = new Label { pickingMode = PickingMode.Ignore };
+            _goalMeasure.AddToClassList("goal-label");
+            _goalMeasure.style.position = Position.Absolute;
+            _goalMeasure.style.visibility = Visibility.Hidden;
+            _goalLabel.parent.Add(_goalMeasure);
             _banner = _root.Q<Label>("banner");
             _boardTip = _root.Q<Label>("board-tip");
             _overlayCaption = _root.Q<Label>("overlay-caption");
@@ -1126,10 +1132,11 @@ namespace Ricochet.Client.App
             string robot = target.Robot.HasValue ? $"the {target.Robot.Value} robot" : "any robot";
             int best = Scratchpad.PracticeShortest;
             string color = ColorUtility.ToHtmlStringRGB(Readable(targetColor));
-            // Compact: one short line beside the banner ("Red robot to its target in 6").
-            _goalLabel.text = Compact
-                ? $"<b><color=#{color}>{(target.Robot.HasValue ? $"{target.Robot.Value} robot" : "Any robot")}</color></b> to its target" + (best > 0 ? $" in {best}" : "")
-                : $"Get <b><color=#{color}>{robot}</color></b> to its target" + (best > 0 ? $" in {best} moves" : "");
+            // Always one line, so the board never shrinks: the short form ("Red robot to its target in 6") when the
+            // sentence doesn't fit beside the banner (a narrow stage, a replay's longer banner), else an ellipsis.
+            string full = $"Get <b><color=#{color}>{robot}</color></b> to its target" + (best > 0 ? $" in {best} moves" : "");
+            string brief = $"<b><color=#{color}>{(target.Robot.HasValue ? $"{target.Robot.Value} robot" : "Any robot")}</color></b> to its target" + (best > 0 ? $" in {best}" : "");
+            _goalLabel.text = Compact || !GoalFits(full) ? brief : full;
 
             Color frame = theme.FrameColor(Session.Mode, target);
             _banner.text = BannerText(Session);
@@ -1210,6 +1217,18 @@ namespace Ricochet.Client.App
             _boardTip.style.left = board.x + board.width * 0.08f;
             _boardTip.style.width = board.width * 0.84f;
             _boardTip.style.top = board.yMax - 64f;
+        }
+
+        // Whether the goal text fits on one line in the room beside the icon (the goal's width doesn't depend on its text).
+        // Measured by the hidden copy, so it lags a frame behind a new text.
+        private bool GoalFits(string text)
+        {
+            _goalMeasure.text = text;
+            float room = _goalLabel.parent.layout.width - _goalIcon.layout.width - _goalLabel.resolvedStyle.marginLeft;
+            float width = _goalMeasure.layout.width;
+            if (float.IsNaN(room) || float.IsNaN(width) || room <= 0f)
+                return true;
+            return width <= room;
         }
 
         private string BannerText(BoardSession session)
