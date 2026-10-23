@@ -521,10 +521,10 @@ namespace Ricochet.Client.Board
                     CreateSprite("Fill", ShapeSprites.Circle, fill, Vector3.zero, new Vector2(0.9f, 0.9f), BodyOrder, robot.Body);
                     CreateSprite("Band", ShapeSprites.Circle, Color.Lerp(fill, Color.black, 0.2f), new Vector3(0f, 0.03f), new Vector2(0.7f, 0.7f), BandOrder, robot.Body);
                     CreateSprite("Head", ShapeSprites.Circle, Color.Lerp(fill, Color.white, 0.18f), new Vector3(0f, 0.03f), new Vector2(0.6f, 0.6f), HeadOrder, robot.Body);
-                    robot.EyeAt = new[] { new Vector3(-0.095f, 0.05f), new Vector3(0.095f, 0.05f) };
-                    robot.EyeSize = new Vector2(0.15f, 0.175f);
-                    robot.PupilSize = new Vector2(0.075f, 0.09f);
-                    robot.LookShift = new Vector2(0.035f, 0.04f);
+                    robot.EyeAt = new[] { new Vector3(-0.115f, 0.05f), new Vector3(0.115f, 0.05f) };
+                    robot.EyeSize = new Vector2(0.2f, 0.235f);
+                    robot.PupilSize = new Vector2(0.1f, 0.12f);
+                    robot.LookShift = new Vector2(0.045f, 0.05f);
                     pupil = new Color(0.16f, 0.09f, 0.03f);
                     break;
                 case BoardKind.Ink:
