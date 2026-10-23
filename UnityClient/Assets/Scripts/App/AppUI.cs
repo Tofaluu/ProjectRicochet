@@ -1068,7 +1068,7 @@ namespace Ricochet.Client.App
                         _dailyRows.Add(LeaderboardRow(board.MyRank, "You", daily.BestMoves, daily.BestSeconds, true));
                 }
             }
-            _dailyNext.text = daily.Stage == DailyStage.Playing ? $"Next puzzle in {DailyState.Clock(daily.UntilNext(now))}" : "";
+            _dailyNext.text = daily.Stage == DailyStage.Playing ? $"Next puzzle in {DailyState.Countdown(daily.UntilNext(now))}" : "";
         }
 
         private static VisualElement LeaderboardRow(int place, string name, int moves, double seconds, bool me)

@@ -372,7 +372,7 @@
 .lb-rank--3 { color: var(--rank-3); }
 .lb-name { flex-grow: 1; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-moves { width: 40px; font-size: 15px; -unity-text-align: middle-right; }
-.lb-time { width: 56px; font-size: 15px; color: var(--muted); -unity-text-align: middle-right; }
+.lb-time { width: 64px; margin-left: 6px; font-size: 15px; color: var(--muted); -unity-text-align: middle-right; }
 
 /* ---- Lobby and match ---- */
 .code-big { font-size: 40px; letter-spacing: 6px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }

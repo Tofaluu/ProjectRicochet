@@ -183,8 +183,16 @@ namespace Ricochet.Client.Game
             }
         }
 
-        /// <summary>"0:42", "12:05", "1:02:03".</summary>
+        /// <summary>"0:42", "12:05", then hours and minutes only ("1h 2m", "18h 0m") so long times fit the result card and leaderboard.</summary>
         public static string Clock(double seconds)
+        {
+            int total = (int)Math.Max(0, Math.Floor(seconds));
+            int h = total / 3600, m = total / 60 % 60, s = total % 60;
+            return h > 0 ? $"{h}h {m}m" : $"{m}:{s:00}";
+        }
+
+        /// <summary>A countdown that keeps ticking by the second: "0:42", "12:05", "1:02:03".</summary>
+        public static string Countdown(double seconds)
         {
             int total = (int)Math.Max(0, Math.Floor(seconds));
             int h = total / 3600, m = total / 60 % 60, s = total % 60;

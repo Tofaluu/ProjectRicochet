@@ -114,7 +114,9 @@ namespace ClientLogic.Tests
             Assert.Equal("0:00", DailyState.Clock(0));
             Assert.Equal("0:42", DailyState.Clock(42.9));
             Assert.Equal("12:05", DailyState.Clock(725));
-            Assert.Equal("1:02:03", DailyState.Clock(3723));
+            Assert.Equal("1h 2m", DailyState.Clock(3723));
+            Assert.Equal("18h 0m", DailyState.Clock(64844));
+            Assert.Equal("1:02:03", DailyState.Countdown(3723));
         }
 
         [Fact]
