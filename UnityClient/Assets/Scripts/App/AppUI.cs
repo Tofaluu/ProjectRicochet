@@ -1324,9 +1324,17 @@ namespace Ricochet.Client.App
             Rect board = BoardOnPanel();
             if (Compact)
             {
+                // Under the controls if it fits above the tab bar and the bottom of what the browser shows (its toolbar
+                // can cover the page's bottom); else over the board's bottom rows, as on a computer (Undo / Reset stay free).
+                float bottom = _nav.worldBound.yMin;
+                if (Viewport.VisibleArea(out float topCss, out float heightCss))
+                    bottom = Mathf.Min(bottom, (topCss + heightCss) * Viewport.PixelRatio / PanelScale);
+                float height = float.IsNaN(_tutorialCard.layout.height) ? 0f : _tutorialCard.layout.height;
+                Rect controls = _boardControls.worldBound;
+                float top = controls.yMax + 10f + height <= bottom - 8f ? controls.yMax + 10f : controls.yMin - 8f - height;
                 _tutorialCard.style.left = board.x;
                 _tutorialCard.style.width = board.width;
-                _tutorialCard.style.top = _boardControls.worldBound.yMax - _root.worldBound.y + 10f;
+                _tutorialCard.style.top = top - _root.worldBound.y;
                 _tutorialCard.style.bottom = StyleKeyword.Auto;
                 return;
             }
