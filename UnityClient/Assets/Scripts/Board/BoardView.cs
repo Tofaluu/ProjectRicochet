@@ -38,20 +38,27 @@ namespace Ricochet.Client.Board
         private const int RobotShadowOrder = 8;
         private const int HaloOrder = 9;
         private const int SelectionOrder = 10;
-        private const int RimOrder = 11;
-        private const int BodyOrder = 12;
-        private const int BodyTopOrder = 13;
-        private const int BandOrder = 14;
-        private const int HeadOrder = 15;
-        private const int EyeRimOrder = 16;
-        private const int EyeOrder = 17;
-        private const int PupilOrder = 18;
-        private const int EffectOrder = 19;
+        private const int SelectionHeadOrder = 11;
+        private const int RimOrder = 12;
+        private const int BodyOrder = 13;
+        private const int BodyTopOrder = 14;
+        private const int BandOrder = 15;
+        private const int HeadOrder = 16;
+        private const int EyeRimOrder = 17;
+        private const int EyeOrder = 18;
+        private const int PupilOrder = 19;
+        private const int EffectOrder = 20;
 
         // Target symbols' outlines grow them by this much of their half-size.
         private const float OutlineGrow = 0.22f;
         // The selection ring's turning speed, in degrees per second (a turn every 6 s).
-        private const float SelectionTurnSpeed = 60f;
+        private const float SelectionTurnSpeed = 300f; // degrees a second: the comet's head goes round in 1.2 s
+        // The selection ring's band, of its radius.
+        private const float SelectionWidth = 0.14f;
+        // The dashed ring's turn (degrees a second), when chosen in Settings.
+        private const float DashedTurnSpeed = 60f;
+        // Degrees a second the any-robot target's colours turn when it's the round's target (a turn in 6 s).
+        private const float AnyTargetTurnSpeed = 60f;
         // How much bigger an Ink eye's outline is than the eye.
         private const float EyeRimGrow = 0.06f;
 
@@ -71,7 +78,11 @@ namespace Ricochet.Client.Board
         private BoardMode _mode;
         private SpriteRenderer _frame, _plateShadow;
         private Transform _content;
-        private SpriteRenderer _selectionRing;
+        private SpriteRenderer _selectionRing, _selectionHead;
+        // The active target's symbol when it's the any-robot target: its four colours turn slowly.
+        private SpriteRenderer _anySpin;
+        // The selection ring's two looks (Settings: dashed or the chasing head, the default).
+        private Sprite _cometRing, _dashedRing;
         private SpriteRenderer _targetGlow;
         private float _targetGlowFrom;
         // A new board's target glows brighter and wider for a few seconds (a few slow beats, fading back to the usual glow),
@@ -123,6 +134,7 @@ namespace Ricochet.Client.Board
             _particles.Clear();
             _pendingSounds.Clear();
             _hasSelection = false;
+            _anySpin = null;
             _round = round;
 
             if (Camera.main != null)
@@ -195,9 +207,11 @@ namespace Ricochet.Client.Board
                 Vector3 at = CellCenter(target.Position);
                 if (i == round.TargetIndex)
                 {
-                    Color glow = color;
+                    // The any-robot target glows in its four colours (the renderer colour only sets how strong).
+                    Color glow = target.Robot.HasValue ? color : Color.white;
                     glow.a = 0.55f;
-                    _targetGlow = CreateSprite("Target Glow", ShapeSprites.SoftCircle, glow, at, new Vector2(1.5f, 1.5f), TargetGlowOrder);
+                    Sprite glowSprite = target.Robot.HasValue ? ShapeSprites.SoftCircle : ShapeSprites.AnyTargetGlow(Colors.RobotColors);
+                    _targetGlow = CreateSprite("Target Glow", glowSprite, glow, at, new Vector2(1.5f, 1.5f), TargetGlowOrder);
                     _targetGlowFrom = Time.time;
                     // Its tile takes on the target's colour.
                     Color tint = color;
@@ -205,16 +219,19 @@ namespace Ricochet.Client.Board
                     CreateRounded("Target Tile", 0.08f, tint, at, new Vector2(0.96f, 0.96f), TargetTintOrder);
                     Color outline = style.Kind == BoardKind.Wood ? new Color(0.25f, 0.13f, 0.05f)
                         : style.Kind == BoardKind.Ink ? BoardStyle.Ink : Color.white;
-                    CreateSymbol(target, color, outline, at, 0.66f);
+                    SpriteRenderer symbol = CreateSymbol(target, color, outline, at, 0.66f);
+                    if (!target.Robot.HasValue)
+                        _anySpin = symbol;
                 }
                 else
                 {
                     // The others: smaller and faded into the tile, so the active one stands out.
-                    Color faded = Color.Lerp(color, style.TileA, style.Kind == BoardKind.Ink ? 0.3f : 0.4f);
+                    float fade = style.Kind == BoardKind.Ink ? 0.3f : 0.4f;
+                    Color faded = Color.Lerp(color, style.TileA, fade);
                     Color ink = BoardStyle.Ink;
                     Color? outline = style.Kind == BoardKind.Wood ? new Color(0.27f, 0.15f, 0.05f, 0.5f)
                         : style.Kind == BoardKind.Ink ? new Color(ink.r, ink.g, ink.b, 0.45f) : (Color?)null;
-                    CreateSymbol(target, faded, outline, at, 0.44f);
+                    CreateSymbol(target, faded, outline, at, 0.44f, fade);
                 }
             }
 
@@ -223,7 +240,10 @@ namespace Ricochet.Client.Board
                 _moveDots[i] = CreateSprite("Move Dot", ShapeSprites.Circle, Color.white, Vector3.zero, new Vector2(0.34f, 0.34f), GhostOrder);
                 _moveDots[i].enabled = false;
             }
-            _selectionRing = CreateSprite("Selection", ShapeSprites.DashedRing(0.09f, 18), Colors.Selection, Vector3.zero, new Vector2(1f, 1f), SelectionOrder);
+            _cometRing = ShapeSprites.CometRing(SelectionWidth);
+            _dashedRing = ShapeSprites.DashedRing(0.09f, 18);
+            _selectionRing = CreateSprite("Selection", _cometRing, Colors.Selection, Vector3.zero, new Vector2(1f, 1f), SelectionOrder);
+            _selectionHead = CreateSprite("Selection Head", ShapeSprites.CometHead(SelectionWidth), Color.white, Vector3.zero, new Vector2(1f, 1f), SelectionHeadOrder);
 
             foreach (RobotColor color in AllRobots)
                 _robots[color] = CreateRobot(color, robots[color], round.Target.Robot == color);
@@ -372,15 +392,29 @@ namespace Ricochet.Client.Board
 
             if (_selectionRing != null && _robots.TryGetValue(_selected, out RobotVisual selected))
             {
-                // A slowly turning dashed ring in a slightly darker shade of the selected robot's colour (Ink: in ink), with a
-                // gap of board around the robot, centred on the piece as drawn (a wooden pawn's edge sits a little low).
-                bool ink = Style.Kind == BoardKind.Ink;
-                Transform ring = _selectionRing.transform;
-                ring.localPosition = selected.Root.localPosition + new Vector3(0f, Style.Kind == BoardKind.Wood ? -0.0225f : 0f);
-                float size = (ink ? 1.18f : 1.12f) * BurstScale(selected, time);
-                ring.localScale = new Vector3(size, size, 1f);
-                ring.localRotation = Quaternion.Euler(0f, 0f, -SelectionTurnSpeed * time);
+                // A faint ring with a bright head chasing round it, in a slightly darker shade of the selected robot's colour
+                // (Ink: in ink) with a white glint at the head - or, if the player chose it, slowly turning dashes in that
+                // colour - with a gap of board around the robot, centred on the piece as drawn (a wooden pawn's edge sits a
+                // little low).
+                bool ink = Style.Kind == BoardKind.Ink, dashed = PlayerSettings.DashedSelection;
+                _selectionRing.sprite = dashed ? _dashedRing : _cometRing;
+                _selectionHead.enabled = !dashed;
+                var at = selected.Root.localPosition + new Vector3(0f, Style.Kind == BoardKind.Wood ? -0.0225f : 0f);
+                float size = (dashed ? (ink ? 1.18f : 1.12f) : (ink ? 1.3f : 1.24f)) * BurstScale(selected, time);
+                var turn = Quaternion.Euler(0f, 0f, -(dashed ? DashedTurnSpeed : SelectionTurnSpeed) * time);
+                foreach (SpriteRenderer part in new[] { _selectionRing, _selectionHead })
+                {
+                    part.transform.localPosition = at;
+                    part.transform.localScale = new Vector3(size, size, 1f);
+                    part.transform.localRotation = turn;
+                }
                 _selectionRing.color = ink ? BoardStyle.Ink : Color.Lerp(selected.Color, Color.black, 0.15f);
+            }
+            if (_anySpin != null)
+            {
+                _anySpin.transform.localRotation = Quaternion.Euler(0f, 0f, -AnyTargetTurnSpeed * time);
+                if (_targetGlow != null)
+                    _targetGlow.transform.localRotation = _anySpin.transform.localRotation; // its rainbow glow turns with it
             }
             if (_targetGlow != null)
             {
@@ -684,7 +718,7 @@ namespace Ricochet.Client.Board
             Play(BoardSounds.Thud, 0.8f);
 
             if (WorldToCell(robot.Destination) == _target.Position && _target.AcceptsRobot(color))
-                Celebrate(robot, Colors.TargetColor(_target));
+                Celebrate(robot, _target.Robot.HasValue ? Colors.TargetColor(_target) : robot.Color); // any-robot: the robot's own colour
         }
 
         private void Celebrate(RobotVisual robot, Color color)
@@ -1050,13 +1084,17 @@ namespace Ricochet.Client.Board
             }
         }
 
-        // A target symbol, with an outline under it when given.
-        private void CreateSymbol(Target target, Color fill, Color? outline, Vector3 at, float size)
+        // A target symbol, with an outline under it when given. The any-robot target draws its four colours instead of
+        // the fill, faded into the tile by <paramref name="fade"/> (as Color.Lerp towards the tile fades the others).
+        private SpriteRenderer CreateSymbol(Target target, Color fill, Color? outline, Vector3 at, float size, float fade = 0f)
         {
             if (outline.HasValue)
                 CreateSprite("Target Outline", ShapeSprites.TargetOutline(target.Robot, OutlineGrow), outline.Value, at,
                     Vector2.one * size * (1f + OutlineGrow), TargetOutlineOrder);
-            CreateSprite("Target", ShapeSprites.TargetSymbol(target.Robot), fill, at, Vector2.one * size, TargetOrder);
+            if (!target.Robot.HasValue)
+                return CreateSprite("Target", ShapeSprites.AnyTargetSymbol(Colors.RobotColors), new Color(1f, 1f, 1f, 1f - fade), at,
+                    Vector2.one * size, TargetOrder);
+            return CreateSprite("Target", ShapeSprites.TargetSymbol(target.Robot), fill, at, Vector2.one * size, TargetOrder);
         }
 
         private SpriteRenderer CreateRounded(string name, float radius, Color color, Vector3 position, Vector2 size, int order)

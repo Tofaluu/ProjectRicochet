@@ -51,6 +51,71 @@ namespace Ricochet.Client.Board
             return Mathf.Max(arc, Mathf.Abs(r - radius) - width / 2f);
         }));
 
+        /// <summary>
+        /// The selection ring's body: a band <paramref name="width"/> of the radius, faint for its first third (clockwise from
+        /// the top), then a tail growing to full strength towards the head near the top. Tinted by the renderer and spun
+        /// clockwise, so the head leads; <see cref="CometHead"/> adds the head's white glint on top.
+        /// </summary>
+        public static Sprite CometRing(float width) => Get("comet" + width, () => FromAlpha(p => RingBand(p, width) * CometTail(Turn(p))));
+
+        /// <summary>The selection ring's head: a white glint brightening towards the head end of <see cref="CometRing"/>.</summary>
+        public static Sprite CometHead(float width) => Get("comet-head" + width, () => FromAlpha(p => RingBand(p, width) * CometGlint(Turn(p))));
+
+        // How far round from the top, clockwise, in turns (0-1).
+        private static float Turn(Vector2 p)
+        {
+            float t = Mathf.Atan2(p.x, p.y) / (2f * Mathf.PI);
+            return t < 0f ? t + 1f : t;
+        }
+
+        // A ring band of the given width (of the radius) at the sprite's edge, anti-aliased.
+        private static float RingBand(Vector2 p, float width)
+        {
+            float d = Mathf.Abs(p.magnitude - (1f - width / 2f)) - width / 2f;
+            return Mathf.Clamp01(0.5f - d / (2f / Size));
+        }
+
+        private const float CometFaint = 0.15f, CometTailStart = 1f / 3f, CometHeadStart = 0.84f, CometHeadEnd = 0.978f;
+
+        private static float CometTail(float t) =>
+            t < CometTailStart ? CometFaint
+            : t < CometHeadStart ? Mathf.Lerp(CometFaint, 1f, (t - CometTailStart) / (CometHeadStart - CometTailStart))
+            : t < CometHeadEnd ? 1f
+            : Mathf.Lerp(1f, CometFaint, (t - CometHeadEnd) / (1f - CometHeadEnd));
+
+        private static float CometGlint(float t) =>
+            t < CometHeadStart ? 0f
+            : t < CometHeadEnd ? (t - CometHeadStart) / (CometHeadEnd - CometHeadStart)
+            : Mathf.Lerp(1f, 0f, (t - CometHeadEnd) / (1f - CometHeadEnd));
+
+        /// <summary>
+        /// The any-robot target in colour: its ring blending through <paramref name="colors"/> (the robots', clockwise from
+        /// the top). Draw it with a white renderer colour (alpha fades it); spin it to turn the colours.
+        /// </summary>
+        public static Sprite AnyTargetSymbol(Color[] colors) => Get("vortex-colours" + string.Join(",", colors), () =>
+        {
+            Func<Vector2, float> sdf = SymbolSdf(null);
+            float pixel = 2f / Size;
+            return FromColor(p =>
+            {
+                float t = Turn(p) * colors.Length;
+                int i = (int)t % colors.Length;
+                Color color = Color.Lerp(colors[i], colors[(i + 1) % colors.Length], t - Mathf.Floor(t));
+                color.a = Mathf.Clamp01(0.5f - sdf(p) / pixel);
+                return color;
+            });
+        });
+
+        /// <summary>The any-robot target's glow: a soft circle in <paramref name="colors"/> blended round it (white renderer colour).</summary>
+        public static Sprite AnyTargetGlow(Color[] colors) => Get("glow-colours" + string.Join(",", colors), () => FromColor(p =>
+        {
+            float t = Turn(p) * colors.Length;
+            int i = (int)t % colors.Length;
+            Color color = Color.Lerp(colors[i], colors[(i + 1) % colors.Length], t - Mathf.Floor(t));
+            color.a = Mathf.SmoothStep(1f, 0f, p.magnitude);
+            return color;
+        }));
+
         /// <summary>The symbol marking a target for <paramref name="robot"/> (null = the any-robot target).</summary>
         public static Sprite TargetSymbol(RobotColor? robot) => Get(SymbolName(robot), () => FromSdf(SymbolSdf(robot)));
 
@@ -79,7 +144,7 @@ namespace Ricochet.Client.Board
         private static Func<Vector2, float> SymbolSdf(RobotColor? robot)
         {
             if (!robot.HasValue)
-                return Vortex;
+                return p => Mathf.Abs(p.magnitude - 0.745f) - 0.195f; // a ring: the four colours blend round it
             switch (robot.Value)
             {
                 case RobotColor.Red: return p => (Mathf.Abs(p.x) + Mathf.Abs(p.y)) * 0.75f - 0.75f;
@@ -111,6 +176,23 @@ namespace Ricochet.Client.Board
         {
             float pixel = 2f / size;
             return FromAlpha(p => Mathf.Clamp01(0.5f - sdf(p) / pixel), size);
+        }
+
+        // A full-colour sprite (most sprites are white shapes the renderer tints).
+        private static Sprite FromColor(Func<Vector2, Color> color, int size = Size)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                    pixels[y * size + x] = color(new Vector2((x + 0.5f) / size * 2f - 1f, (y + 0.5f) / size * 2f - 1f));
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
         }
 
         private static Sprite FromAlpha(Func<Vector2, float> alpha, int size = Size)
@@ -169,14 +251,6 @@ namespace Ricochet.Client.Board
             float t = Mathf.Abs(a) / (sector / 2f);
             float radius = Mathf.Lerp(0.95f, 0.42f, t);
             return p.magnitude - radius;
-        }
-
-        private static float Vortex(Vector2 p)
-        {
-            // A ring with a dot in the middle.
-            float ring = Mathf.Abs(p.magnitude - 0.72f) - 0.14f;
-            float dot = p.magnitude - 0.28f;
-            return Mathf.Min(ring, dot);
         }
     }
 }

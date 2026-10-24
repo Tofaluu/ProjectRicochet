@@ -302,6 +302,8 @@ namespace Ricochet.Client.App
             AddSwitch(AddRow(settingsList), "Sound  (M)", () => !PlayerSettings.Muted, () => PlayerSettings.Muted = !PlayerSettings.Muted);
             AddSwitch(AddRow(settingsList), "Move dots", () => PlayerSettings.MovePreview, () => PlayerSettings.MovePreview = !PlayerSettings.MovePreview);
             AddSwitch(AddRow(settingsList), "Big burst", () => PlayerSettings.BigBurst, () => PlayerSettings.BigBurst = !PlayerSettings.BigBurst);
+            AddSwitch(AddRow(settingsList), "Dashed selection ring", () => PlayerSettings.DashedSelection,
+                () => PlayerSettings.DashedSelection = !PlayerSettings.DashedSelection);
 
             // The palette picker: a swatch per palette (its ground with its action colour inside).
             _paletteLabel = _root.Q<Label>("palette-label");
@@ -1157,8 +1159,9 @@ namespace Ricochet.Client.App
             GameTheme theme = Theme;
             Target target = Session.Round.Target;
             Color targetColor = theme.TargetColor(target);
-            _goalIcon.style.backgroundImage = new StyleBackground(ShapeSprites.TargetSymbol(target.Robot));
-            _goalIcon.style.unityBackgroundImageTintColor = targetColor;
+            _goalIcon.style.backgroundImage = new StyleBackground(target.Robot.HasValue
+                ? ShapeSprites.TargetSymbol(target.Robot) : ShapeSprites.AnyTargetSymbol(theme.RobotColors));
+            _goalIcon.style.unityBackgroundImageTintColor = target.Robot.HasValue ? targetColor : Color.white;
             string robot = target.Robot.HasValue ? $"the {target.Robot.Value} robot" : "any robot";
             int best = Scratchpad.PracticeShortest;
             string color = ColorUtility.ToHtmlStringRGB(Readable(targetColor));

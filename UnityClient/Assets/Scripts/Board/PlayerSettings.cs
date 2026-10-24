@@ -17,6 +17,7 @@ namespace Ricochet.Client.Board
         private const string PracticeMovesPrefKey = "Ricochet.PracticeMoves";
         private const string PalettePrefKey = "Ricochet.Palette";
         private const string BoardStylePrefKey = "Ricochet.BoardStyle";
+        private const string DashedSelectionPrefKey = "Ricochet.DashedSelection";
         // A typical board's length (the median of random boards).
         public const int DefaultPracticeMoves = 6;
 
@@ -30,6 +31,13 @@ namespace Ricochet.Client.Board
         {
             get => Get(BigBurstPrefKey, true);
             set => Set(BigBurstPrefKey, value);
+        }
+
+        /// <summary>The selected robot's ring as slowly turning dashes (the earlier look) instead of the chasing head.</summary>
+        public static bool DashedSelection
+        {
+            get => Get(DashedSelectionPrefKey, false);
+            set => Set(DashedSelectionPrefKey, value);
         }
 
         /// <summary>Dots showing where the selected robot would stop in each direction (click one to move there).</summary>

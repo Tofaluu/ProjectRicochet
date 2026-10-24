@@ -27,8 +27,6 @@ namespace Ricochet.Client.Theme
         [SerializeField] private Color _blue = new Color(0.24f, 0.48f, 0.98f);
         [SerializeField] private Color _green = new Color(0.18f, 0.70f, 0.42f);
         [SerializeField] private Color _yellow = new Color(0.96f, 0.72f, 0.18f);
-        [Tooltip("The wildcard target any robot may reach.")]
-        [SerializeField] private Color _anyRobot = new Color(0.61f, 0.36f, 0.90f);
 
         [Header("What the board shows (frame + banner)")]
         [Tooltip("Replays are neutral so they never look like a target colour.")]
@@ -98,7 +96,16 @@ namespace Ricochet.Client.Theme
             }
         }
 
-        public Color TargetColor(Target target) => target.Robot.HasValue ? RobotColor(target.Robot.Value) : _anyRobot;
+        /// <summary>
+        /// A target's colour: its robot's, or for the any-robot target a soft white (its symbol shows all four robot
+        /// colours; this is for its glow, tile tint and the goal line).
+        /// </summary>
+        public Color TargetColor(Target target) => target.Robot.HasValue ? RobotColor(target.Robot.Value) : AnyTarget;
+
+        public static readonly Color AnyTarget = new Color(1f, 0.96f, 0.88f);
+
+        /// <summary>The four robot colours in order (red, blue, green, yellow): the any-robot target's ring.</summary>
+        public Color[] RobotColors => new[] { _red, _blue, _green, _yellow };
 
         /// <summary>
         /// The frame/banner colour for what the board shows: the player's own board (practice or a round) in the board style's
