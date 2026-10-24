@@ -1306,6 +1306,10 @@ namespace Ricochet.Client.App
             _tutorialCard.EnableInClassList("is-visible", show);
             if (!show)
                 return;
+            // Where it goes depends on its height (phones), unknown until it has been laid out once: invisible until then,
+            // so it never shows in a wrong spot for a frame.
+            float measured = _tutorialCard.layout.height;
+            _tutorialCard.style.visibility = !float.IsNaN(measured) && measured > 1f ? Visibility.Visible : Visibility.Hidden;
 
             bool touch = Touch || Compact;
             _tutorialBadge.text = (_tutorial.Progress + 1).ToString();
