@@ -187,8 +187,8 @@ namespace Ricochet.Client.App
                 dots.Add(dot);
                 _tutorialDots.Add(dot);
             }
-            _tutorialSkip = Click("tutorial-skip", EndTutorial);
-            _tutorialDone = Click("tutorial-done", EndTutorial);
+            _tutorialSkip = Click("tutorial-skip", () => EndTutorial(finished: false));
+            _tutorialDone = Click("tutorial-done", () => EndTutorial(finished: true));
             Click("practice-tutorial", StartTutorial);
             _overlayCaption = _root.Q<Label>("overlay-caption");
             _overlayNumber = _root.Q<Label>("overlay-number");
@@ -1259,14 +1259,16 @@ namespace Ricochet.Client.App
             PlayerPrefs.Save();
             _tutorial.Start();
             _tutorialShown = null;
+            UsageTracker.Track("tutorial_start");
             Scratchpad.ShowTutorial(_tutorial.Round, TutorialState.BestMoves);
             _chosen = Screen.Practice;
             _sheetTarget = 0f; // phones: the panel slides down to show the board (pressed from Practice, it's up)
         }
 
         // Skip or Start playing: Home (the daily puzzle and Play with friends come next), a normal practice board behind it.
-        private void EndTutorial()
+        private void EndTutorial(bool finished)
         {
+            UsageTracker.Track(finished ? "tutorial_finish" : "tutorial_skip");
             _tutorial.End();
             _tutorialCard.RemoveFromClassList("is-visible");
             Scratchpad.PlayOffline();

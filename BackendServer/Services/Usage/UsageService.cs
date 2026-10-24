@@ -39,7 +39,8 @@ namespace BackendServer.Services
 
     /// <summary>One day on the stats page (non-internal players only).</summary>
     public sealed record UsageDay(DateOnly Day, int Players, int NewPlayers, int ReturningPlayers, int Visits,
-        int PracticeSolves, int LobbyJoins, int DailyOpens, int DailySolves);
+        int PracticeSolves, int LobbyJoins, int DailyOpens, int DailySolves, int TutorialStarts, int TutorialFinishes,
+        int TutorialSkips);
 
     public interface IUsageStore
     {
@@ -54,14 +55,18 @@ namespace BackendServer.Services
 
     /// <summary>
     /// Lightweight usage tracking - our own table, no third-party analytics: the game reports a few events (opening
-    /// the game, a practice solve, joining a lobby, opening / solving the daily puzzle) with the device's guest id, and
+    /// the game, a practice solve, joining a lobby, opening / solving the daily puzzle, starting / finishing / skipping
+    /// the first-time tutorial) with the device's guest id, and
     /// <c>/api/stats</c> turns them into players per day, new vs returning. Events from the developer's own devices
     /// (<c>?internal=1</c>) are stored but never counted. Unvalidated input: known kinds and well-formed ids only,
     /// and a per-guest hourly cap.
     /// </summary>
     public class UsageService
     {
-        public static readonly IReadOnlyList<string> Kinds = new[] { "visit", "practice_solve", "lobby_join", "daily_open", "daily_solve" };
+        public static readonly IReadOnlyList<string> Kinds = new[]
+        {
+            "visit", "practice_solve", "lobby_join", "daily_open", "daily_solve", "tutorial_start", "tutorial_finish", "tutorial_skip",
+        };
         private static readonly Regex GuestIdPattern = new("^[A-Za-z0-9_-]{16,64}$");
 
         private readonly IUsageStore _store;
@@ -123,7 +128,8 @@ namespace BackendServer.Services
                 int newPlayers = players.Count(g => DayOf(firstSeen[g]) == day);
                 int Count(string kind) => on.Count(e => e.Kind == kind);
                 days.Add(new UsageDay(day, players.Count, newPlayers, players.Count - newPlayers, Count("visit"),
-                    Count("practice_solve"), Count("lobby_join"), Count("daily_open"), Count("daily_solve")));
+                    Count("practice_solve"), Count("lobby_join"), Count("daily_open"), Count("daily_solve"),
+                    Count("tutorial_start"), Count("tutorial_finish"), Count("tutorial_skip")));
             }
             return days;
         }

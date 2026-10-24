@@ -87,18 +87,21 @@ public class UsageTests
         await usage.RecordAsync(E(Bob, "visit"));
         await usage.RecordAsync(E(Bob, "daily_open"));
         await usage.RecordAsync(E(Bob, "daily_solve"));
+        await usage.RecordAsync(E(Bob, "tutorial_start"));
+        await usage.RecordAsync(E(Bob, "tutorial_finish"));
         await usage.RecordAsync(E(Me, "visit", isInternal: true));
         await usage.RecordAsync(E(Me, "lobby_join", isInternal: true));
 
         IReadOnlyList<UsageDay> days = await usage.SummaryAsync();
         Assert.Equal(3, days.Count); // StatsDays, newest first
         Assert.Equal(new DateOnly(2026, 10, 19), days[0].Day);
-        Assert.Equal(new UsageDay(new DateOnly(2026, 10, 19), 2, 1, 1, 2, 0, 0, 1, 1), days[0]);
-        Assert.Equal(new UsageDay(new DateOnly(2026, 10, 18), 1, 1, 0, 1, 1, 0, 0, 0), days[1]);
+        Assert.Equal(new UsageDay(new DateOnly(2026, 10, 19), 2, 1, 1, 2, 0, 0, 1, 1, 1, 1, 0), days[0]);
+        Assert.Equal(new UsageDay(new DateOnly(2026, 10, 18), 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0), days[1]);
         Assert.Equal(0, days[2].Players);
 
         string page = UsagePage.Render(days);
         Assert.Contains("Mon Oct 19", page);
+        Assert.Contains("Tutorial finished", page);
         Assert.DoesNotContain(Me, page); // no ids on the page
     }
 

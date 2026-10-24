@@ -35,7 +35,10 @@ namespace Ricochet.Client.Network
             _hubUrl = hubUrl;
         }
 
-        /// <summary>One of the server's known kinds: visit, practice_solve, lobby_join, daily_open, daily_solve.</summary>
+        /// <summary>
+        /// One of the server's known kinds: visit, practice_solve, lobby_join, daily_open, daily_solve, tutorial_start,
+        /// tutorial_finish, tutorial_skip.
+        /// </summary>
         public static void Track(string kind)
         {
             if (_instance != null)
