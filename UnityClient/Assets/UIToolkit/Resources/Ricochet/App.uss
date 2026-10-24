@@ -502,8 +502,9 @@
 .app--compact .board-area { flex-grow: 0; min-height: 0; margin: 6px 0; }
 .app--compact .board-tip { white-space: normal; }
 .app--compact .tutorial-card { padding: 10px 12px 10px; }
-.app--compact .tutorial-title { font-size: 15px; margin-right: 112px; }
-.app--compact .tutorial-body { font-size: 13px; margin-left: 0; margin-top: 4px; min-height: 51px; }
+/* Fixed room for a 2-line title and 3 lines of text whatever the step, so the card keeps its size exactly. */
+.app--compact .tutorial-title { font-size: 15px; margin-right: 112px; height: 50px; -unity-text-align: middle-left; }
+.app--compact .tutorial-body { font-size: 13px; margin-left: 0; margin-top: 4px; height: 60px; }
 /* Phones: Skip / Start playing up beside the title and no dots, so the card is short enough to sit over the board's bottom rows. */
 .app--compact .tutorial-foot { position: absolute; top: 10px; right: 12px; margin: 0; }
 .app--compact .tutorial-dots { display: none; }

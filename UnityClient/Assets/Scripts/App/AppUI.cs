@@ -1261,6 +1261,7 @@ namespace Ricochet.Client.App
             _tutorialShown = null;
             Scratchpad.ShowTutorial(_tutorial.Round, TutorialState.BestMoves);
             _chosen = Screen.Practice;
+            _sheetTarget = 0f; // phones: the panel slides down to show the board (pressed from Practice, it's up)
         }
 
         // Skip or Start playing: Home (the daily puzzle and Play with friends come next), a normal practice board behind it.
