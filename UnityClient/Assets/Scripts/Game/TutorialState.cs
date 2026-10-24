@@ -31,7 +31,7 @@ namespace Ricochet.Client.Game
         public static readonly GridPos TargetCell = new GridPos(11, 11);
         public static readonly GridPos Overshoot = new GridPos(15, 14);
         public static readonly GridPos AboveTarget = new GridPos(11, 14);
-        public static readonly GridPos RedStart = new GridPos(12, 6);
+        public static readonly GridPos RedStart = new GridPos(12, 8);
         public static readonly GridPos RedBlock = new GridPos(12, 14);
         public const int BestMoves = 3;
 
