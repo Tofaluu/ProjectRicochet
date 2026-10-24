@@ -373,6 +373,7 @@
 .stat--last { margin-right: 0; }
 .stat-value { font-size: 24px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
 .stat-value--daily { color: var(--daily-text); }
+.stat-value.stat-value--long { font-size: 18px; }
 .stat-label { font-size: 13px; color: var(--muted); white-space: normal; -unity-text-align: upper-center; }
 .squares { flex-direction: row; flex-wrap: wrap; }
 .square { width: 28px; height: 28px; border-radius: 6px; margin: 0 5px 5px 0; align-items: center; justify-content: center; }

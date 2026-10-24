@@ -1050,6 +1050,7 @@ namespace Ricochet.Client.App
             _dailyMoves.text = solved ? $"{daily.BestMoves}/{daily.ShortestLength}" : $"{daily.ShortestLength}";
             _dailyMovesLabel.text = solved ? "moves" : "best possible";
             _dailyTime.text = DailyState.Clock(solved ? daily.BestSeconds : daily.Elapsed(now));
+            _dailyTime.EnableInClassList("stat-value--long", _dailyTime.text.Length > 5); // "12h 30m" doesn't fit at full size
             _dailyStreak.text = daily.Streak.ToString();
             _dailyDetail.text = error ? daily.Error
                 : loading ? ""
