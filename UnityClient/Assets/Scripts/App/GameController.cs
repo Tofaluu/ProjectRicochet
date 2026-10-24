@@ -34,6 +34,11 @@ namespace Ricochet.Client.App
         /// <summary>The game server (the cloud server unless given <c>?server=</c> / <c>-server</c>).</summary>
         public string ServerUrl { get; set; } = NetworkManager.DefaultServer;
 
+        /// <summary>Started from a lobby link (?lobby= / -lobby): straight into a match, so no first-time tutorial.</summary>
+        public bool LaunchedIntoLobby { get; private set; }
+        /// <summary>?tutorial=0 / -notutorial: never start the first-time tutorial (automated tests use fresh profiles).</summary>
+        public bool SkipTutorial { get; private set; }
+
         /// <summary>The name shown in lobbies and on the daily leaderboard (remembered on this device).</summary>
         public string PlayerName
         {
@@ -92,12 +97,14 @@ namespace Ricochet.Client.App
             string server = QueryValue(Application.absoluteURL, "server");
             string lobby = QueryValue(Application.absoluteURL, "lobby");
             string internalFlag = QueryValue(Application.absoluteURL, "internal");
+            string tutorialFlag = QueryValue(Application.absoluteURL, "tutorial");
 #else
             string[] args = Environment.GetCommandLineArgs();
             string name = ArgValue(args, "-name");
             string server = ArgValue(args, "-server");
             string lobby = ArgValue(args, "-lobby");
             string internalFlag = Array.IndexOf(args, "-internal") >= 0 ? "1" : null;
+            string tutorialFlag = Array.IndexOf(args, "-notutorial") >= 0 ? "0" : null;
 #endif
             if (server != null)
                 ServerUrl = server;
@@ -105,6 +112,8 @@ namespace Ricochet.Client.App
             if (internalFlag == "1" || internalFlag == "0")
                 UsageTracker.SetInternal(internalFlag == "1");
             UsageTracker.Track("visit");
+            LaunchedIntoLobby = lobby != null;
+            SkipTutorial = tutorialFlag == "0";
             if (lobby != null)
                 Join(lobby, name ?? PlayerName, save: false); // a test join doesn't overwrite the saved name
             else if (name != null && PlayerName.Length == 0)

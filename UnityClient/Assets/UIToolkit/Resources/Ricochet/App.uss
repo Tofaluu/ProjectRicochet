@@ -300,6 +300,20 @@
 /* First visit only: how to move, floating over the bottom of the board until the first move. */
 .board-tip { position: absolute; display: none; padding: 8px 16px; border-radius: 10px; background-color: rgba(18, 20, 31, 0.88); color: #ecebf5; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); -unity-text-align: middle-center; }
 .board-tip.is-visible { display: flex; }
+.tutorial-card { position: absolute; display: none; padding: 14px 16px 12px; border-radius: 14px; background-color: var(--panel); border-width: 2px; border-color: var(--ink); }
+.tutorial-card.is-visible { display: flex; }
+.tutorial-head { flex-direction: row; align-items: center; }
+.tutorial-badge { width: 28px; height: 28px; border-radius: 8px; background-color: var(--daily); color: var(--on-daily); font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); -unity-text-align: middle-center; margin-right: 10px; flex-shrink: 0; }
+.tutorial-badge.is-solved { background-color: var(--action); color: var(--on-action); }
+.tutorial-title { flex-grow: 1; flex-shrink: 1; font-size: 18px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); white-space: normal; color: var(--text); }
+.tutorial-body { font-size: 15px; white-space: normal; color: var(--body); margin-top: 6px; margin-left: 38px; min-height: 60px; } /* 3 lines: every step's card the same size */
+.tutorial-foot { flex-direction: row; align-items: center; margin-top: 10px; margin-left: 38px; }
+.tutorial-dots { flex-direction: row; flex-grow: 1; }
+.tutorial-dot { width: 8px; height: 8px; border-radius: 3px; margin-right: 6px; background-color: var(--line); }
+.tutorial-dot.is-on { background-color: var(--daily); }
+.tutorial-dot.is-current { width: 20px; }
+.app .tutorial-foot .btn { height: 34px; padding: 0 14px; font-size: 14px; margin-left: 8px; }
+.app .tutorial-replay { margin-top: 14px; align-self: flex-start; }
 
 /* The countdown / "finding a board" layer, placed over the board itself. */
 .board-overlay { position: absolute; display: none; background-color: rgba(12, 12, 24, 0.66); border-radius: 14px; align-items: center; justify-content: center; }
@@ -487,6 +501,10 @@
 .app--compact .banner { display: none; }
 .app--compact .board-area { flex-grow: 0; min-height: 0; margin: 6px 0; }
 .app--compact .board-tip { white-space: normal; }
+.app--compact .tutorial-card { padding: 10px 12px 10px; }
+.app--compact .tutorial-title { font-size: 16px; }
+.app--compact .tutorial-body { font-size: 14px; margin-left: 0; min-height: 57px; }
+.app--compact .tutorial-foot { margin-left: 0; }
 .app--compact .board-controls { margin: 0 -4px; }
 .app--compact .board-controls .btn { height: 44px; margin: 0 4px; padding: 0 6px; font-size: 15px; }
 .app--compact #replay-pause { width: 76px; }

@@ -42,6 +42,18 @@ namespace Ricochet.Client.App
         private Screen _chosen = Screen.Home;
 
         private VisualElement _main, _boardArea, _boardOverlay, _goalIcon, _replayBar, _settings, _profilePopover, _profileButton;
+        private readonly TutorialState _tutorial = new TutorialState();
+        // A device that has never played (checked before the first visit makes a guest id): gets the tutorial.
+        private static bool _newPlayer;
+        private bool _tutorialChecked;
+        private TutorialStep? _tutorialShown;
+        private float _tutorialStepAt;
+        private VisualElement _tutorialCard;
+        private readonly List<VisualElement> _tutorialDots = new List<VisualElement>();
+        private Label _tutorialBadge, _tutorialTitle, _tutorialBody;
+        private Button _tutorialSkip, _tutorialDone;
+        private const string TutorialDoneKey = "Ricochet.TutorialDone";
+
         private Label _goalLabel, _goalMeasure, _banner, _boardTip, _overlayCaption, _overlayNumber, _overlayHint;
         private Button _navHome, _navDaily, _navPlay, _navPractice, _navSettings;
         private Button _undo, _reset, _newBoard, _shortest, _replayPause, _replayBack, _replayForward;
@@ -81,6 +93,7 @@ namespace Ricochet.Client.App
             if (network == null || scratchpad == null)
                 return;
 
+            _newPlayer = !GuestIdentity.Exists && !PlayerPrefs.HasKey(TipSeenKey) && !PlayerPrefs.HasKey(TutorialDoneKey);
             var app = new GameObject("App");
             var game = app.AddComponent<GameController>();
             game.Init(network, scratchpad);
@@ -162,6 +175,21 @@ namespace Ricochet.Client.App
             _goalLabel.parent.Add(_goalMeasure);
             _banner = _root.Q<Label>("banner");
             _boardTip = _root.Q<Label>("board-tip");
+            _tutorialCard = _root.Q("tutorial-card");
+            _tutorialBadge = _root.Q<Label>("tutorial-badge");
+            _tutorialTitle = _root.Q<Label>("tutorial-title");
+            _tutorialBody = _root.Q<Label>("tutorial-body");
+            VisualElement dots = _root.Q("tutorial-dots");
+            for (int i = 0; i < 4; i++)
+            {
+                var dot = new VisualElement();
+                dot.AddToClassList("tutorial-dot");
+                dots.Add(dot);
+                _tutorialDots.Add(dot);
+            }
+            _tutorialSkip = Click("tutorial-skip", EndTutorial);
+            _tutorialDone = Click("tutorial-done", EndTutorial);
+            Click("practice-tutorial", StartTutorial);
             _overlayCaption = _root.Q<Label>("overlay-caption");
             _overlayNumber = _root.Q<Label>("overlay-number");
             _overlayHint = _root.Q<Label>("overlay-hint");
@@ -700,6 +728,7 @@ namespace Ricochet.Client.App
             KeepFieldAboveKeyboard();
             if (Session.Round != null)
                 ShowStage();
+            ShowTutorial();
         }
 
         // The settings and profile popovers: one open at a time, closed by a click anywhere else (the board included) or
@@ -1209,7 +1238,7 @@ namespace Ricochet.Client.App
                 PlayerPrefs.SetInt(TipSeenKey, 1);
                 seen = true;
             }
-            bool show = !seen && Session.AcceptsInput && !Session.IsCountingDown && Scratchpad.SearchStatus == null;
+            bool show = !seen && !_tutorial.IsActive && Session.AcceptsInput && !Session.IsCountingDown && Scratchpad.SearchStatus == null;
             _boardTip.EnableInClassList("is-visible", show);
             if (!show)
                 return;
@@ -1217,6 +1246,96 @@ namespace Ricochet.Client.App
             _boardTip.style.left = board.x + board.width * 0.08f;
             _boardTip.style.width = board.width * 0.84f;
             _boardTip.style.top = board.yMax - 64f;
+        }
+
+        // ---- The first-time tutorial (TutorialState): a hand-made board with a prompt card over its bottom ----
+
+        private void StartTutorial()
+        {
+            if (_game.Match.InLobby)
+                return;
+            PlayerPrefs.SetInt(TutorialDoneKey, 1);
+            PlayerPrefs.SetInt(TipSeenKey, 1); // the card says how to move
+            PlayerPrefs.Save();
+            _tutorial.Start();
+            _tutorialShown = null;
+            Scratchpad.ShowTutorial(_tutorial.Round, TutorialState.BestMoves);
+            _chosen = Screen.Practice;
+        }
+
+        // Skip or Start playing: Home (the daily puzzle and Play with friends come next), a normal practice board behind it.
+        private void EndTutorial()
+        {
+            _tutorial.End();
+            _tutorialCard.RemoveFromClassList("is-visible");
+            Scratchpad.PlayOffline();
+            _chosen = Screen.Home;
+        }
+
+        private void ShowTutorial()
+        {
+            if (!_tutorialChecked)
+            {
+                // The first frame (the game controller has read the address by now): a new player who didn't come
+                // from a lobby link starts here.
+                _tutorialChecked = true;
+                if (_newPlayer && !_game.LaunchedIntoLobby && !_game.SkipTutorial)
+                    StartTutorial();
+            }
+            if (_tutorial.IsActive && Session.Round != _tutorial.Round)
+                _tutorial.End(); // another board took over (the daily, a lobby): the tutorial is over
+            if (!_tutorial.IsActive)
+            {
+                _tutorialCard.RemoveFromClassList("is-visible");
+                return;
+            }
+
+            int moves = Session.Moves.Count;
+            _tutorial.Update(Session.Robots, moves, Session.IsSolved);
+            if (_tutorial.Step != _tutorialShown)
+            {
+                _tutorialShown = _tutorial.Step;
+                _tutorialStepAt = Time.time;
+                if (_tutorial.RobotToSelect is RobotColor robot && Session.AcceptsInput)
+                    Scratchpad.SelectRobot(robot);
+            }
+            bool solved = _tutorial.Step == TutorialStep.Solved;
+            // A solve shows its slide and burst before the card comes back.
+            bool show = !BoardHidden && !SheetCoversBoard && (!solved || Time.time - _tutorialStepAt > 1.2f);
+            _tutorialCard.EnableInClassList("is-visible", show);
+            if (!show)
+                return;
+
+            bool touch = Touch || Compact;
+            _tutorialBadge.text = (_tutorial.Progress + 1).ToString();
+            _tutorialBadge.EnableInClassList("is-solved", solved);
+            _tutorialTitle.text = _tutorial.Title(moves);
+            _tutorialBody.text = _tutorial.Body(touch, moves);
+            for (int i = 0; i < _tutorialDots.Count; i++)
+            {
+                _tutorialDots[i].EnableInClassList("is-on", i <= _tutorial.Progress);
+                _tutorialDots[i].EnableInClassList("is-current", i == _tutorial.Progress);
+            }
+            _tutorialSkip.style.display = solved ? DisplayStyle.None : DisplayStyle.Flex;
+            _tutorialDone.style.display = solved ? DisplayStyle.Flex : DisplayStyle.None;
+
+            // Over the bottom of the board (the lesson happens in its upper half); on a phone the board is too small for
+            // that, so under the Undo / Reset row, over the panel (not needed meanwhile).
+            Rect board = BoardOnPanel();
+            if (Compact)
+            {
+                _tutorialCard.style.left = board.x;
+                _tutorialCard.style.width = board.width;
+                _tutorialCard.style.top = _boardControls.worldBound.yMax - _root.worldBound.y + 10f;
+                _tutorialCard.style.bottom = StyleKeyword.Auto;
+                return;
+            }
+            // Anchored by its bottom edge, so it's in place from the first frame (its height isn't known until laid out).
+            float inset = board.width * 0.06f;
+            _tutorialCard.style.left = board.x + inset;
+            _tutorialCard.style.width = board.width - 2f * inset;
+            _tutorialCard.style.top = StyleKeyword.Auto;
+            _tutorialCard.style.bottom = _root.layout.height - (board.yMax - inset);
         }
 
         // Whether the goal text fits on one line in the room beside the icon (the goal's width doesn't depend on its text).

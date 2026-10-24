@@ -116,6 +116,7 @@
                         <ui:Label text="HOW TO PLAY" class="h3 gap-s" />
                         <ui:Label text="Robots slide until they hit a wall or another robot. Get the robot shown above onto its target in as few moves as you can." class="body gap-m" />
                         <ui:Label text="Click a robot, then click a dot to move it, or drag it. Keys: 1-4 or Tab to pick, arrows or WASD to move, Z undo, R reset, N new board, H shortest solution." class="muted small" />
+                        <ui:Button name="practice-tutorial" text="Play the tutorial" class="btn btn--small tutorial-replay" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
@@ -265,6 +266,19 @@
         </ui:VisualElement>
 
         <ui:Label name="board-tip" text="Click a robot, then a dot to move it. Arrow keys and dragging work too." class="board-tip" picking-mode="Ignore" />
+        <!-- The first-time tutorial's prompt, over the bottom of the board. -->
+        <ui:VisualElement name="tutorial-card" class="tutorial-card">
+            <ui:VisualElement class="tutorial-head">
+                <ui:Label name="tutorial-badge" text="1" class="tutorial-badge" />
+                <ui:Label name="tutorial-title" text="" class="tutorial-title" />
+            </ui:VisualElement>
+            <ui:Label name="tutorial-body" text="" class="tutorial-body" />
+            <ui:VisualElement class="tutorial-foot">
+                <ui:VisualElement name="tutorial-dots" class="tutorial-dots" />
+                <ui:Button name="tutorial-skip" text="Skip tutorial" class="btn btn--ghost btn--small" />
+                <ui:Button name="tutorial-done" text="Start playing" class="btn btn--primary btn--small" />
+            </ui:VisualElement>
+        </ui:VisualElement>
         <ui:VisualElement name="board-overlay" class="board-overlay" picking-mode="Ignore">
             <ui:Label name="overlay-caption" text="" class="overlay-caption" picking-mode="Ignore" />
             <ui:Label name="overlay-number" text="" class="overlay-number" picking-mode="Ignore" />

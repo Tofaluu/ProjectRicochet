@@ -87,6 +87,18 @@ namespace Ricochet.Client.Scratchpad
                 _boardView.PlayStart();
         }
 
+        /// <summary>The first-time tutorial's board: practice, but no new board or hint (the tutorial has its own Skip).</summary>
+        public void ShowTutorial(RoundSetup round, int shortest)
+        {
+            Show(round, practice: true);
+            _tutorial = true;
+            _shownShortest = shortest;
+            Session.Title = "Tutorial";
+        }
+
+        /// <summary>Selects a robot for the player (the tutorial points them at the one to move).</summary>
+        public void SelectRobot(RobotColor robot) => Select(robot);
+
         /// <summary>Back to offline practice (e.g. between matches): a fresh random board, N / H enabled.</summary>
         public void PlayOffline() => NewBoard();
 
@@ -253,9 +265,9 @@ namespace Ricochet.Client.Scratchpad
                 case ControlAction.Reset:
                     return Session.AcceptsInput || (Session.IsPractice && Session.IsReplaying);
                 case ControlAction.NewBoard:
-                    return Session.IsPractice && (Session.AcceptsInput || Session.IsReplaying);
+                    return Session.IsPractice && !_tutorial && (Session.AcceptsInput || Session.IsReplaying);
                 case ControlAction.Shortest:
-                    return Session.IsPractice && Session.AcceptsInput;
+                    return Session.IsPractice && !_tutorial && Session.AcceptsInput;
                 default:
                     return false;
             }
@@ -458,6 +470,8 @@ namespace Ricochet.Client.Scratchpad
         }
 
         private bool _plainPractice;
+        // The tutorial's board is shown (ShowTutorial; any other board clears it).
+        private bool _tutorial;
         private bool PuzzleMode => PlayerSettings.PracticeExact && !_plainPractice;
 
         public void SetPracticeExact(bool on)
@@ -526,6 +540,7 @@ namespace Ricochet.Client.Scratchpad
         private void Show(RoundSetup round, bool practice, int seed = 0)
         {
             CancelSearch();
+            _tutorial = false;
             _shownShortest = 0;
             StopReplay();
             Session.Load(round, practice, seed);

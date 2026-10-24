@@ -12,6 +12,9 @@ namespace Ricochet.Client.Network
     {
         private const string PrefKey = "Ricochet.GuestId";
 
+        /// <summary>Whether this device has played before (an id is made on the first visit).</summary>
+        public static bool Exists => PlayerPrefs.GetString(PrefKey, "").Length >= 16;
+
         public static string Id
         {
             get
