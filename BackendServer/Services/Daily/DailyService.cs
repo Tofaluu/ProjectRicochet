@@ -38,18 +38,23 @@ namespace BackendServer.Services
         }
 
         /// <summary>
-        /// The day's board length (shortest solution), easy on Monday to hard on Sunday like a newspaper crossword.
+        /// The day's board length (shortest solution), easy on Monday to hard on Sunday like a newspaper crossword. Each
+        /// puzzle gets one of these lengths, picked at random with equal odds (<see cref="PickLength"/>): a search for the
+        /// whole range would mostly stop at its lower end.
         /// </summary>
         public static (int Min, int Max) Difficulty(DayOfWeek day) => day switch
         {
-            DayOfWeek.Monday => (4, 5),
-            DayOfWeek.Tuesday => (6, 7),
-            DayOfWeek.Wednesday => (8, 9),
-            DayOfWeek.Thursday => (10, 11),
-            DayOfWeek.Friday => (12, 13),
-            DayOfWeek.Saturday => (13, 14),
-            _ => (15, 16),
+            DayOfWeek.Monday => (9, 9),
+            DayOfWeek.Tuesday => (10, 11),
+            DayOfWeek.Wednesday => (11, 12),
+            DayOfWeek.Thursday => (12, 13),
+            DayOfWeek.Friday => (13, 14),
+            DayOfWeek.Saturday => (14, 15),
+            _ => (16, 17),
         };
+
+        /// <summary>One length from <paramref name="min"/>..<paramref name="max"/>, each equally likely.</summary>
+        public static int PickLength(int min, int max, Random random) => min + random.Next(max - min + 1);
 
         private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
@@ -196,17 +201,19 @@ namespace BackendServer.Services
             min = _options.MinMoves ?? min;
             max = Math.Max(min, _options.MaxMoves ?? max);
             int seed = _options.Seed.HasValue ? _options.Seed.Value * 10007 + number : Random.Shared.Next();
-            var search = new BoardSearch(min, new Random(seed), TimeSpan.FromSeconds(_options.SolverTimeLimitSeconds), max);
-            // 15+ move boards (Sunday) can take a minute or more to find on the server; there's a day to spare.
-            var budget = TimeSpan.FromSeconds(min >= DailyOptions.LongBoardMoves ? _options.LongSearchSeconds : _options.SearchSeconds);
+            var random = new Random(seed);
+            int wanted = PickLength(min, max, random);
+            var search = new BoardSearch(wanted, random, TimeSpan.FromSeconds(_options.SolverTimeLimitSeconds), wanted);
+            // 15+ move boards (Saturday, Sunday) can take minutes to find on the server; there's a day to spare.
+            var budget = TimeSpan.FromSeconds(wanted >= DailyOptions.LongBoardMoves ? _options.LongSearchSeconds : _options.SearchSeconds);
             var clock = Stopwatch.StartNew();
             while (!search.Step(noTimeLimit: clock.Elapsed >= budget && search.Longest == null))
             {
                 if (clock.Elapsed >= budget && search.Longest != null)
                     break;
             }
-            _log.LogInformation("Daily #{Number} ({Day:yyyy-MM-dd}, {Weekday}): shortest {Moves} moves, wanted {Min}-{Max} ({Solves} solves, {Ms} ms)",
-                number, day, day.DayOfWeek, search.LongestMoves.Length, min, max, search.Solves, clock.ElapsedMilliseconds);
+            _log.LogInformation("Daily #{Number} ({Day:yyyy-MM-dd}, {Weekday}): shortest {Moves} moves, wanted {Wanted} of {Min}-{Max} ({Solves} solves, {Ms} ms)",
+                number, day, day.DayOfWeek, search.LongestMoves.Length, wanted, min, max, search.Solves, clock.ElapsedMilliseconds);
             return new DailyPuzzleRecord
             {
                 Number = number,

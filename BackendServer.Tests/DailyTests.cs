@@ -12,7 +12,7 @@ namespace BackendServer.Tests;
 /// <summary>The daily puzzle: one board a day for everyone, guest results, the leaderboard and streaks.</summary>
 public class DailyTests
 {
-    // Launch on a Monday (easy boards keep the tests quick). Noon in Toronto (EDT, UTC-4) on launch day.
+    // Launch on a Monday. Noon in Toronto (EDT, UTC-4) on launch day.
     private const string Launch = "2026-10-12";
     private static readonly DateTimeOffset LaunchNoon = new(2026, 10, 12, 16, 0, 0, TimeSpan.Zero);
 
@@ -20,10 +20,15 @@ public class DailyTests
     private const string Bob = "bob-guest-id-000002";
     private const string Carol = "carol-guest-id-0003";
 
-    private static (DailyService daily, FakeTimeProvider time) Create(IDailyStore? store = null)
+    // Boards of 4-5 moves keep the tests quick, unless a test checks the real weekday lengths.
+    private static (DailyService daily, FakeTimeProvider time) Create(IDailyStore? store = null, bool weekdayLengths = false)
     {
         var time = new FakeTimeProvider(LaunchNoon);
-        var options = Options.Create(new DailyOptions { LaunchDate = Launch, Seed = 7, SearchSeconds = 20 });
+        var options = Options.Create(new DailyOptions
+        {
+            LaunchDate = Launch, Seed = 7, SearchSeconds = 20,
+            MinMoves = weekdayLengths ? null : 4, MaxMoves = weekdayLengths ? null : 5,
+        });
         return (new DailyService(store ?? new InMemoryDailyStore(), options, time, NullLogger<DailyService>.Instance), time);
     }
 
@@ -41,7 +46,7 @@ public class DailyTests
         Assert.Equal("2026-10-12", alice.Date);
         Assert.Equal(alice.Board, bob.Board);
         Assert.Equal(alice.ShortestLength, Shortest(alice).Length); // a board with a known shortest solution
-        Assert.InRange(alice.ShortestLength, 4, 5); // Monday is easy
+        Assert.InRange(alice.ShortestLength, 4, 5);
         Assert.Equal(0, alice.BestMoves);
         Assert.Equal(12 * 3600, alice.SecondsUntilNext, 1); // noon -> midnight
     }
@@ -49,16 +54,34 @@ public class DailyTests
     [Fact]
     public async Task TheNextPuzzleComesAtMidnightEastern_AndItsHarder()
     {
-        var (daily, time) = Create();
+        var (daily, time) = Create(weekdayLengths: true);
         time.SetUtcNow(new DateTimeOffset(2026, 10, 13, 3, 59, 0, TimeSpan.Zero)); // 23:59 in Toronto
-        Assert.Equal(1, (await daily.GetDailyAsync(Alice, "Alice")).Number);
+        DailyPuzzleInfo monday = await daily.GetDailyAsync(Alice, "Alice");
+        Assert.Equal(1, monday.Number);
+        Assert.Equal(9, monday.ShortestLength);
 
         time.Advance(TimeSpan.FromMinutes(2));
         DailyPuzzleInfo tuesday = await daily.GetDailyAsync(Alice, "Alice");
         Assert.Equal(2, tuesday.Number);
-        Assert.InRange(tuesday.ShortestLength, 6, 7);
-        Assert.Equal((6, 7), DailyService.Difficulty(DayOfWeek.Tuesday));
-        Assert.Equal((15, 16), DailyService.Difficulty(DayOfWeek.Sunday));
+        Assert.InRange(tuesday.ShortestLength, 10, 11);
+        Assert.Equal((10, 11), DailyService.Difficulty(DayOfWeek.Tuesday));
+        Assert.Equal((16, 17), DailyService.Difficulty(DayOfWeek.Sunday));
+    }
+
+    [Fact]
+    public void EachDaysTwoLengths_AreEquallyLikely()
+    {
+        var random = new Random(3);
+        int longer = 0;
+        for (int i = 0; i < 2000; i++)
+        {
+            int length = DailyService.PickLength(10, 11, random);
+            Assert.InRange(length, 10, 11);
+            if (length == 11)
+                longer++;
+        }
+        Assert.InRange(longer, 900, 1100);
+        Assert.Equal(9, DailyService.PickLength(9, 9, random));
     }
 
     [Fact]
