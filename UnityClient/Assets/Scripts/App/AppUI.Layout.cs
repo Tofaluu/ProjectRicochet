@@ -92,6 +92,10 @@ namespace Ricochet.Client.App
             {
                 if (_panelSettings.scaleMode != PanelScaleMode.ScaleWithScreenSize)
                     _panelSettings.scaleMode = PanelScaleMode.ScaleWithScreenSize;
+                // The compact layout's scale multiplies this mode's too: drop it (a minimized window can briefly report a
+                // phone-sized screen, and the restored desktop UI came back zoomed in).
+                if (_panelSettings.scale != 1f)
+                    _panelSettings.scale = 1f;
             }
             else
             {
@@ -132,8 +136,9 @@ namespace Ricochet.Client.App
 
             if (!Compact)
             {
-                // Back to the desktop layout: the sheet's sizes and positions go.
+                // Back to the desktop layout: the sheet's sizes and positions go, and its head hides again (App.uss).
                 _boardArea.style.height = StyleKeyword.Null;
+                _sheetHead.style.display = StyleKeyword.Null;
                 foreach (VisualElement element in new[] { _side, _sheetHead })
                 {
                     element.style.left = StyleKeyword.Null;
