@@ -20,8 +20,6 @@ MonoBehaviour:
   _blue: {r: 0.24, g: 0.48, b: 0.98, a: 1}
   _green: {r: 0.18, g: 0.7, b: 0.42, a: 1}
   _yellow: {r: 0.96, g: 0.72, b: 0.18, a: 1}
-  _playerReplay: {r: 0.95, g: 0.92, b: 0.85, a: 1}
-  _shortestReplay: {r: 0.55, g: 0.56, b: 0.62, a: 1}
   _roundOver: {r: 0.3, g: 0.31, b: 0.39, a: 1}
   _highlightText: {r: 0.98, g: 0.74, b: 0.25, a: 1}
   _bannerText: {r: 0.08, g: 0.07, b: 0.16, a: 1}

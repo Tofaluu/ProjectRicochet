@@ -32,8 +32,12 @@ namespace Ricochet.Client.Theme
         public Color Grout { get; }
         /// <summary>The frame around the player's own board; null = the palette's.</summary>
         public Color? Frame { get; }
+        /// <summary>The frames while watching a player's replay and the shortest solution, in the board's own materials.</summary>
+        public Color ReplayFrame { get; }
+        public Color ShortestFrame { get; }
 
-        private BoardStyle(string id, string name, BoardKind kind, uint tileA, uint tileB, uint grout, uint? frame = null)
+        private BoardStyle(string id, string name, BoardKind kind, uint tileA, uint tileB, uint grout, uint replayFrame, uint shortestFrame,
+            uint? frame = null)
         {
             Id = id;
             Name = name;
@@ -42,14 +46,17 @@ namespace Ricochet.Client.Theme
             TileB = Rgb(tileB);
             Grout = Rgb(grout);
             Frame = frame.HasValue ? Rgb(frame.Value) : (Color?)null;
+            ReplayFrame = Rgb(replayFrame);
+            ShortestFrame = Rgb(shortestFrame);
         }
 
         public static readonly BoardStyle[] All =
         {
-            new BoardStyle("wood", "Wood", BoardKind.Wood, 0xe6c48e, 0xe6c48e, 0xc39661, frame: 0x6e4524),
-            new BoardStyle("wood2", "Wood, two tones", BoardKind.Wood, 0xe9c893, 0xd6ad75, 0xb98a54, frame: 0x6e4524),
-            new BoardStyle("ink", "Ink & toy", BoardKind.Ink, 0xf8efdc, 0xf8efdc, 0xe4d6bb),
-            new BoardStyle("paper", "Graph paper", BoardKind.Paper, 0xfbf8f0, 0xfbf8f0, 0xc3d4ea),
+            // Replays: honey maple / ebony against the walnut; ink black / warm grey; navy pen / pencil graphite.
+            new BoardStyle("wood", "Wood", BoardKind.Wood, 0xe6c48e, 0xe6c48e, 0xc39661, 0xd39b4a, 0x2b221c, frame: 0x6e4524),
+            new BoardStyle("wood2", "Wood, two tones", BoardKind.Wood, 0xe9c893, 0xd6ad75, 0xb98a54, 0xd39b4a, 0x2b221c, frame: 0x6e4524),
+            new BoardStyle("ink", "Ink & toy", BoardKind.Ink, 0xf8efdc, 0xf8efdc, 0xe4d6bb, 0x1d1610, 0x8a8178),
+            new BoardStyle("paper", "Graph paper", BoardKind.Paper, 0xfbf8f0, 0xfbf8f0, 0xc3d4ea, 0x24305a, 0x8a8f99),
         };
 
         public static BoardStyle Default => All[0];

@@ -28,10 +28,7 @@ namespace Ricochet.Client.Theme
         [SerializeField] private Color _green = new Color(0.18f, 0.70f, 0.42f);
         [SerializeField] private Color _yellow = new Color(0.96f, 0.72f, 0.18f);
 
-        [Header("What the board shows (frame + banner)")]
-        [Tooltip("Replays are neutral so they never look like a target colour.")]
-        [SerializeField] private Color _playerReplay = new Color(0.95f, 0.92f, 0.85f);
-        [SerializeField] private Color _shortestReplay = new Color(0.55f, 0.56f, 0.62f);
+        [Header("What the board shows (frame + banner); replay frames come from the BoardStyle")]
         [SerializeField] private Color _roundOver = new Color(0.30f, 0.31f, 0.39f);
         [Tooltip("Highlighted panel text (the feedback line).")]
         [SerializeField] private Color _highlightText = new Color(0.98f, 0.74f, 0.25f);
@@ -116,10 +113,9 @@ namespace Ricochet.Client.Theme
         {
             switch (mode)
             {
-                case BoardMode.PlayerReplay:
-                    // A style with its own frame (walnut) watches in the plain cream: the palette's replacement is for its frame.
-                    return BoardStyle.Current.Frame.HasValue ? _playerReplay : Palette.Current.ReplayFrame ?? _playerReplay;
-                case BoardMode.ShortestReplay: return Palette.Current.ShortestFrame ?? _shortestReplay;
+                // Replays are framed in the board style's own materials (light = a player's, dark = the shortest).
+                case BoardMode.PlayerReplay: return BoardStyle.Current.ReplayFrame;
+                case BoardMode.ShortestReplay: return BoardStyle.Current.ShortestFrame;
                 case BoardMode.RoundOver: return _roundOver;
                 default: return BoardStyle.Current.Frame ?? Palette.Current.BoardFrame;
             }

@@ -19,8 +19,9 @@ namespace Ricochet.Client.Board
         public const float FrameThickness = 0.3f;
 
         // Back to front.
-        private const int PlateShadowOrder = -8;
-        private const int FrameOrder = -7;
+        private const int PlateShadowOrder = -9;
+        private const int FrameOrder = -8;
+        private const int FrameSheenOrder = -7;
         private const int GroutOrder = -6;
         private const int TileOrder = -5;
         private const int GrainOrder = -4;
@@ -57,6 +58,8 @@ namespace Ricochet.Client.Board
         private const float SelectionWidth = 0.14f;
         // The dashed ring's turn (degrees a second), when chosen in Settings.
         private const float DashedTurnSpeed = 60f;
+        // The replay frame's sheen (degrees a second): a turn in 8 s.
+        private const float FrameSheenTurnSpeed = 45f;
         // Degrees a second the any-robot target's colours turn when it's the round's target (a turn in 6 s).
         private const float AnyTargetTurnSpeed = 60f;
         // How much bigger an Ink eye's outline is than the eye.
@@ -81,6 +84,8 @@ namespace Ricochet.Client.Board
         private SpriteRenderer _selectionRing, _selectionHead;
         // The active target's symbol when it's the any-robot target: its four colours turn slowly.
         private SpriteRenderer _anySpin;
+        // Light and dark shading turning round the frame while it shows a replay (masked to the frame's shape).
+        private SpriteRenderer _frameSheen;
         // The selection ring's two looks (Settings: dashed or the chasing head, the default).
         private Sprite _cometRing, _dashedRing;
         private SpriteRenderer _targetGlow;
@@ -135,6 +140,7 @@ namespace Ricochet.Client.Board
             _pendingSounds.Clear();
             _hasSelection = false;
             _anySpin = null;
+            _frameSheen = null;
             _round = round;
 
             if (Camera.main != null)
@@ -155,6 +161,19 @@ namespace Ricochet.Client.Board
                 ? CreateRounded("Plate Shadow", 0.45f, PlateShadowColor, centre + new Vector3(0f, -0.35f), plate, PlateShadowOrder)
                 : CreateRounded("Plate Shadow", 0.6f, PlateShadowColor, centre + new Vector3(0.15f, -0.3f), plate + new Vector2(0.3f, 0.3f), PlateShadowOrder);
             _frame = CreateRounded("Frame", 0.45f, Colors.FrameColor(_mode, _target), centre, plate, FrameOrder);
+            var frameMask = new GameObject("Frame Mask").AddComponent<SpriteMask>();
+            frameMask.transform.SetParent(_content, false);
+            frameMask.transform.localPosition = centre;
+            // Just inside the frame's edge, so the mask's hard cut-off never shows past the frame's smooth one.
+            frameMask.transform.localScale = new Vector3(plate.x - 0.04f, plate.y - 0.04f, 1f);
+            frameMask.sprite = ShapeSprites.RoundedSquare(0.45f / ((plate.x - 0.04f) / 2f));
+            frameMask.isCustomRangeActive = true;
+            frameMask.frontSortingOrder = FrameSheenOrder;
+            frameMask.backSortingOrder = FrameSheenOrder - 1;
+            float sheenSize = Mathf.Max(plate.x, plate.y) * 1.45f; // covers the frame's corners as it turns
+            _frameSheen = CreateSprite("Frame Sheen", ShapeSprites.FrameSheen, Color.white, centre, new Vector2(sheenSize, sheenSize), FrameSheenOrder);
+            _frameSheen.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            _frameSheen.enabled = IsReplay(_mode);
             CreateRounded("Grout", 0.12f, style.Grout, centre, new Vector2(width + WallThickness, height + WallThickness), GroutOrder);
 
             GridPos blockMin = new GridPos(width, height), blockMax = new GridPos(-1, -1);
@@ -350,7 +369,11 @@ namespace Ricochet.Client.Board
             _mode = mode;
             if (_frame != null)
                 _frame.color = Colors.FrameColor(mode, _target);
+            if (_frameSheen != null)
+                _frameSheen.enabled = IsReplay(mode);
         }
+
+        private static bool IsReplay(BoardMode mode) => mode == BoardMode.PlayerReplay || mode == BoardMode.ShortestReplay;
 
         /// <summary>Redraws the board in the current <see cref="BoardStyle"/> (the player picked another), keeping where things are.</summary>
         public void Restyle()
@@ -410,6 +433,8 @@ namespace Ricochet.Client.Board
                 }
                 _selectionRing.color = ink ? BoardStyle.Ink : Color.Lerp(selected.Color, Color.black, 0.15f);
             }
+            if (_frameSheen != null && _frameSheen.enabled)
+                _frameSheen.transform.localRotation = Quaternion.Euler(0f, 0f, -FrameSheenTurnSpeed * time);
             if (_anySpin != null)
             {
                 _anySpin.transform.localRotation = Quaternion.Euler(0f, 0f, -AnyTargetTurnSpeed * time);
