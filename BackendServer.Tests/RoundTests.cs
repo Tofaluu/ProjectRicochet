@@ -92,10 +92,10 @@ public class RoundTests
         await h.AdvanceAsync(50); // 10 s left
         await alice.SubmitAsync(better);
         Assert.True(bob.Player("Alice").Leading);
-        Assert.Equal(45.0, (double)bob.All(HubMethods.TimerUpdated).Last().Args[1]!);
+        Assert.Equal(60.0, (double)bob.All(HubMethods.TimerUpdated).Last().Args[1]!);
 
-        // 45 s from the better solution, not 10.
-        await h.AdvanceAsync(40);
+        // The full countdown again from the better solution (the extension defaults to the first timer), not 10 s.
+        await h.AdvanceAsync(55);
         Assert.Equal(0, bob.Count(HubMethods.RoundEnded));
         await h.AdvanceUntil(() => bob.Count(HubMethods.RoundEnded) == 1, "the timer to run out", maxSeconds: 10);
         Assert.Equal("Alice", bob.LastResult.WinnerName);

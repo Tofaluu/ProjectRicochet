@@ -526,3 +526,44 @@
 .app .gap-s { margin-bottom: 8px; }
 .app .gap-m { margin-bottom: 14px; }
 .app .gap-l { margin-bottom: 22px; }
+
+/* ---- Lobby and match panels (2026-10-27 redesign) ---- */
+.app .card.card--gold { border-width: 2px; border-color: var(--daily-border); }
+.app.palette--toynight .card.card--gold { border-color: var(--daily-border); }
+.code-actions { flex-direction: column; align-items: stretch; margin-left: 10px; }
+.app .code-actions .btn { margin-bottom: 8px; }
+.lobby-alone { margin-top: 6px; padding-left: 10px; }
+.app .link-quiet { align-self: center; background-color: rgba(0, 0, 0, 0); border-width: 0; margin: 2px 0 8px 0; padding: 6px 12px;
+    color: var(--muted); font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
+.app .link-quiet:hover { color: var(--text); background-color: rgba(0, 0, 0, 0); }
+.match-head { align-items: flex-end; }
+.match-sub { margin-bottom: 6px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
+.timer-row { align-items: flex-end; margin-bottom: 4px; }
+.timer-unit { margin-left: 10px; margin-bottom: 7px; color: var(--muted); }
+.timer-unit.is-bumped { color: var(--good); }
+.round-detail { font-size: 20px; white-space: normal; margin-bottom: 4px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.round-progress { height: 6px; border-radius: 3px; background-color: var(--panel-2); margin-top: 12px; overflow: hidden; }
+.round-progress-fill { height: 100%; width: 0; border-radius: 3px; background-color: var(--daily); }
+.best-box { flex-direction: row; align-items: center; margin-top: 12px; padding-top: 12px; border-top-width: 1px; border-color: var(--line); }
+.best-text { flex-grow: 1; flex-shrink: 1; margin-right: 10px; }
+.best-text .round-detail { margin-bottom: 2px; }
+.settings-group { font-size: 14px; color: var(--nav-text); margin-top: 6px; margin-bottom: 2px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.settings-divider { height: 1px; background-color: var(--line); margin: 10px 0 4px 0; opacity: 0.6; }
+.setting-hint { font-size: 13px; color: var(--muted); white-space: normal; margin-top: -6px; margin-bottom: 6px; }
+.setting-row--view { min-height: 36px; }
+.setting-value { font-size: 16px; flex-shrink: 0; margin-left: 10px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.player-score-box { margin-left: auto; padding-left: 8px; align-items: flex-end; flex-shrink: 0; }
+.player-score-box .player-score { margin-left: 0; padding-left: 0; }
+.player-score-of { margin-left: 4px; font-size: 14px; color: var(--muted); -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
+.pips { flex-direction: row; margin-top: 3px; }
+.pip { width: 12px; height: 5px; border-radius: 3px; margin-left: 3px; background-color: var(--panel-2); }
+.player-row.is-me .pip { background-color: var(--panel-hover); }
+.pip.is-on, .player-row.is-me .pip.is-on { background-color: var(--action); }
+.rank { width: 24px; margin-right: 6px; font-size: 16px; color: var(--muted); -unity-text-align: middle-center; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); flex-shrink: 0; }
+.rank--first { color: var(--daily-text); }
+.tag--left { color: var(--muted); border-width: 1px; border-color: var(--line); }
+.app .history-row { flex-direction: row; justify-content: space-between; align-items: center; height: 44px; padding: 0 14px; margin-bottom: 8px; }
+.app .history-row.is-selected { border-color: var(--daily-border); }
+.history-row-text { font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
+.history-row-meta { font-size: 13px; color: var(--muted); margin-left: 8px; flex-shrink: 0; }
+.history-detail { padding: 2px 0 6px 14px; }

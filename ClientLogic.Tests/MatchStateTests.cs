@@ -214,7 +214,9 @@ namespace ClientLogic.Tests
             Assert.True(replays[1].IsShortest);
             Assert.Equal(0.6f, replays[1].StepSeconds, 3);
             Assert.Equal(MatchStage.RoundOver, match.Stage);
-            Assert.Contains("Shortest possible: 4", match.Feedback);
+            Assert.Equal("Bob wins the round", match.ResultTitle);
+            Assert.Equal("6 moves. The shortest was 4.", match.ResultDetail);
+            Assert.Equal("", match.Feedback); // the round's card says it, not the feedback line
         }
 
         [Fact]
@@ -223,7 +225,8 @@ namespace ClientLogic.Tests
             MatchState match = InRound();
             var replays = match.OnRoundEnded(Result(7, Me, matchWinner: Me), Moves(4), Moves(4));
             Assert.Equal("Your solution", replays.Single().Label);
-            Assert.Contains("you win!", match.Feedback);
+            Assert.Equal("You win the match!", match.ResultTitle);
+            Assert.Equal("4 moves, the shortest possible", match.ResultDetail);
         }
 
         [Fact]
@@ -231,6 +234,8 @@ namespace ClientLogic.Tests
         {
             MatchState match = InRound();
             Assert.True(match.OnRoundEnded(Result(7, null), new Move[0], Moves(5)).Single().IsShortest);
+            Assert.Equal("Board skipped", match.ResultTitle);
+            Assert.Equal("Nobody solved it. It could be done in 5 moves.", match.ResultDetail);
 
             match = InRound();
             Assert.Empty(match.OnRoundEnded(Result(7, null), new Move[0], null));
@@ -244,7 +249,8 @@ namespace ClientLogic.Tests
             Assert.Equal(MatchStage.Solving, match.Stage);
 
             match.OnRoundEnded(Result(7, "Zed"), Moves(5), Moves(5));
-            Assert.Contains("but left", match.Feedback);
+            Assert.Equal("No point this round", match.ResultTitle);
+            Assert.Contains("but left", match.ResultDetail);
         }
 
         [Fact]
@@ -277,6 +283,30 @@ namespace ClientLogic.Tests
             Assert.Equal(MatchStage.BetweenMatches, match.Stage);
             Assert.Equal("Bob", match.MatchWinner);
             Assert.Equal(0, match.Round);
+            Assert.Null(match.ResultTitle);
+        }
+
+        [Fact]
+        public void FinalStandings_KeepPlayersWhoLeave_UntilTheNextMatch()
+        {
+            MatchState match = InRound();
+            var finished = Lobby(MatchPhase.Finished, 1, false, "Bob");
+            finished.Players = new[] { new PlayerInfo { Name = Me, Score = 2, Connected = true }, new PlayerInfo { Name = "Bob", Score = 5, Connected = true } };
+            match.OnLobbyState(finished, Me);
+            Assert.Equal(new[] { "Bob", Me }, match.FinalStandings.Select(p => p.Name));
+            Assert.Equal(5, match.FinalStandings[0].Score);
+            Assert.False(match.FinalStandings[0].Left);
+
+            // Bob leaves the results: he stays first, marked as gone; a newcomer isn't in the standings.
+            var after = Lobby(MatchPhase.Finished, 1, false, "Bob");
+            after.Players = new[] { new PlayerInfo { Name = Me, Score = 2, Connected = true }, new PlayerInfo { Name = "Cat", Score = 0, Connected = true } };
+            match.OnLobbyState(after, Me);
+            Assert.Equal(new[] { "Bob", Me }, match.FinalStandings.Select(p => p.Name));
+            Assert.True(match.FinalStandings[0].Left);
+            Assert.False(match.FinalStandings[1].Left);
+
+            match.OnLobbyState(Lobby(MatchPhase.Playing, 2), Me);
+            Assert.Empty(match.FinalStandings);
         }
 
         [Fact]
@@ -303,7 +333,7 @@ namespace ClientLogic.Tests
             match.OnRoundTimeLimit(7, 300f, now: 0f);
             var result = new RoundResult { RoundNumber = 7, OutOfTime = true, ReplayStepSeconds = 1, ShortestReplayStepSeconds = 1 };
             Assert.Single(match.OnRoundEnded(result, new Move[0], Moves(9)));
-            Assert.StartsWith("Time's up", match.Feedback);
+            Assert.Equal("Time's up", match.ResultTitle);
             Assert.False(match.HasTimeLimit);
         }
 

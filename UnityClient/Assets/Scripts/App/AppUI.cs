@@ -63,14 +63,18 @@ namespace Ricochet.Client.App
         private Button _dailyCopy, _dailyRetry;
         private string _shownSquares, _shownRows;
         private Label _homeTitle, _homeDailyTitle, _homeDailyStreak, _playStatus, _profileAvatar, _profileName;
-        private VisualElement _lobbyPlayers, _lobbySettings, _lobbyHistory, _historySolutions, _matchPlayers;
-        private Label _lobbyTitle, _lobbySub, _lobbyCode, _lobbyCopied, _lobbyPlayersSub, _lobbySummary, _lobbyFeedback;
-        private Label _historyBoard, _historyWinner, _matchTitle, _matchSub, _timerCaption, _timerValue, _timerSub, _matchBest, _matchFeedback;
-        private Button _lobbyStart, _historyPrev, _historyNext, _matchWatch, _matchDone;
+        private VisualElement _lobbyPlayers, _lobbySettings, _lobbySettingsView, _lobbyHistory, _historyList, _matchPlayers;
+        private VisualElement _lobbyStandings, _lobbyStandingsList, _lobbyCodeCard, _lobbyPlayersCard, _roundCard, _roundProgress, _roundProgressFill, _bestBox;
+        private Label _lobbyTitle, _lobbySub, _lobbyCode, _lobbyCopied, _lobbyPlayersTitle, _lobbyAlone, _lobbyFeedback, _lobbyTip;
+        private Label _matchTitle, _matchSub, _timerCaption, _timerValue, _timerUnit, _roundDetail, _timerSub, _matchBest, _matchBestSub;
+        private Label _matchFeedback, _matchTip;
+        private Button _lobbyStart, _lobbyLeave, _matchWatch, _matchDone;
         private readonly List<Action> _settingRefreshers = new List<Action>();
-        private string _shownLobbyPlayers, _shownMatchPlayers, _shownHistory;
-        private int _historyIndex = -1;
+        private string _shownLobbyPlayers, _shownMatchPlayers, _shownHistory, _shownStandings;
+        private int _historyIndex = -1; // the history board that's open (-1: none)
         private float _copiedUntil;
+        private string _copiedText = "";
+        private bool? _resultsOrder; // the lobby's cards are in the results' order (true) or the waiting room's (false)
         private ScrollView _side;
         private float _scrollTarget, _scrollSetTo;
         private bool _scrollGliding;
@@ -382,71 +386,136 @@ namespace Ricochet.Client.App
             _screens[Screen.Match] = _root.Q("screen-match");
             _lobbyTitle = _root.Q<Label>("lobby-title");
             _lobbySub = _root.Q<Label>("lobby-sub");
+            _lobbyStandings = _root.Q("lobby-standings");
+            _lobbyStandingsList = _root.Q("lobby-standings-list");
+            _lobbyCodeCard = _root.Q("lobby-code-card");
             _lobbyCode = _root.Q<Label>("lobby-code");
             _lobbyCopied = _root.Q<Label>("lobby-copied");
+            _lobbyPlayersCard = _root.Q("lobby-players-card");
+            _lobbyPlayersTitle = _root.Q<Label>("lobby-players-title");
             _lobbyPlayers = _root.Q("lobby-players");
-            _lobbyPlayersSub = _root.Q<Label>("lobby-players-sub");
+            _lobbyAlone = _root.Q<Label>("lobby-alone");
             _lobbySettings = _root.Q("lobby-settings");
-            _lobbySummary = _root.Q<Label>("lobby-summary");
+            _lobbySettingsView = _root.Q("lobby-settings-view");
             _lobbyFeedback = _root.Q<Label>("lobby-feedback");
+            _lobbyTip = _root.Q<Label>("lobby-tip");
             _lobbyHistory = _root.Q("lobby-history");
-            _historyBoard = _root.Q<Label>("history-board");
-            _historyWinner = _root.Q<Label>("history-winner");
-            _historySolutions = _root.Q("history-solutions");
+            _historyList = _root.Q("history-list");
             _matchTitle = _root.Q<Label>("match-title");
             _matchSub = _root.Q<Label>("match-sub");
+            _roundCard = _root.Q("round-card");
             _timerCaption = _root.Q<Label>("timer-caption");
             _timerValue = _root.Q<Label>("timer-value");
+            _timerUnit = _root.Q<Label>("timer-unit");
+            _roundDetail = _root.Q<Label>("round-detail");
             _timerSub = _root.Q<Label>("timer-sub");
+            _roundProgress = _root.Q("round-progress");
+            _roundProgressFill = _root.Q("round-progress-fill");
+            _bestBox = _root.Q("match-best-box");
             _matchBest = _root.Q<Label>("match-best");
+            _matchBestSub = _root.Q<Label>("match-best-sub");
             _matchFeedback = _root.Q<Label>("match-feedback");
+            _matchTip = _root.Q<Label>("match-tip");
             _matchPlayers = _root.Q("match-players");
 
-            Click("lobby-copy", () =>
-            {
-                Clipboard.Copy($"https://ricochet.thomasliu.dev/?lobby={_game.Match.LobbyCode}");
-                _copiedUntil = Time.time + 2.5f;
-            });
+            Click("lobby-copy", () => Copy($"https://ricochet.thomasliu.dev/?lobby={_game.Match.LobbyCode}", "Copied! Send it to your friends."));
+            Click("lobby-copy-code", () => Copy(_game.Match.LobbyCode, "Code copied."));
             _lobbyStart = Click("lobby-start", _game.StartMatch);
-            Click("lobby-leave", _game.Leave);
+            _lobbyLeave = Click("lobby-leave", _game.Leave);
             Click("match-leave", _game.Leave);
             _matchWatch = Click("match-watch", _game.WatchBest);
             _matchDone = Click("match-done", _game.ToggleDone);
-            _historyPrev = Click("history-prev", () => SelectHistory(_historyIndex - 1));
-            _historyNext = Click("history-next", () => SelectHistory(_historyIndex + 1));
 
-            // The host's settings: steppers send the change at once (the server clamps it and echoes it back).
+            // The host's settings, in groups: steppers send the change at once (the server clamps it and echoes it back).
             VisualElement list = _root.Q("lobby-settings-list");
+            AddSettingsGroup(list, "Match", first: true);
             AddSettingStepper(list, "Points to win", s => s.PointsToWin, (s, v) => s.PointsToWin = v, 1,
                 MatchSettings.MinPointsToWin, MatchSettings.MaxPointsToWin, v => v.ToString());
-            AddSettingStepper(list, "Timer after the first solution", s => s.FirstTimerSeconds, (s, v) => s.FirstTimerSeconds = v, 10,
+            AddSettingsGroup(list, "Timers");
+            AddSettingStepper(list, "Round timer", s => s.RoundLimitSeconds, (s, v) => s.RoundLimitSeconds = v, 60,
+                0, MatchSettings.MaxRoundLimitSeconds, LimitText);
+            AddSettingHint(list, "Time to find a first solution.");
+            // One countdown: it starts on the first solution and every shorter one starts it again (the extension is kept
+            // equal to it).
+            AddSettingStepper(list, "Countdown after a solution", s => s.FirstTimerSeconds,
+                (s, v) => { s.FirstTimerSeconds = v; s.ExtensionSeconds = v; }, 10,
                 MatchSettings.MinTimerSeconds, MatchSettings.MaxTimerSeconds, v => $"{v} s");
-            AddSettingStepper(list, "Extra time for a better one", s => s.ExtensionSeconds, (s, v) => s.ExtensionSeconds = v, 5,
-                MatchSettings.MinTimerSeconds, MatchSettings.MaxTimerSeconds, v => $"{v} s");
-            AddSettingStepper(list, "Time to find a first solution", s => s.RoundLimitSeconds, (s, v) => s.RoundLimitSeconds = v, 60,
-                0, MatchSettings.MaxRoundLimitSeconds, v => v <= 0 ? "No limit" : $"{v / 60} min");
-            AddSettingStepper(list, "Fewest moves per board", s => s.MinMoves, (s, v) => s.MinMoves = v, 1,
+            AddSettingHint(list, "Each shorter solution starts it again.");
+            AddSettingsGroup(list, "Boards");
+            AddSettingStepper(list, "Fewest moves", s => s.MinMoves, (s, v) => s.MinMoves = v, 1,
                 MatchSettings.MinMinMoves, MatchSettings.MaxMinMoves, v => v.ToString());
-            AddSettingStepper(list, "Most moves per board", s => s.MaxMoves, (s, v) => s.MaxMoves = v, 1,
+            AddSettingStepper(list, "Most moves", s => s.MaxMoves, (s, v) => s.MaxMoves = v, 1,
                 MatchSettings.MinMinMoves, MatchSettings.MaxMinMoves, v => v.ToString());
-            AddSwitch(AddRow(list), "Show the best solution", () => _game.Match.Settings != null && _game.Match.Settings.ShowBestSolution,
+            AddSettingsGroup(list, "During a round");
+            AddSwitch(AddRow(list), "Watch the best so far", () => _game.Match.Settings != null && _game.Match.Settings.ShowBestSolution,
                 () => EditSettings(s => s.ShowBestSolution = !s.ShowBestSolution));
+            AddSettingHint(list, "Players who are behind can replay the current best solution.");
+
+            // Everyone else sees the same settings, read-only.
+            VisualElement view = _root.Q("lobby-settings-view-list");
+            AddSettingValue(view, "Points to win", s => s.PointsToWin.ToString());
+            AddSettingValue(view, "Round timer", s => LimitText(s.RoundLimitSeconds));
+            AddSettingValue(view, "Countdown after a solution", s => $"{s.FirstTimerSeconds} s");
+            AddSettingValue(view, "Board moves", s => s.MinMoves == s.MaxMoves ? s.MinMoves.ToString() : $"{s.MinMoves} to {s.MaxMoves}");
+            AddSettingValue(view, "Watch the best so far", s => s.ShowBestSolution ? "On" : "Off");
+        }
+
+        private static string LimitText(int seconds) => seconds <= 0 ? "No limit" : $"{seconds / 60} min";
+
+        private void Copy(string text, string notice)
+        {
+            Clipboard.Copy(text);
+            _copiedText = notice;
+            _copiedUntil = Time.time + 2.5f;
+        }
+
+        // A muted line under the setting above it, saying what it does.
+        private static void AddSettingHint(VisualElement parent, string text)
+        {
+            var hint = new Label(text);
+            hint.AddToClassList("setting-hint");
+            parent.Add(hint);
+        }
+
+        private static void AddSettingsGroup(VisualElement parent, string title, bool first = false)
+        {
+            if (!first)
+            {
+                var divider = new VisualElement();
+                divider.AddToClassList("settings-divider");
+                parent.Add(divider);
+            }
+            var label = new Label(title);
+            label.AddToClassList("settings-group");
+            parent.Add(label);
+        }
+
+        private static Label SettingLabel(string text)
+        {
+            var label = new Label(text);
+            label.AddToClassList("setting-label");
+            label.style.flexShrink = 1;
+            label.style.flexGrow = 1;
+            label.style.flexBasis = 0;
+            label.style.whiteSpace = WhiteSpace.Normal;
+            return label;
         }
 
         private void AddSettingStepper(VisualElement parent, string label, Func<MatchSettings, int> get, Action<MatchSettings, int> set,
             int step, int min, int max, Func<int, string> format)
         {
             VisualElement row = AddRow(parent);
-            var text = new Label(label);
-            text.AddToClassList("setting-label");
-            text.style.flexShrink = 1;
-            text.style.flexGrow = 1;
-            text.style.flexBasis = 0;
-            text.style.whiteSpace = WhiteSpace.Normal;
-            row.Add(text);
+            row.Add(SettingLabel(label));
+            row.Add(MiniStepper(get, set, step, min, max, format));
+        }
+
+        // A - value + stepper for one setting.
+        private VisualElement MiniStepper(Func<MatchSettings, int> get, Action<MatchSettings, int> set, int step, int min, int max,
+            Func<int, string> format)
+        {
             var stepper = new VisualElement();
             stepper.AddToClassList("mini-stepper");
-            var minus = new Button { text = "\u2212" };
+            var minus = new Button { text = "−" };
             var plus = new Button { text = "+" };
             minus.AddToClassList("btn");
             plus.AddToClassList("btn");
@@ -459,7 +528,6 @@ namespace Ricochet.Client.App
             stepper.Add(minus);
             stepper.Add(value);
             stepper.Add(plus);
-            row.Add(stepper);
             _settingRefreshers.Add(() =>
             {
                 MatchSettings settings = _game.Match.Settings;
@@ -469,6 +537,23 @@ namespace Ricochet.Client.App
                 value.text = format(current);
                 minus.SetEnabled(current > min);
                 plus.SetEnabled(current < max);
+            });
+            return stepper;
+        }
+
+        private void AddSettingValue(VisualElement parent, string label, Func<MatchSettings, string> value)
+        {
+            VisualElement row = AddRow(parent);
+            row.AddToClassList("setting-row--view");
+            row.Add(SettingLabel(label));
+            var text = new Label();
+            text.AddToClassList("setting-value");
+            row.Add(text);
+            _settingRefreshers.Add(() =>
+            {
+                MatchSettings settings = _game.Match.Settings;
+                if (settings != null)
+                    text.text = value(settings);
             });
         }
 
@@ -791,34 +876,155 @@ namespace Ricochet.Client.App
             MatchState match = _game.Match;
             MatchSettings settings = match.Settings;
             bool finished = match.Phase == MatchPhase.Finished;
-            _lobbyTitle.text = !finished ? "Lobby" : match.MatchWinner == match.MyName ? "You win the match!" : $"{match.MatchWinner} wins the match!";
-            _lobbySub.text = match.IAmHost
-                ? (finished ? "Change the settings or play again." : "You're the host: pick the settings, then start when everyone's in.")
-                : (finished ? $"Waiting for {match.Host} to start a new match." : $"Waiting for {match.Host} to start the match.");
+            OrderLobbyCards(finished);
+            int players = match.Standings.Count;
+            if (finished)
+            {
+                _lobbyTitle.text = match.MatchWinner == match.MyName ? "You win the match!" : $"{match.MatchWinner} wins the match!";
+                string line = ResultsLine(match);
+                _lobbySub.text = match.IAmHost ? line : Join(line, $"waiting for {match.Host} to start a new match");
+            }
+            else
+            {
+                _lobbyTitle.text = "Lobby";
+                _lobbySub.text = match.IAmHost ? "Share the code, then start when everyone's in." : $"Waiting for {match.Host} to start the match.";
+            }
+            _lobbySub.style.display = _lobbySub.text.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             _lobbyCode.text = match.LobbyCode;
+            _lobbyCopied.text = _copiedText;
             _lobbyCopied.style.display = Time.time < _copiedUntil ? DisplayStyle.Flex : DisplayStyle.None;
-            _lobbyPlayersSub.text = settings != null ? $"first to {settings.PointsToWin}" : "";
+
+            // The results show the final standings instead of the players (who's still here is marked there).
+            _lobbyStandings.style.display = finished ? DisplayStyle.Flex : DisplayStyle.None;
+            if (finished)
+                ShowStandings();
+            _lobbyPlayersCard.style.display = finished ? DisplayStyle.None : DisplayStyle.Flex;
+            _lobbyPlayersTitle.text = $"PLAYERS  ·  {players}";
+            _lobbyAlone.style.display = !finished && players < 2 ? DisplayStyle.Flex : DisplayStyle.None;
             ShowPlayers(_lobbyPlayers, ref _shownLobbyPlayers, duringMatch: false);
 
             _lobbySettings.style.display = match.IAmHost ? DisplayStyle.Flex : DisplayStyle.None;
+            _lobbySettingsView.style.display = !match.IAmHost && settings != null ? DisplayStyle.Flex : DisplayStyle.None;
             foreach (Action refresh in _settingRefreshers)
                 refresh();
-            _lobbySummary.style.display = !match.IAmHost && settings != null ? DisplayStyle.Flex : DisplayStyle.None;
-            if (!match.IAmHost && settings != null)
-                _lobbySummary.text = SettingsSummary(settings);
             _lobbyStart.style.display = match.IAmHost ? DisplayStyle.Flex : DisplayStyle.None;
-            _lobbyStart.text = finished ? "Play again" : "Start match";
+            _lobbyStart.text = finished ? "Play again" : players < 2 ? "Start match" : $"Start match  ·  {players} players";
             ShowFeedback(_lobbyFeedback, match.Feedback);
+            _lobbyTip.text = finished ? "Practice on the board until the next match." : "Practice on the board while you wait.";
             ShowHistory(finished);
         }
 
-        private static string SettingsSummary(MatchSettings s) =>
-            $"First to {s.PointsToWin}. {s.FirstTimerSeconds} s timer after the first solution (+{s.ExtensionSeconds} s for a better one). "
-            + (s.RoundLimitSeconds > 0 ? $"{s.RoundLimitSeconds / 60} min to find a first solution. " : "")
-            + (s.MinMoves == s.MaxMoves ? $"{s.MinMoves}-move boards." : $"Boards of {s.MinMoves} to {s.MaxMoves} moves.")
-            + (s.ShowBestSolution ? " The best solution is shown." : "");
+        // The waiting room leads with the code and the players (Start under them); the results with the standings, Play
+        // again and the boards, the code moving down.
+        private void OrderLobbyCards(bool finished)
+        {
+            if (_resultsOrder == finished)
+                return;
+            _resultsOrder = finished;
+            VisualElement screen = _screens[Screen.Lobby];
+            VisualElement[] order = finished
+                ? new[] { _lobbyTitle, _lobbySub, _lobbyStandings, _lobbyStart, _lobbyHistory, _lobbySettings, _lobbySettingsView,
+                    _lobbyCodeCard, _lobbyPlayersCard, _lobbyFeedback, _lobbyTip, _lobbyLeave }
+                : new[] { _lobbyTitle, _lobbySub, _lobbyStandings, _lobbyCodeCard, _lobbyPlayersCard, _lobbyStart, _lobbyHistory,
+                    _lobbySettings, _lobbySettingsView, _lobbyFeedback, _lobbyTip, _lobbyLeave };
+            foreach (VisualElement element in order)
+                screen.Add(element); // re-adding moves it to the end
+        }
 
-        // The finished match's boards: step through them and replay anyone's best, or the shortest, on its board.
+        // "5 to 2 · 7 boards": the top scores and how many boards the match took.
+        private static string ResultsLine(MatchState match)
+        {
+            var scores = new List<string>();
+            foreach (FinalPlace place in match.FinalStandings)
+            {
+                if (scores.Count == 3)
+                    break;
+                scores.Add(place.Score.ToString());
+            }
+            int boards = match.History.Count;
+            return Join(scores.Count > 1 ? string.Join(" to ", scores) : null, boards == 0 ? null : boards == 1 ? "1 board" : $"{boards} boards");
+        }
+
+        // The finished match's final scores (players who left stay, marked), then anyone who joined since.
+        private void ShowStandings()
+        {
+            MatchState match = _game.Match;
+            var signature = new System.Text.StringBuilder();
+            foreach (FinalPlace place in match.FinalStandings)
+                signature.Append(place.Name).Append('/').Append(place.Score).Append('/').Append(place.Left).Append('|');
+            foreach (PlayerInfo p in match.Standings)
+                signature.Append(p.Name).Append(',');
+            if (signature.ToString() == _shownStandings)
+                return;
+            _shownStandings = signature.ToString();
+            _lobbyStandingsList.Clear();
+
+            var names = new List<string>();
+            foreach (FinalPlace place in match.FinalStandings)
+                names.Add(place.Name);
+            var newcomers = new List<string>();
+            foreach (PlayerInfo p in match.Standings)
+                if (!names.Contains(p.Name))
+                    newcomers.Add(p.Name);
+            var all = new List<string>(names);
+            all.AddRange(newcomers);
+
+            int rank = 0, position = 0, lastScore = -1;
+            foreach (FinalPlace place in match.FinalStandings)
+            {
+                position++;
+                if (place.Score != lastScore)
+                {
+                    rank = position;
+                    lastScore = place.Score;
+                }
+                VisualElement row = PlayerRowStart(place.Name, all, rank.ToString(), rank == 1);
+                if (place.Left)
+                    row.Add(Tag("left", "tag--left"));
+                var score = new Label(place.Score.ToString());
+                score.AddToClassList("player-score");
+                row.Add(score);
+                _lobbyStandingsList.Add(row);
+            }
+            foreach (string name in newcomers)
+            {
+                VisualElement row = PlayerRowStart(name, all, "", false);
+                row.Add(Tag("new", "tag--host"));
+                _lobbyStandingsList.Add(row);
+            }
+        }
+
+        // A player row's start: an optional rank, the avatar (its colour from the name's place among `names`, so it stays
+        // put as the order changes) and the name.
+        private VisualElement PlayerRowStart(string name, List<string> names, string rank, bool first)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("player-row");
+            row.EnableInClassList("is-me", name == _game.Match.MyName);
+            if (rank != null)
+            {
+                var r = new Label(rank);
+                r.AddToClassList("rank");
+                r.EnableInClassList("rank--first", first);
+                row.Add(r);
+            }
+            var sorted = new List<string>(names);
+            sorted.Sort(StringComparer.Ordinal);
+            RobotColor color = AvatarColors[Math.Max(0, sorted.IndexOf(name)) % AvatarColors.Length];
+            var avatar = new Label(name.Length > 0 ? name.Substring(0, 1).ToUpperInvariant() : "?");
+            avatar.AddToClassList("player-avatar");
+            avatar.style.backgroundColor = Theme.RobotColor(color);
+            if (color == RobotColor.Yellow)
+                avatar.style.color = (Color)new Color32(0x1b, 0x1d, 0x2a, 0xff);
+            row.Add(avatar);
+            var label = new Label(name == _game.Match.MyName ? $"{name} (you)" : name);
+            label.AddToClassList("player-name");
+            row.Add(label);
+            return row;
+        }
+
+        // The finished match's boards, one row each (who won it, the shortest); picking one opens it: its board on screen and
+        // everyone's best plus the shortest to replay.
         private void ShowHistory(bool finished)
         {
             IReadOnlyList<HistoryRound> history = _game.Match.History;
@@ -827,34 +1033,68 @@ namespace Ricochet.Client.App
             if (!show)
             {
                 _historyIndex = -1;
+                _shownHistory = null;
                 return;
             }
-            if (_historyIndex < 0 || _historyIndex >= history.Count)
-                _historyIndex = history.Count - 1; // start on the last board
-            HistoryRound round = history[_historyIndex];
-            _historyBoard.text = $"Board {round.MatchRound} of {history.Count}";
-            _historyPrev.SetEnabled(_historyIndex > 0);
-            _historyNext.SetEnabled(_historyIndex < history.Count - 1);
-            _historyWinner.text = round.WinnerName == null ? "Nobody solved it"
-                : round.WinnerName == _game.Match.MyName ? "You won this board" : $"{round.WinnerName} won this board";
-
+            if (_historyIndex >= history.Count)
+                _historyIndex = -1;
             string signature = _historyIndex + "/" + history.Count;
             if (signature == _shownHistory)
                 return;
             _shownHistory = signature;
-            _historySolutions.Clear();
-            foreach (HistorySolution solution in round.Solutions)
+            _historyList.Clear();
+            for (int i = 0; i < history.Count; i++)
             {
-                string who = solution.Name == _game.Match.MyName ? "You" : solution.Name;
-                string won = solution.Name == round.WinnerName ? "  (won)" : "";
-                AddSolutionButton(round, $"{who}  ·  {solution.Moves.Count} moves{won}", new ReplaySegment(who, solution.Moves, 0.6f));
+                HistoryRound round = history[i];
+                int index = i;
+                var row = new Button();
+                row.AddToClassList("btn");
+                row.AddToClassList("history-row");
+                row.EnableInClassList("is-selected", i == _historyIndex);
+                AddShadow(row);
+                var text = new Label(HistoryLine(round));
+                text.AddToClassList("history-row-text");
+                text.pickingMode = PickingMode.Ignore;
+                var meta = new Label(round.Shortest != null ? $"shortest {round.Shortest.Count}" : "");
+                meta.AddToClassList("history-row-meta");
+                meta.pickingMode = PickingMode.Ignore;
+                row.Add(text);
+                row.Add(meta);
+                row.clicked += () =>
+                {
+                    SelectHistory(index);
+                    row.Blur();
+                };
+                _historyList.Add(row);
+                if (i != _historyIndex)
+                    continue;
+                var detail = new VisualElement();
+                detail.AddToClassList("history-detail");
+                foreach (HistorySolution solution in round.Solutions)
+                {
+                    string who = solution.Name == _game.Match.MyName ? "You" : solution.Name;
+                    string won = solution.Name == round.WinnerName ? "  (won)" : "";
+                    AddSolutionButton(detail, round, $"{who}  ·  {solution.Moves.Count} moves{won}", new ReplaySegment(who, solution.Moves, 0.6f));
+                }
+                if (round.Shortest != null)
+                    AddSolutionButton(detail, round, $"Shortest possible  ·  {round.Shortest.Count} moves",
+                        new ReplaySegment("Shortest possible", round.Shortest, 0.6f, isShortest: true));
+                _historyList.Add(detail);
             }
-            if (round.Shortest != null)
-                AddSolutionButton(round, $"Shortest possible  ·  {round.Shortest.Count} moves",
-                    new ReplaySegment("Shortest possible", round.Shortest, 0.6f, isShortest: true));
         }
 
-        private void AddSolutionButton(HistoryRound round, string label, ReplaySegment segment)
+        private string HistoryLine(HistoryRound round)
+        {
+            if (round.WinnerName == null)
+                return $"Board {round.MatchRound}  ·  nobody";
+            string who = round.WinnerName == _game.Match.MyName ? "you" : round.WinnerName;
+            foreach (HistorySolution solution in round.Solutions)
+                if (solution.Name == round.WinnerName)
+                    return $"Board {round.MatchRound}  ·  {who}, {solution.Moves.Count}";
+            return $"Board {round.MatchRound}  ·  {who}";
+        }
+
+        private void AddSolutionButton(VisualElement parent, HistoryRound round, string label, ReplaySegment segment)
         {
             var button = new Button { text = label };
             button.AddToClassList("btn");
@@ -869,14 +1109,20 @@ namespace Ricochet.Client.App
                 Scratchpad.ShowSolution(segment);
                 button.Blur();
             };
-            _historySolutions.Add(button);
+            parent.Add(button);
         }
 
+        // Opens a board of the history (picking the open one again closes it).
         private void SelectHistory(int index)
         {
             IReadOnlyList<HistoryRound> history = _game.Match.History;
             if (index < 0 || index >= history.Count)
                 return;
+            if (index == _historyIndex)
+            {
+                _historyIndex = -1;
+                return;
+            }
             _historyIndex = index;
             Scratchpad.ShowHistoryBoard(history[index].Board);
         }
@@ -890,60 +1136,89 @@ namespace Ricochet.Client.App
             MatchStage stage = match.Stage;
             int next = match.MatchRound + 1;
             _matchTitle.text = stage == MatchStage.Countdown || stage == MatchStage.Dealing ? $"Round {next}" : $"Round {match.MatchRound}";
-            _matchSub.text = match.Settings != null ? $"Lobby {match.LobbyCode}  ·  first to {match.Settings.PointsToWin}" : $"Lobby {match.LobbyCode}";
+            _matchSub.text = match.Settings != null ? $"First to {match.Settings.PointsToWin}" : "";
 
-            string caption, value, sub;
-            bool bumped = false;
+            // The round card: its clock (before the first solution: the time to find one; after: the round's countdown and
+            // the best so far), then the round's result while the replays play.
+            string caption, value = "", unit = "", detail = "", sub = "";
+            bool bumped = false, result = false;
+            float replayed = -1f;
+            int firstTimer = match.Settings != null ? match.Settings.FirstTimerSeconds : 60;
             switch (stage)
             {
                 case MatchStage.Dealing:
-                    caption = "GET READY"; value = ""; sub = "Dealing the first board...";
+                    caption = "GET READY";
+                    sub = "Dealing the first board...";
                     break;
                 case MatchStage.Countdown:
                     float left = match.CountdownLeft(now);
-                    caption = "NEXT BOARD"; value = left > 0f ? Mathf.CeilToInt(left).ToString() : ""; sub = left > 0f ? $"Round {next} starts soon." : "Dealing...";
+                    caption = "NEXT BOARD";
+                    value = left > 0f ? Mathf.CeilToInt(left).ToString() : "";
+                    sub = left > 0f ? $"Round {next} starts soon." : "Dealing...";
                     break;
                 case MatchStage.RoundOver:
-                    caption = "ROUND OVER"; value = ""; sub = ReplayText();
+                    result = match.ResultTitle != null;
+                    caption = (match.ResultTitle ?? "Round over").ToUpperInvariant();
+                    detail = match.ResultDetail ?? "";
+                    sub = ReplayText();
+                    ReplaySegment replay = Session.CurrentReplay;
+                    if (replay != null && replay.Moves.Count > 0)
+                        replayed = (float)Session.ReplayStep / replay.Moves.Count;
                     break;
                 default:
-                    if (match.HasTimeLimit)
+                    if (match.TimerRunning)
                     {
-                        caption = "TIME LIMIT"; value = Clock(match.TimeLimitLeft(now)); sub = "Find a first solution in time. The timer starts on the first one.";
-                    }
-                    else if (!match.TimerRunning)
-                    {
-                        caption = "NO SOLUTION YET"; value = ""; sub = "The timer starts on the first solution.";
+                        caption = "ROUND ENDS IN";
+                        value = Clock(match.TimeLeft(now));
+                        bumped = match.TimeJustAdded(now);
+                        unit = bumped ? "+ more time" : "";
                     }
                     else
                     {
-                        caption = "TIME LEFT"; value = Clock(match.TimeLeft(now));
-                        bumped = match.TimeJustAdded(now);
-                        sub = bumped ? "A better solution: more time!" : "Shorter solutions add time.";
+                        caption = "NO SOLUTION YET";
+                        if (match.HasTimeLimit)
+                        {
+                            value = Clock(match.TimeLimitLeft(now));
+                            unit = "left to find one";
+                        }
+                        sub = $"The first solution starts a {firstTimer} s countdown for everyone.";
                     }
                     break;
             }
+            _roundCard.EnableInClassList("card--gold", result);
             _timerCaption.text = caption;
             _timerValue.text = value;
             _timerValue.EnableInClassList("is-bumped", bumped);
+            _timerUnit.text = unit;
+            _timerUnit.EnableInClassList("is-bumped", bumped);
+            _timerValue.parent.style.display = value.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            _roundDetail.text = detail;
+            _roundDetail.style.display = detail.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             _timerSub.text = sub;
+            _timerSub.style.display = sub.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            _roundProgress.style.display = replayed >= 0f ? DisplayStyle.Flex : DisplayStyle.None;
+            if (replayed >= 0f)
+                _roundProgressFill.style.width = Length.Percent(100f * Mathf.Clamp01(replayed));
 
-            bool solving = stage == MatchStage.Solving;
-            _matchBest.text = match.BestPlayer == null || !solving ? ""
-                : match.BestPlayer == match.MyName ? $"Best so far: you, {match.BestMoves} moves."
-                : $"Best so far: {match.BestPlayer}, {match.BestMoves} moves. Beat it!";
-            _matchBest.style.display = _matchBest.text.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
-            _matchWatch.style.display = match.CanWatchBest ? DisplayStyle.Flex : DisplayStyle.None;
-            if (match.CanWatchBest)
+            bool best = stage == MatchStage.Solving && match.TimerRunning && match.BestPlayer != null;
+            _bestBox.style.display = best ? DisplayStyle.Flex : DisplayStyle.None;
+            if (best)
             {
-                _matchWatch.text = $"Watch {match.BestPlayer}'s {match.BestMoves}";
-                _matchWatch.SetEnabled(!Session.IsReplaying);
+                bool mine = match.BestPlayer == match.MyName;
+                _matchBest.text = $"{(mine ? "You" : match.BestPlayer)}  ·  {match.BestMoves} moves";
+                _matchBestSub.text = mine ? "Best so far. Find a shorter one to stay ahead." : "Best so far. Beat it to take the round.";
             }
+            _matchWatch.style.display = match.CanWatchBest ? DisplayStyle.Flex : DisplayStyle.None;
+            _matchWatch.SetEnabled(!Session.IsReplaying);
 
             ShowPlayers(_matchPlayers, ref _shownMatchPlayers, duringMatch: true);
             _matchDone.style.display = match.DoneAction != DoneAction.None ? DisplayStyle.Flex : DisplayStyle.None;
             _matchDone.text = DoneLabel(match);
             ShowFeedback(_matchFeedback, match.Feedback);
+            // How rounds work, on the match's first board only.
+            _matchTip.text = stage == MatchStage.Solving && match.MatchRound <= 1
+                ? "Reaching the target sends your solution. Only a shorter one beats the best." : "";
+            _matchTip.style.display = _matchTip.text.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         private string ReplayText()
@@ -952,7 +1227,7 @@ namespace Ricochet.Client.App
             if (replay == null)
                 return "The next board is on its way.";
             int step = Session.ReplayStep;
-            return step == 0 ? $"Replaying {replay.Label}..." : $"Replaying {replay.Label}: move {step} of {replay.Moves.Count}";
+            return step == 0 ? $"Replaying {replay.Label}..." : $"Replaying {replay.Label}  ·  move {step} of {replay.Moves.Count}";
         }
 
         private static string DoneLabel(MatchState match)
@@ -979,42 +1254,32 @@ namespace Ricochet.Client.App
             label.style.display = string.IsNullOrEmpty(feedback) ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
-        // The players, in standings order, rebuilt only when something about them changes.
+        // The players, in standings order, rebuilt only when something about them changes. During a match each shows their
+        // points out of the target (with a bar of pips when the target is small); the waiting room shows no scores.
         private void ShowPlayers(VisualElement list, ref string shown, bool duringMatch)
         {
             MatchState match = _game.Match;
+            int target = match.Settings != null ? match.Settings.PointsToWin : 0;
             var signature = new System.Text.StringBuilder(duringMatch ? "m" : "l");
             foreach (PlayerInfo p in match.Standings)
                 signature.Append('|').Append(p.Name).Append('/').Append(p.Score).Append('/').Append(p.Done).Append('/')
                     .Append(p.Leading).Append('/').Append(p.Connected);
-            signature.Append('|').Append(match.Host).Append('|').Append(match.BestMoves);
+            signature.Append('|').Append(match.Host).Append('|').Append(match.BestMoves).Append('|').Append(target);
             if (signature.ToString() == shown)
                 return;
             shown = signature.ToString();
             list.Clear();
-            var order = new List<string>(); // avatar colours by name, so they stay put as the standings change
+            var names = new List<string>();
             foreach (PlayerInfo p in match.Standings)
-                order.Add(p.Name);
-            order.Sort(StringComparer.Ordinal);
+                names.Add(p.Name);
             foreach (PlayerInfo p in match.Standings)
-                list.Add(PlayerRow(p, AvatarColors[order.IndexOf(p.Name) % AvatarColors.Length], duringMatch));
+                list.Add(PlayerRow(p, names, duringMatch, target));
         }
 
-        private VisualElement PlayerRow(PlayerInfo p, RobotColor color, bool duringMatch)
+        private VisualElement PlayerRow(PlayerInfo p, List<string> names, bool duringMatch, int target)
         {
             MatchState match = _game.Match;
-            var row = new VisualElement();
-            row.AddToClassList("player-row");
-            row.EnableInClassList("is-me", p.Name == match.MyName);
-            var avatar = new Label(p.Name.Length > 0 ? p.Name.Substring(0, 1).ToUpperInvariant() : "?");
-            avatar.AddToClassList("player-avatar");
-            avatar.style.backgroundColor = Theme.RobotColor(color);
-            if (color == RobotColor.Yellow)
-                avatar.style.color = (Color)new Color32(0x1b, 0x1d, 0x2a, 0xff);
-            row.Add(avatar);
-            var name = new Label(p.Name == match.MyName ? $"{p.Name} (you)" : p.Name);
-            name.AddToClassList("player-name");
-            row.Add(name);
+            VisualElement row = PlayerRowStart(p.Name, names, null, false);
             if (p.Name == match.Host)
                 row.Add(Tag("host", "tag--host"));
             if (!p.Connected)
@@ -1023,9 +1288,37 @@ namespace Ricochet.Client.App
                 row.Add(Tag(match.BestMoves > 0 ? $"leading · {match.BestMoves}" : "leading", "tag--lead"));
             else if (duringMatch && p.Done)
                 row.Add(Tag("done", "tag--done"));
+            if (!duringMatch)
+                return row;
+
+            var box = new VisualElement();
+            box.AddToClassList("player-score-box");
+            var line = new VisualElement();
+            line.AddToClassList("row");
             var score = new Label(p.Score.ToString());
             score.AddToClassList("player-score");
-            row.Add(score);
+            line.Add(score);
+            if (target > 0)
+            {
+                var of = new Label($"/ {target}");
+                of.AddToClassList("player-score-of");
+                line.Add(of);
+            }
+            box.Add(line);
+            if (target > 0 && target <= 10)
+            {
+                var pips = new VisualElement();
+                pips.AddToClassList("pips");
+                for (int i = 0; i < target; i++)
+                {
+                    var pip = new VisualElement();
+                    pip.AddToClassList("pip");
+                    pip.EnableInClassList("is-on", i < p.Score);
+                    pips.Add(pip);
+                }
+                box.Add(pips);
+            }
+            row.Add(box);
             return row;
         }
 

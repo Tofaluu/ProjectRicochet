@@ -294,16 +294,22 @@ namespace Ricochet.Client.App
                     string so = daily.HasSolved ? $"best {daily.BestMoves}/{daily.ShortestLength}" : _dailyTime.text;
                     return Join($"Daily #{daily.Number}", so, BoardCounter(named: false));
                 case Screen.Match:
-                    string value = _timerValue.text, caption = _timerCaption.text;
-                    if (caption == "NEXT BOARD")
-                        return Join(_matchTitle.text, value.Length == 0 ? "dealing" : $"starts in {value}");
+                    MatchState match = _game.Match;
+                    float now = Time.time;
                     string counter = BoardCounter(named: true);
-                    if (caption == "ROUND OVER")
-                        return Join(_matchTitle.text, counter ?? "round over");
-                    string when = value.Length == 0 ? caption.ToLowerInvariant()
-                        : caption == "TIME LEFT" ? $"{value} left"
-                        : caption == "TIME LIMIT" ? $"{value} to find one"
-                        : $"{caption.ToLowerInvariant()} {value}";
+                    switch (match.Stage)
+                    {
+                        case MatchStage.Countdown:
+                            float left = match.CountdownLeft(now);
+                            return Join(_matchTitle.text, left > 0f ? $"starts in {Mathf.CeilToInt(left)}" : "dealing");
+                        case MatchStage.Dealing:
+                            return Join(_matchTitle.text, "dealing");
+                        case MatchStage.RoundOver:
+                            return Join(_matchTitle.text, counter ?? "round over");
+                    }
+                    string when = match.TimerRunning ? $"{Clock(match.TimeLeft(now))} left"
+                        : match.HasTimeLimit ? $"{Clock(match.TimeLimitLeft(now))} to find one"
+                        : "no solution yet";
                     return Join(when, counter);
                 case Screen.Lobby:
                     return Join($"Lobby {_game.Match.LobbyCode}", BoardCounter(named: true));

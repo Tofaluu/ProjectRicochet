@@ -49,6 +49,20 @@ namespace Ricochet.Client.Game
     /// show). Plain C#: views (<c>App/AppUI</c>) read it and decide how it looks. Times are passed in
     /// (seconds on any steady clock), so this has no Unity dependency and is unit-tested.
     /// </summary>
+    /// <summary>A place in a finished match's final standings (kept after the player leaves).</summary>
+    public sealed class FinalPlace
+    {
+        public string Name { get; }
+        public int Score { get; }
+        public bool Left { get; set; }
+
+        public FinalPlace(string name, int score)
+        {
+            Name = name;
+            Score = score;
+        }
+    }
+
     public sealed class MatchState
     {
         private float _countdownEnd = -1f;
@@ -106,8 +120,19 @@ namespace Ricochet.Client.Game
         /// <summary>The current (or just finished) match's boards with everyone's solutions, in order.</summary>
         public IReadOnlyList<HistoryRound> History => _history;
 
-        /// <summary>The latest message for the player (results, rejections, what to do next).</summary>
+        /// <summary>The latest message for the player (rejections, the lead changing, connection trouble).</summary>
         public string Feedback { get; private set; } = "";
+
+        /// <summary>The finished round's headline ("Bob wins the round") and its detail ("5 moves, the shortest possible").</summary>
+        public string ResultTitle { get; private set; }
+        public string ResultDetail { get; private set; }
+
+        /// <summary>
+        /// The finished match's final scores, highest first, as they stood when it ended: players who leave afterwards stay
+        /// (marked <see cref="FinalPlace.Left"/>). Empty outside the results.
+        /// </summary>
+        public IReadOnlyList<FinalPlace> FinalStandings => _finalStandings;
+        private readonly List<FinalPlace> _finalStandings = new List<FinalPlace>();
 
         public MatchStage Stage =>
             !InLobby ? MatchStage.NotInLobby
@@ -163,6 +188,7 @@ namespace Ricochet.Client.Game
 
             _playerNames = new HashSet<string>(state.Players.Select(p => p.Name));
             LobbyChange change = ApplyPhase(state, first, previous);
+            UpdateFinalStandings(first || previous != MatchPhase.Finished);
 
             PlayerInfo me = state.Players.FirstOrDefault(p => p.Name == myName);
             IAmDone = me != null && me.Done;
@@ -176,17 +202,14 @@ namespace Ricochet.Client.Game
             if (Phase != MatchPhase.Playing && (first || previous == MatchPhase.Playing))
             {
                 ClearRound();
-                // The results text says who won.
-                Feedback = Phase == MatchPhase.Finished
-                    ? "Practice on your own board until the next match."
-                    : "Practice on your own board while you wait.";
+                Feedback = ""; // the results (or the waiting room) say what's next
                 return LobbyChange.BetweenMatches;
             }
             if (Phase == MatchPhase.Playing && !first && previous != MatchPhase.Playing)
             {
                 ClearRound();
                 _history.Clear();
-                Feedback = "Match started! Get ready...";
+                Feedback = "";
                 return LobbyChange.MatchStarted;
             }
             // Normally RoundEnded said so already; this is for a board caught up on after the round ended.
@@ -195,7 +218,8 @@ namespace Ricochet.Client.Game
                 RoundOver = true;
                 _timerEnd = -1f;
                 BestPlayer = null;
-                Feedback = "This round is over. The next board is on its way...";
+                ResultTitle = "Round over";
+                ResultDetail = "The next board is on its way.";
                 return LobbyChange.RoundOver;
             }
             return LobbyChange.None;
@@ -207,7 +231,7 @@ namespace Ricochet.Client.Game
         {
             ClearRound();
             Round = round;
-            Feedback = "Find the shortest solution: reaching the target sends it!";
+            Feedback = "";
         }
 
         /// <returns>False if it's for another round.</returns>
@@ -275,41 +299,44 @@ namespace Ricochet.Client.Game
             BestSolution = null;
             _timerEnd = -1f;
             _limitEnd = -1f;
-            string skipped = result.OutOfTime ? "Time's up, nobody solved it." : "Board skipped.";
+            Feedback = ""; // the round's card tells the result
 
             string winner = result.WinnerName;
             var replays = new List<ReplaySegment>();
             if (winnerMoves.Length > 0)
             {
-                bool wasShortest = shortest != null && winnerMoves.Length <= shortest.Length;
+                int moves = winnerMoves.Length;
+                bool wasShortest = shortest != null && moves <= shortest.Length;
                 // The best solver only scores if they still have a seat.
                 if (!_playerNames.Contains(winner))
-                    Feedback = $"{winner} had the best solution ({winnerMoves.Length} moves) but left, so no point this round.";
-                else if (wasShortest)
-                    Feedback = $"{winner} found the shortest possible solution! ({winnerMoves.Length} moves)";
-                else if (shortest != null)
-                    Feedback = $"{winner} wins with {winnerMoves.Length} moves. Shortest possible: {shortest.Length}.";
+                {
+                    ResultTitle = "No point this round";
+                    ResultDetail = $"{winner} had the best solution ({moves} moves) but left.";
+                }
                 else
-                    Feedback = $"{winner} wins the round with {winnerMoves.Length} moves!";
+                {
+                    ResultTitle = winner == MyName ? "You win the round" : $"{winner} wins the round";
+                    ResultDetail = wasShortest ? $"{moves} moves, the shortest possible"
+                        : shortest != null ? $"{moves} moves. The shortest was {shortest.Length}."
+                        : $"{moves} moves";
+                }
 
                 string whose = winner == MyName ? "Your solution" : $"{winner}'s solution";
                 replays.Add(new ReplaySegment(whose, winnerMoves, (float)result.ReplayStepSeconds));
                 if (shortest != null && !wasShortest)
                     replays.Add(new ReplaySegment("Shortest possible", shortest, (float)result.ShortestReplayStepSeconds, isShortest: true));
             }
-            else if (shortest != null)
-            {
-                Feedback = $"{skipped} Here's how it could be done in {shortest.Length} moves:";
-                replays.Add(new ReplaySegment("Shortest possible", shortest, (float)result.ShortestReplayStepSeconds, isShortest: true));
-            }
             else
             {
-                Feedback = $"{skipped} Next board soon...";
+                ResultTitle = result.OutOfTime ? "Time's up" : "Board skipped";
+                ResultDetail = shortest != null ? $"Nobody solved it. It could be done in {shortest.Length} moves." : "Nobody solved it.";
+                if (shortest != null)
+                    replays.Add(new ReplaySegment("Shortest possible", shortest, (float)result.ShortestReplayStepSeconds, isShortest: true));
             }
 
             string matchWinner = result.MatchWinnerName;
             if (matchWinner != null)
-                Feedback += matchWinner == MyName ? "\nThat's the match — you win!" : $"\nThat's the match — {matchWinner} wins!";
+                ResultTitle = matchWinner == MyName ? "You win the match!" : $"{matchWinner} wins the match!";
             return replays;
         }
 
@@ -382,10 +409,29 @@ namespace Ricochet.Client.Game
 
         public void OnStartRequested() => Feedback = "Starting...";
 
+        // The results' standings: taken when the match ends (or on joining its results), then only marks who has left.
+        private void UpdateFinalStandings(bool fresh)
+        {
+            if (Phase != MatchPhase.Finished)
+            {
+                _finalStandings.Clear();
+                return;
+            }
+            if (fresh)
+            {
+                _finalStandings.Clear();
+                _finalStandings.AddRange(Standings.Select(p => new FinalPlace(p.Name, p.Score)));
+            }
+            foreach (FinalPlace place in _finalStandings)
+                place.Left = !_playerNames.Contains(place.Name);
+        }
+
         private void ClearRound()
         {
             Round = 0;
             RoundOver = false;
+            ResultTitle = null;
+            ResultDetail = null;
             _countdownEnd = -1f;
             _timerEnd = -1f;
             _timerExtendedUntil = -1f;

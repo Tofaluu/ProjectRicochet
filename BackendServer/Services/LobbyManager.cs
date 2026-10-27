@@ -16,9 +16,11 @@ namespace BackendServer.Services
 
         /// <summary>
         /// Each strictly better solution after that tops the timer up to at least this much,
-        /// so nobody can be sniped in the last seconds. It never shortens the timer.
+        /// so nobody can be sniped in the last seconds. It never shortens the timer. The same as
+        /// <see cref="FirstTimerSeconds"/> by default (since 2026-10-27): the host sees one countdown that every
+        /// shorter solution starts again, and the game's settings keep the two equal.
         /// </summary>
-        public int ExtensionSeconds { get; set; } = 45;
+        public int ExtensionSeconds { get; set; } = 60;
 
         /// <summary>
         /// Time to find a first solution before the board ends unsolved (no point); 0 = no limit. The
