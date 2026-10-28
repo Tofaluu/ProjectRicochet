@@ -587,8 +587,9 @@
 .strip-dow { font-size: 10px; letter-spacing: 1px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
 .strip-num { font-size: 16px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
 .app .cal-cell--tried { background-color: rgba(0, 0, 0, 0); border-color: var(--line); color: var(--text); }
-.app .cal-cell--solved { background-color: var(--action); color: var(--on-action); }
-.app .cal-cell--perfect { background-color: var(--daily); color: var(--on-daily); }
+/* Like Wordle: green = exactly right (perfect), yellow = close (solved, not the shortest). */
+.app .cal-cell--solved { background-color: var(--daily); color: var(--on-daily); }
+.app .cal-cell--perfect { background-color: var(--action); color: var(--on-action); }
 .app .cal-cell--today { background-color: rgba(0, 0, 0, 0); border-color: var(--daily-border); color: var(--daily-text); }
 .app .cal-cell--off { opacity: 0.25; }
 .app .cal-cell--off:hover { border-color: rgba(0, 0, 0, 0); }
@@ -604,8 +605,8 @@
 /* The strip's labels take the day's text colour. */
 .app .cal-cell Label { color: var(--muted); }
 .app .cal-cell--tried Label { color: var(--text); }
-.app .cal-cell--solved Label { color: var(--on-action); }
-.app .cal-cell--perfect Label { color: var(--on-daily); }
+.app .cal-cell--solved Label { color: var(--on-daily); }
+.app .cal-cell--perfect Label { color: var(--on-action); }
 .app .cal-cell--today Label { color: var(--daily-text); }
 .legend-swatch.cal-cell--none { background-color: var(--panel-2); }
 /* Stat tiles: one height in a row, and room for "best possible" on one line beside the panel's scrollbar. */
