@@ -26,6 +26,24 @@ mergeInto(LibraryManager.library, {
     return v ? v.height : -1;
   },
 
+  // How far the page would scroll for the wheel events since the last call, in CSS pixels (what the browser itself would
+  // scroll). Unity's wheel events give one step per event, and a trackpad sends dozens of tiny ones per swipe.
+  Ricochet_TakeWheel: function () {
+    if (!window.ricochetWheel) {
+      window.ricochetWheel = { dy: 0, at: 0 };
+      window.addEventListener('wheel', function (e) {
+        var w = window.ricochetWheel, now = performance.now();
+        if (now - w.at > 250) w.dy = 0; // an old gesture nobody took (scrolled over the board)
+        w.at = now;
+        w.dy += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * window.innerHeight : e.deltaY;
+      }, { capture: true, passive: true });
+      return 0;
+    }
+    var dy = window.ricochetWheel.dy;
+    window.ricochetWheel.dy = 0;
+    return dy;
+  },
+
   // The palette's colours for the loading page (index.html reads them on the next visit, before the game starts).
   Ricochet_SaveLoadingColors: function (json) {
     try { localStorage.setItem('ricochet.loadingColors', UTF8ToString(json)); } catch (e) { }

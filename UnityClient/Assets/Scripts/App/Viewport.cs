@@ -22,7 +22,28 @@ namespace Ricochet.Client.App
 
         [DllImport("__Internal")]
         private static extern float Ricochet_VisibleHeight();
+
+        [DllImport("__Internal")]
+        private static extern float Ricochet_TakeWheel();
 #endif
+
+        /// <summary>Starts listening for the browser's wheel events (call once at startup; see <see cref="TakeWheel"/>).</summary>
+        public static void ListenForWheel() => TakeWheel(out _);
+
+        /// <summary>
+        /// The browser's scroll distance for the wheel events since the last call, in CSS pixels (false outside browsers):
+        /// a trackpad's many small events add up to what it moved, a wheel notch is ~100 px, as on a web page.
+        /// </summary>
+        public static bool TakeWheel(out float cssY)
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            cssY = Ricochet_TakeWheel();
+            return true;
+#else
+            cssY = 0f;
+            return false;
+#endif
+        }
 
         /// <summary>
         /// The part of the screen not covered by an on-screen keyboard, in CSS pixels from the top (false where unknown:

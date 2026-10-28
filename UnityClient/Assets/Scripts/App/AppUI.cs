@@ -209,6 +209,7 @@ namespace Ricochet.Client.App
             // ScrollView's own wheel handling jumps a fixed step per event, which stutters on a trackpad).
             _side = _root.Q<ScrollView>("side");
             _side.RegisterCallback<WheelEvent>(OnSideWheel, TrickleDown.TrickleDown);
+            Viewport.ListenForWheel();
 
             _navHome = Click("nav-home", () => Choose(Screen.Home));
             _navDaily = Click("nav-daily", OpenDaily);
@@ -678,7 +679,10 @@ namespace Ricochet.Client.App
             float max = Mathf.Max(0f, _side.contentContainer.layout.height - _side.contentViewport.layout.height);
             if (!_scrollGliding)
                 _scrollTarget = _side.scrollOffset.y;
-            _scrollTarget = Mathf.Clamp(_scrollTarget + e.delta.y * WheelStep, 0f, max);
+            // Browsers: the distance the page itself would scroll (each event is one step otherwise, so a trackpad swipe's
+            // dozens of events went straight to the end).
+            float delta = Viewport.TakeWheel(out float css) ? css * Viewport.PixelRatio / PanelScale : e.delta.y * WheelStep;
+            _scrollTarget = Mathf.Clamp(_scrollTarget + delta, 0f, max);
             _scrollSetTo = _side.scrollOffset.y;
             _scrollGliding = true;
             e.StopPropagation(); // not the ScrollView's own step-per-event scrolling too
