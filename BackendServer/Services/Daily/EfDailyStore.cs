@@ -109,5 +109,61 @@ namespace BackendServer.Services
                 .Where(e => e.GuestId == guestId && e.BestMoves > 0 && e.Number >= from && e.Number <= to)
                 .Select(e => e.Number).OrderBy(n => n).ToListAsync();
         }
+
+        public async Task<IReadOnlyList<DailySummary>> GetSummariesAsync(int to)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            var rows = await db.Puzzles.Where(p => p.Number <= to).OrderBy(p => p.Number)
+                .Select(p => new { p.Number, p.Date, Length = p.Shortest.Length }).ToListAsync();
+            return rows.Select(r => new DailySummary(r.Number, r.Date, r.Length)).ToList();
+        }
+
+        public async Task<IReadOnlyList<DailyEntryRecord>> GetEntriesAsync(string guestId)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            return await db.Entries.AsNoTracking().Where(e => e.GuestId == guestId).ToListAsync();
+        }
+
+        public async Task<IReadOnlyList<DailyArchiveRecord>> GetArchiveAsync(string guestId)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            return await db.Archive.AsNoTracking().Where(e => e.GuestId == guestId).ToListAsync();
+        }
+
+        public async Task<DailyArchiveRecord?> GetArchiveEntryAsync(int number, string guestId)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            return await db.Archive.AsNoTracking().FirstOrDefaultAsync(e => e.Number == number && e.GuestId == guestId);
+        }
+
+        public async Task SaveArchiveEntryAsync(DailyArchiveRecord entry)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            DailyArchiveRecord? stored = await db.Archive.FindAsync(entry.Number, entry.GuestId);
+            if (stored == null)
+                db.Archive.Add(entry);
+            else
+                db.Entry(stored).CurrentValues.SetValues(entry);
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Two tabs saved at once: the other one's row stands.
+            }
+        }
+
+        public async Task<IReadOnlyList<DailySolve>> GetStreakSolvesAsync(int from, int to)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            IQueryable<string> going = db.Entries.Where(e => e.BestMoves > 0 && e.Number >= to - 1 && e.Number <= to)
+                .Select(e => e.GuestId);
+            var rows = await db.Entries
+                .Where(e => e.BestMoves > 0 && e.Number >= from && e.Number <= to && going.Contains(e.GuestId))
+                .Join(db.Players, e => e.GuestId, p => p.GuestId, (e, p) => new { e.GuestId, p.Name, e.Number })
+                .ToListAsync();
+            return rows.Select(r => new DailySolve(r.GuestId, r.Name, r.Number)).ToList();
+        }
     }
 }

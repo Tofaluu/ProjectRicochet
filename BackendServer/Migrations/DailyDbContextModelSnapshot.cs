@@ -22,6 +22,37 @@ namespace BackendServer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("BackendServer.Services.DailyArchiveRecord", b =>
+                {
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("GuestId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("BestMoves")
+                        .HasColumnType("integer");
+
+                    b.Property<byte[]>("BestSolution")
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTime>("OpenedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("SawSolutionUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("SolvedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Number", "GuestId");
+
+                    b.HasIndex("GuestId");
+
+                    b.ToTable("daily_archive", (string)null);
+                });
+
             modelBuilder.Entity("BackendServer.Services.DailyEntryRecord", b =>
                 {
                     b.Property<int>("Number")

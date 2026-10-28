@@ -55,7 +55,7 @@ namespace Ricochet.Client.App
         // The board isn't on screen: compact Home, or the rotate notice.
         // The daily screen hides the board until today's puzzle is on it (no flash of the practice board while it loads).
         private bool BoardHidden => _layout == Layout.Rotate || (_layout == Layout.Compact && Current == Screen.Home)
-            || (Current == Screen.Daily && !_daily.ShowingBoard);
+            || (Current == Screen.Daily && !_daily.ShowingBoard) || (Current == Screen.Archive && !_daily.ShowingPastBoard);
 
         private void InitLayout()
         {
@@ -170,7 +170,8 @@ namespace Ricochet.Client.App
         private void ShowBoardVisibility()
         {
             // The goal line and controls wait with the board on the daily screen.
-            _stage.style.visibility = Current == Screen.Daily && !_daily.ShowingBoard ? Visibility.Hidden : Visibility.Visible;
+            _stage.style.visibility = (Current == Screen.Daily && !_daily.ShowingBoard) || (Current == Screen.Archive && !_daily.ShowingPastBoard)
+                ? Visibility.Hidden : Visibility.Visible;
             Camera camera = Scratchpad.Camera;
             if (camera == null || BoardHidden == _boardCulled)
                 return;
@@ -222,7 +223,8 @@ namespace Ricochet.Client.App
 
         // ---- The compact sheet ----
 
-        private static bool SheetUpByDefault(Screen screen) => screen == Screen.Home || screen == Screen.Play || screen == Screen.Lobby;
+        private static bool SheetUpByDefault(Screen screen) =>
+            screen == Screen.Home || screen == Screen.Play || screen == Screen.Lobby || screen == Screen.Archive;
 
         // Each frame in the compact layout, after the screens have updated their labels: sizes the board so the sheet's
         // summary fits under it, and slides the sheet to where it's headed.
@@ -241,7 +243,7 @@ namespace Ricochet.Client.App
             }
             // Picking a history solution in the lobby plays it on the board: bring the board into view.
             bool replaying = Session.IsReplaying;
-            if (screen == Screen.Lobby && replaying && !_wasReplaying)
+            if ((screen == Screen.Lobby || screen == Screen.Archive) && replaying && !_wasReplaying)
                 _sheetTarget = 0f;
             _wasReplaying = replaying;
             if (home)
@@ -293,6 +295,9 @@ namespace Ricochet.Client.App
                         return "Daily puzzle";
                     string so = daily.HasSolved ? $"best {daily.BestMoves}/{daily.ShortestLength}" : _dailyTime.text;
                     return Join($"Daily #{daily.Number}", so, BoardCounter(named: false));
+                case Screen.Archive:
+                    PastPuzzle past = _daily.Archive.Past;
+                    return past == null ? "Past puzzles" : Join($"Daily #{past.Number} · {past.Date:MMM d}", BoardCounter(named: false));
                 case Screen.Match:
                     MatchState match = _game.Match;
                     float now = Time.time;

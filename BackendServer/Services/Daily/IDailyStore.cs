@@ -31,5 +31,25 @@ namespace BackendServer.Services
 
         /// <summary>The puzzle numbers in [<paramref name="from"/>, <paramref name="to"/>] the player has solved.</summary>
         Task<IReadOnlyList<int>> GetSolvedNumbersAsync(string guestId, int from, int to);
+
+        /// <summary>Every stored puzzle numbered up to <paramref name="to"/>, oldest first, without boards.</summary>
+        Task<IReadOnlyList<DailySummary>> GetSummariesAsync(int to);
+
+        /// <summary>The player's entries (days they opened), any number.</summary>
+        Task<IReadOnlyList<DailyEntryRecord>> GetEntriesAsync(string guestId);
+
+        /// <summary>The player's past-puzzle plays, any number.</summary>
+        Task<IReadOnlyList<DailyArchiveRecord>> GetArchiveAsync(string guestId);
+
+        Task<DailyArchiveRecord?> GetArchiveEntryAsync(int number, string guestId);
+
+        /// <summary>Adds or replaces the player's past-puzzle play for that number.</summary>
+        Task SaveArchiveEntryAsync(DailyArchiveRecord entry);
+
+        /// <summary>
+        /// Solved days in [<paramref name="from"/>, <paramref name="to"/>] of the players who solved
+        /// <paramref name="to"/> or the day before (only they can have a streak going), with their names.
+        /// </summary>
+        Task<IReadOnlyList<DailySolve>> GetStreakSolvesAsync(int from, int to);
     }
 }

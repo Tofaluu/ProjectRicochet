@@ -107,19 +107,7 @@ namespace BackendServer.Services
                 ?? throw new HubException("Open today's puzzle first.");
             DailyPuzzleRecord puzzle = await _store.GetPuzzleAsync(number)
                 ?? throw new HubException("Open today's puzzle first.");
-
-            Move[] moves;
-            try
-            {
-                moves = MoveCodec.Decode(moveData);
-            }
-            catch (FormatException)
-            {
-                throw new HubException("That isn't a valid solution.");
-            }
-            RoundSetup round = BoardCodec.Decode(puzzle.Board);
-            if (GameRules.ValidateSolution(round.Grid, round.Robots, round.Target, moves) != SolutionResult.Valid)
-                throw new HubException("That isn't a valid solution.");
+            Move[] moves = CheckSolution(puzzle, moveData);
 
             double seconds = (now - entry.OpenedUtc).TotalSeconds;
             bool improved = entry.BestMoves == 0 || moves.Length < entry.BestMoves;
@@ -165,6 +153,155 @@ namespace BackendServer.Services
                 MyRank = mine != null && mine.BestMoves > 0 ? await _store.GetRankAsync(number, mine.BestMoves, mine.BestSeconds) : 0,
                 Players = players,
             };
+        }
+
+        // ---- Past puzzles: played again after their day, never changing its leaderboard or a streak ----
+
+        /// <summary>Every puzzle so far (today's included, which the calendar shows but doesn't open) and the player's results.</summary>
+        public async Task<DailyCalendar> GetCalendarAsync(string guestId)
+        {
+            CheckGuestId(guestId);
+            int today = TodaysNumber;
+            IReadOnlyList<DailySummary> puzzles = await _store.GetSummariesAsync(today);
+            Dictionary<int, DailyEntryRecord> entries = (await _store.GetEntriesAsync(guestId)).ToDictionary(e => e.Number);
+            Dictionary<int, DailyArchiveRecord> later = (await _store.GetArchiveAsync(guestId)).ToDictionary(e => e.Number);
+            return new DailyCalendar
+            {
+                Today = today,
+                Days = puzzles.Select(p =>
+                {
+                    entries.TryGetValue(p.Number, out DailyEntryRecord? entry);
+                    later.TryGetValue(p.Number, out DailyArchiveRecord? play);
+                    return new DailyDay
+                    {
+                        Number = p.Number,
+                        Date = p.Date.ToString("yyyy-MM-dd"),
+                        ShortestLength = p.ShortestLength,
+                        Opened = entry != null,
+                        BestMoves = entry?.BestMoves ?? 0,
+                        LaterMoves = play?.BestMoves ?? 0,
+                        SawSolution = play?.SawSolutionUtc != null,
+                    };
+                }).ToArray(),
+            };
+        }
+
+        /// <summary>A puzzle from before today, to play again.</summary>
+        public async Task<DailyPastInfo> GetPastAsync(string guestId, int number)
+        {
+            CheckGuestId(guestId);
+            DailyPuzzleRecord puzzle = await PastPuzzleAsync(number);
+            DailyEntryRecord? entry = await _store.GetEntryAsync(number, guestId);
+            DailyArchiveRecord? play = await _store.GetArchiveEntryAsync(number, guestId);
+            (_, int players) = await _store.GetLeaderboardAsync(number, 0);
+            return new DailyPastInfo
+            {
+                Number = number,
+                Date = puzzle.Date.ToString("yyyy-MM-dd"),
+                Board = puzzle.Board,
+                ShortestLength = puzzle.Shortest.Length,
+                Opened = entry != null,
+                BestMoves = entry?.BestMoves ?? 0,
+                BestSeconds = entry?.BestSeconds ?? 0,
+                BestSolution = entry?.BestSolution ?? Array.Empty<byte>(),
+                LaterMoves = play?.BestMoves ?? 0,
+                LaterSolution = play?.BestSolution ?? Array.Empty<byte>(),
+                SawSolution = play?.SawSolutionUtc != null,
+                Players = players,
+            };
+        }
+
+        /// <summary>A solution to a past puzzle: the player's best later play is kept (fewest moves).</summary>
+        public async Task<DailyPastResult> SubmitPastAsync(string guestId, int number, byte[] moveData)
+        {
+            CheckGuestId(guestId);
+            DailyPuzzleRecord puzzle = await PastPuzzleAsync(number);
+            Move[] moves = CheckSolution(puzzle, moveData);
+            DateTime now = UtcNow;
+            DailyArchiveRecord play = await _store.GetArchiveEntryAsync(number, guestId)
+                ?? new DailyArchiveRecord { Number = number, GuestId = guestId, OpenedUtc = now };
+            bool improved = play.BestMoves == 0 || moves.Length < play.BestMoves;
+            if (improved)
+            {
+                play.BestMoves = moves.Length;
+                play.BestSolution = moveData;
+                play.SolvedUtc = now;
+                await _store.SaveArchiveEntryAsync(play);
+            }
+            return new DailyPastResult
+            {
+                Moves = moves.Length,
+                Improved = improved,
+                LaterMoves = play.BestMoves,
+                LaterSolution = play.BestSolution ?? Array.Empty<byte>(),
+            };
+        }
+
+        /// <summary>A past puzzle's shortest solution; the player's calendar marks the day as seen from now on.</summary>
+        public async Task<DailySolution> ShowSolutionAsync(string guestId, int number)
+        {
+            CheckGuestId(guestId);
+            DailyPuzzleRecord puzzle = await PastPuzzleAsync(number);
+            DateTime now = UtcNow;
+            DailyArchiveRecord play = await _store.GetArchiveEntryAsync(number, guestId)
+                ?? new DailyArchiveRecord { Number = number, GuestId = guestId, OpenedUtc = now };
+            if (play.SawSolutionUtc == null)
+            {
+                play.SawSolutionUtc = now;
+                await _store.SaveArchiveEntryAsync(play);
+            }
+            return new DailySolution { Number = number, Moves = puzzle.Shortest };
+        }
+
+        /// <summary>The longest current streaks (equal streaks share a place) and the asking player's.</summary>
+        public async Task<StreakLeaderboard> GetStreakLeaderboardAsync(string guestId)
+        {
+            CheckGuestId(guestId);
+            int today = TodaysNumber;
+            IReadOnlyList<DailySolve> solves = await _store.GetStreakSolvesAsync(Math.Max(1, today - StreakWindow), today);
+            var streaks = solves.GroupBy(s => s.GuestId)
+                .Select(g => (GuestId: g.Key, Name: g.First().Name, Days: CountStreak(g.Select(s => s.Number).ToHashSet(), today)))
+                .Where(s => s.Days > 0)
+                .OrderByDescending(s => s.Days).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            int RankOf(int days) => 1 + streaks.Count(s => s.Days > days);
+            int mine = streaks.FirstOrDefault(s => s.GuestId == guestId).Days;
+            return new StreakLeaderboard
+            {
+                Top = streaks.Take(_options.LeaderboardSize)
+                    .Select(s => new StreakEntry { Name = s.Name, Days = s.Days, Rank = RankOf(s.Days), IsMe = s.GuestId == guestId })
+                    .ToArray(),
+                MyStreak = mine,
+                MyRank = mine > 0 ? RankOf(mine) : 0,
+                Players = streaks.Count,
+            };
+        }
+
+        // Only puzzles whose day is over: today's (and tomorrow's, made ahead) never go out through the archive.
+        private async Task<DailyPuzzleRecord> PastPuzzleAsync(int number)
+        {
+            if (number < 1 || number >= TodaysNumber)
+                throw new HubException("That puzzle isn't in the archive.");
+            return await _store.GetPuzzleAsync(number) ?? throw new HubException("There's no puzzle for that day.");
+        }
+
+        private Move[] CheckSolution(DailyPuzzleRecord puzzle, byte[] moveData)
+        {
+            if (moveData == null || moveData.Length == 0 || moveData.Length > _options.MaxSolutionMoves)
+                throw new HubException("That isn't a valid solution.");
+            Move[] moves;
+            try
+            {
+                moves = MoveCodec.Decode(moveData);
+            }
+            catch (FormatException)
+            {
+                throw new HubException("That isn't a valid solution.");
+            }
+            RoundSetup round = BoardCodec.Decode(puzzle.Board);
+            if (GameRules.ValidateSolution(round.Grid, round.Robots, round.Target, moves) != SolutionResult.Valid)
+                throw new HubException("That isn't a valid solution.");
+            return moves;
         }
 
         /// <summary>
@@ -228,6 +365,11 @@ namespace BackendServer.Services
         private async Task<int> StreakAsync(string guestId, int today)
         {
             var solved = new HashSet<int>(await _store.GetSolvedNumbersAsync(guestId, Math.Max(1, today - StreakWindow), today));
+            return CountStreak(solved, today);
+        }
+
+        private static int CountStreak(HashSet<int> solved, int today)
+        {
             int day = solved.Contains(today) ? today : today - 1;
             int streak = 0;
             while (solved.Contains(day))

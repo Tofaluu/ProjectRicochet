@@ -154,13 +154,56 @@
                     </ui:VisualElement>
                     <ui:VisualElement name="daily-board" class="card">
                         <ui:VisualElement class="row row--spread gap-s">
-                            <ui:Label text="Today's leaderboard" class="h2" />
-                            <ui:Label name="daily-rank" text="" class="muted small" />
+                            <ui:Label text="Leaderboard" class="h2" />
+                            <ui:VisualElement class="seg">
+                                <ui:Button name="daily-tab-today" text="Today" class="seg-btn" />
+                                <ui:Button name="daily-tab-streaks" text="Streaks" class="seg-btn" />
+                            </ui:VisualElement>
                         </ui:VisualElement>
+                        <ui:Label name="daily-rank" text="" class="muted small gap-s" />
                         <ui:VisualElement name="daily-rows" />
+                        <ui:Label name="daily-board-empty" text="" class="muted small" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="daily-past" class="card">
+                        <ui:VisualElement class="row row--spread gap-m">
+                            <ui:Label text="PAST PUZZLES" class="h3" />
+                            <ui:Button name="daily-see-all" text="See all" class="btn btn--small btn--ghost" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="daily-strip" class="strip gap-m" />
+                        <ui:Label text="Missed a day? Past puzzles are always playable." class="muted small" />
                     </ui:VisualElement>
                     <ui:Label name="daily-next" text="" class="muted small gap-m" style="-unity-text-align: middle-center;" />
                     <ui:Button name="daily-back" text="Back to practice" class="btn" />
+                </ui:VisualElement>
+
+                <!-- Past daily puzzles: a calendar, and the picked day (its board is on the stage, to play again). -->
+                <ui:VisualElement name="screen-archive" class="screen">
+                    <ui:Label text="Past puzzles" class="h1 gap-s" />
+                    <ui:Label name="archive-sub" text="" class="muted body gap-m" />
+                    <ui:VisualElement class="card">
+                        <ui:VisualElement class="row row--spread gap-m">
+                            <ui:Button name="archive-prev" text="&lt;" class="btn btn--small btn--square" />
+                            <ui:Label name="archive-month" text="" class="h2" />
+                            <ui:Button name="archive-next" text="&gt;" class="btn btn--small btn--square" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="archive-grid" class="cal gap-m" />
+                        <ui:VisualElement name="archive-legend" class="legend" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="archive-day" class="card">
+                        <ui:Label name="archive-day-title" text="" class="h3 gap-s" />
+                        <ui:Label name="archive-day-headline" text="" class="h2 gap-s" />
+                        <ui:VisualElement name="archive-stats" class="row gap-m">
+                            <ui:VisualElement class="stat"><ui:Label name="archive-day-moves" class="stat-value" /><ui:Label text="on the day" class="stat-label" /></ui:VisualElement>
+                            <ui:VisualElement class="stat"><ui:Label name="archive-later-moves" class="stat-value" /><ui:Label text="played later" class="stat-label" /></ui:VisualElement>
+                            <ui:VisualElement class="stat stat--last"><ui:Label name="archive-shortest" class="stat-value stat-value--daily" /><ui:Label text="best possible" class="stat-label" /></ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:Label name="archive-day-detail" text="" class="muted body gap-m" />
+                        <ui:Button name="archive-watch" text="Watch your solution" class="btn gap-s" />
+                        <ui:Button name="archive-solution" text="Show the solution" class="btn gap-s" />
+                        <ui:Button name="archive-restart" text="Start over" class="btn" />
+                        <ui:Label name="archive-notice" text="" class="notice" />
+                    </ui:VisualElement>
+                    <ui:Button name="archive-today" text="Back to today's puzzle" class="link-quiet" />
                 </ui:VisualElement>
 
                 <!-- Lobby: the waiting room before a match, and the results after one. AppUI orders the cards for each. -->

@@ -173,6 +173,154 @@ public class DailyTests
         Assert.NotNull(await store.GetPuzzleAsync(1));
     }
 
+    [Fact]
+    public async Task PastPuzzles_OnlyAfterTheirDay_AndKeptApartFromIt()
+    {
+        await PastPuzzleScenario(Create());
+    }
+
+    [Fact]
+    public async Task StreakLeaderboard_CurrentStreaksOnly_LongestFirst()
+    {
+        await StreakScenario(Create());
+    }
+
+    [Fact]
+    public async Task TheDatabaseStore_KeepsPastPlaysAndStreaksTheSame()
+    {
+        using var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        var options = new DbContextOptionsBuilder<DailyDbContext>().UseSqlite(connection).Options;
+        using (var db = new DailyDbContext(options))
+            db.Database.EnsureCreated();
+        var store = new EfDailyStore(new Factory(options));
+
+        await PastPuzzleScenario(Create(store));
+        Assert.Single(await store.GetArchiveAsync(Bob));
+        Assert.Single(await store.GetArchiveAsync(Alice));
+    }
+
+    [Fact]
+    public async Task TheDatabaseStore_StreakLeaderboard()
+    {
+        using var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        var options = new DbContextOptionsBuilder<DailyDbContext>().UseSqlite(connection).Options;
+        using (var db = new DailyDbContext(options))
+            db.Database.EnsureCreated();
+        await StreakScenario(Create(new EfDailyStore(new Factory(options))));
+    }
+
+    // Alice solves day 1 (a longer solution), Bob never opens it. On day 2 both play day 1 again: Bob's solve and Alice's
+    // look at the solution show on their calendars, but day 1's leaderboard and their streaks stay as they were.
+    private static async Task PastPuzzleScenario((DailyService daily, FakeTimeProvider time) setup)
+    {
+        var (daily, time) = setup;
+        DailyPuzzleInfo dayOne = await daily.GetDailyAsync(Alice, "Alice");
+        Move[] shortest = Shortest(dayOne);
+        Move[] longer = LobbyHarness.LongerSolution(BoardCodec.Decode(dayOne.Board));
+        await daily.SubmitAsync(Alice, 1, Encode(longer));
+
+        // Today's puzzle is never in the archive, nor its solution.
+        await Assert.ThrowsAsync<HubException>(() => daily.GetPastAsync(Alice, 1));
+        await Assert.ThrowsAsync<HubException>(() => daily.ShowSolutionAsync(Alice, 1));
+        await Assert.ThrowsAsync<HubException>(() => daily.SubmitPastAsync(Alice, 1, Encode(shortest)));
+
+        time.Advance(TimeSpan.FromDays(1));
+        DailyPuzzleInfo dayTwo = await daily.GetDailyAsync(Alice, "Alice");
+        await daily.GetDailyAsync(Bob, "Bob");
+        await Assert.ThrowsAsync<HubException>(() => daily.GetPastAsync(Alice, 2)); // today
+        await Assert.ThrowsAsync<HubException>(() => daily.GetPastAsync(Alice, 3)); // tomorrow, even if it's made already
+        await Assert.ThrowsAsync<HubException>(() => daily.GetPastAsync(Alice, 0));
+
+        DailyPastInfo past = await daily.GetPastAsync(Bob, 1);
+        Assert.Equal(dayOne.Board, past.Board);
+        Assert.Equal(dayOne.ShortestLength, past.ShortestLength);
+        Assert.False(past.Opened);
+        Assert.Equal(1, past.Players);
+        await Assert.ThrowsAsync<HubException>(() => daily.SubmitPastAsync(Bob, 1, Encode(new[] { new Move(RobotColor.Red, Direction.Up) })));
+
+        DailyPastResult first = await daily.SubmitPastAsync(Bob, 1, Encode(longer));
+        Assert.True(first.Improved);
+        DailyPastResult better = await daily.SubmitPastAsync(Bob, 1, Encode(shortest));
+        Assert.True(better.Improved);
+        Assert.Equal(shortest.Length, better.LaterMoves);
+        Assert.False((await daily.SubmitPastAsync(Bob, 1, Encode(longer))).Improved);
+        Assert.Equal(Encode(shortest), (await daily.GetPastAsync(Bob, 1)).LaterSolution);
+
+        DailySolution solution = await daily.ShowSolutionAsync(Alice, 1);
+        Assert.Equal(dayOne.ShortestLength, solution.Moves.Length);
+        DailyPastInfo alicePast = await daily.GetPastAsync(Alice, 1);
+        Assert.True(alicePast.SawSolution);
+        Assert.True(alicePast.Opened);
+        Assert.Equal(longer.Length, alicePast.BestMoves);
+        Assert.Equal(Encode(longer), alicePast.BestSolution);
+
+        // Day 1's leaderboard: still only Alice, with her solution on the day.
+        DailyLeaderboard board = await daily.GetLeaderboardAsync(Bob, 1);
+        Assert.Equal(1, board.Players);
+        Assert.Equal(longer.Length, board.Top.Single().Moves);
+        Assert.Equal(0, board.MyRank);
+        Assert.Equal(0, (await daily.GetDailyAsync(Bob, "Bob")).Streak);
+
+        DailyCalendar bobs = await daily.GetCalendarAsync(Bob);
+        Assert.Equal(2, bobs.Today);
+        Assert.Equal(new[] { 1, 2 }, bobs.Days.Select(d => d.Number));
+        Assert.Equal("2026-10-12", bobs.Days[0].Date);
+        Assert.Equal(dayOne.ShortestLength, bobs.Days[0].ShortestLength);
+        Assert.False(bobs.Days[0].Opened);
+        Assert.Equal(shortest.Length, bobs.Days[0].LaterMoves);
+        Assert.False(bobs.Days[0].SawSolution);
+        Assert.True(bobs.Days[1].Opened); // today: opened, not solved
+        Assert.Equal(0, bobs.Days[1].BestMoves);
+
+        DailyCalendar alices = await daily.GetCalendarAsync(Alice);
+        Assert.Equal(longer.Length, alices.Days[0].BestMoves);
+        Assert.Equal(0, alices.Days[0].LaterMoves);
+        Assert.True(alices.Days[0].SawSolution);
+        Assert.Equal(dayTwo.ShortestLength, alices.Days[1].ShortestLength);
+    }
+
+    // Day 3: Alice solved days 1-3 (3), Bob days 2-3 (2), Dave day 2 only (1: today can still be saved), Carol day 1 only
+    // (broken), plus a later play of day 2 that doesn't count.
+    private static async Task StreakScenario((DailyService daily, FakeTimeProvider time) setup)
+    {
+        var (daily, time) = setup;
+        const string dave = "dave-guest-id-00004";
+        var solvers = new[]
+        {
+            new[] { Alice, Carol },
+            new[] { Alice, Bob, dave },
+            new[] { Alice, Bob },
+        };
+        for (int day = 0; day < solvers.Length; day++)
+        {
+            if (day > 0)
+                time.Advance(TimeSpan.FromDays(1));
+            foreach (string guest in solvers[day])
+            {
+                DailyPuzzleInfo info = await daily.GetDailyAsync(guest, guest.Split('-')[0]);
+                await daily.SubmitAsync(guest, info.Number, Encode(Shortest(info)));
+            }
+        }
+        DailyPastInfo dayTwo = await daily.GetPastAsync(Carol, 2);
+        await daily.SubmitPastAsync(Carol, 2, Encode(Solver.Solve(BoardCodec.Decode(dayTwo.Board)).Moves));
+
+        StreakLeaderboard board = await daily.GetStreakLeaderboardAsync(Bob);
+        Assert.Equal(new[] { "alice", "bob", "dave" }, board.Top.Select(e => e.Name));
+        Assert.Equal(new[] { 3, 2, 1 }, board.Top.Select(e => e.Days));
+        Assert.Equal(new[] { 1, 2, 3 }, board.Top.Select(e => e.Rank));
+        Assert.True(board.Top[1].IsMe);
+        Assert.Equal(2, board.MyStreak);
+        Assert.Equal(2, board.MyRank);
+        Assert.Equal(3, board.Players);
+
+        StreakLeaderboard carols = await daily.GetStreakLeaderboardAsync(Carol);
+        Assert.Equal(0, carols.MyStreak);
+        Assert.Equal(0, carols.MyRank);
+        Assert.DoesNotContain(carols.Top, e => e.IsMe);
+    }
+
     // Bob and Carol tie on moves, Bob faster; Alice, first to finish, takes more moves. Alice renames herself.
     private static async Task LeaderboardScenario((DailyService daily, FakeTimeProvider time) setup)
     {

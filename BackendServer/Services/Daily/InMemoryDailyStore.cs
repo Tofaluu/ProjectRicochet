@@ -7,6 +7,7 @@ namespace BackendServer.Services
         private readonly Dictionary<int, DailyPuzzleRecord> _puzzles = new();
         private readonly Dictionary<string, DailyPlayerRecord> _players = new();
         private readonly Dictionary<(int, string), DailyEntryRecord> _entries = new();
+        private readonly Dictionary<(int, string), DailyArchiveRecord> _archive = new();
 
         public Task<DailyPuzzleRecord?> GetPuzzleAsync(int number)
         {
@@ -89,6 +90,60 @@ namespace BackendServer.Services
             }
         }
 
+        public Task<IReadOnlyList<DailySummary>> GetSummariesAsync(int to)
+        {
+            lock (_gate)
+            {
+                IReadOnlyList<DailySummary> list = _puzzles.Values.Where(p => p.Number <= to).OrderBy(p => p.Number)
+                    .Select(p => new DailySummary(p.Number, p.Date, p.Shortest.Length)).ToList();
+                return Task.FromResult(list);
+            }
+        }
+
+        public Task<IReadOnlyList<DailyEntryRecord>> GetEntriesAsync(string guestId)
+        {
+            lock (_gate)
+            {
+                IReadOnlyList<DailyEntryRecord> list = _entries.Values.Where(e => e.GuestId == guestId).Select(Copy).ToList();
+                return Task.FromResult(list);
+            }
+        }
+
+        public Task<IReadOnlyList<DailyArchiveRecord>> GetArchiveAsync(string guestId)
+        {
+            lock (_gate)
+            {
+                IReadOnlyList<DailyArchiveRecord> list = _archive.Values.Where(e => e.GuestId == guestId).Select(Copy).ToList();
+                return Task.FromResult(list);
+            }
+        }
+
+        public Task<DailyArchiveRecord?> GetArchiveEntryAsync(int number, string guestId)
+        {
+            lock (_gate)
+                return Task.FromResult(_archive.TryGetValue((number, guestId), out DailyArchiveRecord? e) ? Copy(e) : null);
+        }
+
+        public Task SaveArchiveEntryAsync(DailyArchiveRecord entry)
+        {
+            lock (_gate)
+                _archive[(entry.Number, entry.GuestId)] = Copy(entry);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<DailySolve>> GetStreakSolvesAsync(int from, int to)
+        {
+            lock (_gate)
+            {
+                var going = _entries.Values.Where(e => e.BestMoves > 0 && e.Number >= to - 1 && e.Number <= to)
+                    .Select(e => e.GuestId).ToHashSet();
+                IReadOnlyList<DailySolve> list = _entries.Values
+                    .Where(e => e.BestMoves > 0 && e.Number >= from && e.Number <= to && going.Contains(e.GuestId))
+                    .Select(e => new DailySolve(e.GuestId, _players[e.GuestId].Name, e.Number)).ToList();
+                return Task.FromResult(list);
+            }
+        }
+
         private IEnumerable<DailyRow> Solved(int number) => _entries.Values
             .Where(e => e.Number == number && e.BestMoves > 0)
             .OrderBy(e => e.BestMoves).ThenBy(e => e.BestSeconds)
@@ -99,6 +154,12 @@ namespace BackendServer.Services
         {
             Number = e.Number, GuestId = e.GuestId, OpenedUtc = e.OpenedUtc, BestMoves = e.BestMoves,
             BestSeconds = e.BestSeconds, BestSolution = e.BestSolution, SolvedUtc = e.SolvedUtc,
+        };
+
+        private static DailyArchiveRecord Copy(DailyArchiveRecord e) => new()
+        {
+            Number = e.Number, GuestId = e.GuestId, OpenedUtc = e.OpenedUtc, BestMoves = e.BestMoves,
+            BestSolution = e.BestSolution, SolvedUtc = e.SolvedUtc, SawSolutionUtc = e.SawSolutionUtc,
         };
     }
 }

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using Ricochet.Client.Board;
 using Ricochet.Client.Game;
 using Ricochet.Client.Network;
@@ -20,7 +22,7 @@ namespace Ricochet.Client.App
     /// </summary>
     public partial class AppUI : MonoBehaviour
     {
-        private enum Screen { Home, Play, Practice, Lobby, Match, Daily }
+        private enum Screen { Home, Play, Practice, Lobby, Match, Daily, Archive }
 
         // Avatar colours, one per player in join order.
         private static readonly RobotColor[] AvatarColors = { RobotColor.Blue, RobotColor.Red, RobotColor.Green, RobotColor.Yellow };
@@ -60,8 +62,15 @@ namespace Ricochet.Client.App
         private readonly Dictionary<Screen, VisualElement> _screens = new Dictionary<Screen, VisualElement>();
         private VisualElement _dailySquares, _dailyRows, _dailyStats, _dailyBoard;
         private Label _dailyHeader, _dailyHeadline, _dailyMoves, _dailyMovesLabel, _dailyTime, _dailyStreak, _dailyDetail, _dailyNotice, _dailyRank, _dailyNext;
-        private Button _dailyCopy, _dailyRetry;
+        private Button _dailyCopy, _dailyRetry, _dailyTabToday, _dailyTabStreaks;
         private string _shownSquares, _shownRows;
+        private VisualElement _dailyPast, _dailyStrip, _archiveGrid, _archiveDay, _archiveStats;
+        private Label _dailyBoardEmpty, _archiveSub, _archiveMonth, _archiveDayTitle, _archiveDayHeadline, _archiveDayDetail;
+        private Label _archiveDayMoves, _archiveLaterMoves, _archiveShortest, _archiveNotice;
+        private Button _archivePrev, _archiveNext, _archiveWatch, _archiveSolution;
+        private string _shownStrip, _shownCalendar;
+        private bool _streaksTab; // the daily leaderboard shows streaks instead of today's results
+        private Screen? _scrolledFor; // the screen the side panel's scroll belongs to
         private Label _homeTitle, _homeDailyTitle, _homeDailyStreak, _playStatus, _profileAvatar, _profileName;
         private VisualElement _lobbyPlayers, _lobbySettings, _lobbySettingsView, _lobbyHistory, _historyList, _matchPlayers;
         private VisualElement _lobbyStandings, _lobbyStandingsList, _lobbyCodeCard, _lobbyPlayersCard, _roundCard, _roundProgress, _roundProgressFill, _bestBox;
@@ -248,6 +257,17 @@ namespace Ricochet.Client.App
             _dailyCopy = Click("daily-copy", _daily.CopyResult);
             _dailyRetry = Click("daily-retry", _daily.Open);
             Click("daily-back", () => Choose(Screen.Practice));
+            _dailyBoardEmpty = _root.Q<Label>("daily-board-empty");
+            _dailyTabToday = Click("daily-tab-today", () => _streaksTab = false);
+            _dailyTabStreaks = Click("daily-tab-streaks", () =>
+            {
+                _streaksTab = true;
+                _daily.RefreshStreaks();
+            });
+            _dailyPast = _root.Q("daily-past");
+            _dailyStrip = _root.Q("daily-strip");
+            Click("daily-see-all", () => _daily.OpenArchive());
+            BindArchive();
             BindLobby();
 
             _homeTitle = _root.Q<Label>("home-title");
@@ -721,7 +741,7 @@ namespace Ricochet.Client.App
                 return;
             }
             _chosen = screen;
-            if (_daily.State.IsActive)
+            if (_daily.State.IsActive || _daily.Archive.IsOpen)
                 _daily.Close(backToPractice: true);
         }
 
@@ -766,7 +786,7 @@ namespace Ricochet.Client.App
         }
 
         private Screen Current => _game.Match.InLobby ? (_game.Match.Stage == MatchStage.BetweenMatches ? Screen.Lobby : Screen.Match)
-            : _daily.State.IsActive ? Screen.Daily : _chosen;
+            : _daily.State.IsActive ? Screen.Daily : _daily.Archive.IsOpen ? Screen.Archive : _chosen;
 
         // ---- Each frame: show the state ----
 
@@ -783,6 +803,13 @@ namespace Ricochet.Client.App
             GoAfterLeaving();
             GlideSide();
             Screen screen = Current;
+            if (_scrolledFor != screen)
+            {
+                // A new screen starts at its top (the panel's scroll would otherwise carry over from the last one).
+                _scrolledFor = screen;
+                _scrollGliding = false;
+                _side.scrollOffset = new Vector2(_side.scrollOffset.x, 0f);
+            }
             ShowBoardVisibility();
             // Puzzle mode is the Practice side's: Play with friends and the lobby get plain random boards.
             Scratchpad.PlainPractice = screen == Screen.Play || screen == Screen.Lobby || screen == Screen.Match;
@@ -790,7 +817,7 @@ namespace Ricochet.Client.App
             foreach (KeyValuePair<Screen, VisualElement> pair in _screens)
                 pair.Value.EnableInClassList("is-visible", pair.Key == screen);
             _navHome.EnableInClassList("is-active", screen == Screen.Home);
-            _navDaily.EnableInClassList("is-active", screen == Screen.Daily);
+            _navDaily.EnableInClassList("is-active", screen == Screen.Daily || screen == Screen.Archive);
             _navPlay.EnableInClassList("is-active", screen == Screen.Play || screen == Screen.Lobby || screen == Screen.Match);
             _navPractice.EnableInClassList("is-active", screen == Screen.Practice);
             _navSettings.EnableInClassList("is-active", _settings.ClassListContains("is-open"));
@@ -801,6 +828,8 @@ namespace Ricochet.Client.App
             ShowHome();
             if (screen == Screen.Daily)
                 ShowDaily();
+            else if (screen == Screen.Archive)
+                ShowArchive();
             else if (screen == Screen.Lobby)
                 ShowLobby();
             else if (screen == Screen.Match)
@@ -1386,24 +1415,293 @@ namespace Ricochet.Client.App
                 }
             }
 
-            DailyLeaderboard board = daily.Leaderboard;
-            bool hasBoard = solved && board != null && board.Top != null && board.Top.Length > 0;
-            _dailyBoard.style.display = hasBoard ? DisplayStyle.Flex : DisplayStyle.None;
-            _dailyRank.text = daily.Rank > 0 ? $"#{daily.Rank} of {daily.Players}" : "";
-            string rows = hasBoard ? string.Join("|", Array.ConvertAll(board.Top, e => $"{e.Name}/{e.Moves}/{e.Seconds:0}/{e.IsMe}")) + board.MyRank : "";
-            if (rows != _shownRows)
+            _dailyBoard.style.display = loading || error ? DisplayStyle.None : DisplayStyle.Flex;
+            _dailyTabToday.EnableInClassList("is-on", !_streaksTab);
+            _dailyTabStreaks.EnableInClassList("is-on", _streaksTab);
+            string rows;
+            if (_streaksTab)
             {
-                _shownRows = rows;
-                _dailyRows.Clear();
-                if (hasBoard)
+                StreakLeaderboard streaks = _daily.Archive.Streaks;
+                bool any = streaks?.Top != null && streaks.Top.Length > 0;
+                _dailyRank.text = streaks != null && streaks.MyRank == 0 ? "Solve today's puzzle to start a streak." : "";
+                _dailyBoardEmpty.text = streaks == null ? "Loading..." : any ? "" : "Nobody has a streak going yet.";
+                rows = "s" + (any ? string.Join("|", Array.ConvertAll(streaks.Top, e => $"{e.Name}/{e.Days}/{e.Rank}/{e.IsMe}")) + streaks.MyRank : "");
+                if (rows != _shownRows)
                 {
-                    for (int i = 0; i < board.Top.Length && i < 5; i++)
-                        _dailyRows.Add(LeaderboardRow(i + 1, board.Top[i].IsMe ? "You" : board.Top[i].Name, board.Top[i].Moves, board.Top[i].Seconds, board.Top[i].IsMe));
-                    if (board.MyRank > 5)
-                        _dailyRows.Add(LeaderboardRow(board.MyRank, "You", daily.BestMoves, daily.BestSeconds, true));
+                    _shownRows = rows;
+                    _dailyRows.Clear();
+                    if (any)
+                    {
+                        for (int i = 0; i < streaks.Top.Length && i < 5; i++)
+                            _dailyRows.Add(StreakRow(streaks.Top[i].Rank, streaks.Top[i].IsMe ? "You" : streaks.Top[i].Name, streaks.Top[i].Days, streaks.Top[i].IsMe));
+                        if (streaks.MyRank > 0 && Array.FindIndex(streaks.Top, e => e.IsMe) is int mine && (mine < 0 || mine >= 5))
+                            _dailyRows.Add(StreakRow(streaks.MyRank, "You", streaks.MyStreak, true));
+                    }
                 }
             }
+            else
+            {
+                DailyLeaderboard board = daily.Leaderboard;
+                bool hasBoard = solved && board != null && board.Top != null && board.Top.Length > 0;
+                _dailyRank.text = "";
+                _dailyBoardEmpty.text = solved ? (hasBoard ? "" : "Loading...") : "Solve today's puzzle to see how you compare.";
+                rows = hasBoard ? string.Join("|", Array.ConvertAll(board.Top, e => $"{e.Name}/{e.Moves}/{e.Seconds:0}/{e.IsMe}")) + board.MyRank : "";
+                if (rows != _shownRows)
+                {
+                    _shownRows = rows;
+                    _dailyRows.Clear();
+                    if (hasBoard)
+                    {
+                        for (int i = 0; i < board.Top.Length && i < 5; i++)
+                            _dailyRows.Add(LeaderboardRow(i + 1, board.Top[i].IsMe ? "You" : board.Top[i].Name, board.Top[i].Moves, board.Top[i].Seconds, board.Top[i].IsMe));
+                        if (board.MyRank > 5)
+                            _dailyRows.Add(LeaderboardRow(board.MyRank, "You", daily.BestMoves, daily.BestSeconds, true));
+                    }
+                }
+            }
+            _dailyRank.style.display = _dailyRank.text.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            _dailyBoardEmpty.style.display = _dailyBoardEmpty.text.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            ShowStrip(loading || error);
             _dailyNext.text = daily.Stage == DailyStage.Playing ? $"Next puzzle in {DailyState.Countdown(daily.UntilNext(now))}" : "";
+        }
+
+        private static string Days(int days) => days == 1 ? "1 day" : $"{days} days";
+
+        private static VisualElement StreakRow(int place, string name, int days, bool me)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("lb-row");
+            row.EnableInClassList("is-me", me);
+            var rank = new Label(place.ToString());
+            rank.AddToClassList("lb-rank");
+            if (place <= 3)
+                rank.AddToClassList($"lb-rank--{place}");
+            var who = new Label(name);
+            who.AddToClassList("lb-name");
+            var count = new Label(Days(days));
+            count.AddToClassList("lb-streak");
+            row.Add(rank);
+            row.Add(who);
+            row.Add(count);
+            return row;
+        }
+
+        // ---- Past puzzles ----
+
+        private void BindArchive()
+        {
+            _screens[Screen.Archive] = _root.Q("screen-archive");
+            _archiveSub = _root.Q<Label>("archive-sub");
+            _archiveMonth = _root.Q<Label>("archive-month");
+            _archiveGrid = _root.Q("archive-grid");
+            _archiveDay = _root.Q("archive-day");
+            _archiveDayTitle = _root.Q<Label>("archive-day-title");
+            _archiveDayHeadline = _root.Q<Label>("archive-day-headline");
+            _archiveDayDetail = _root.Q<Label>("archive-day-detail");
+            _archiveStats = _root.Q("archive-stats");
+            _archiveDayMoves = _root.Q<Label>("archive-day-moves");
+            _archiveLaterMoves = _root.Q<Label>("archive-later-moves");
+            _archiveShortest = _root.Q<Label>("archive-shortest");
+            _archiveNotice = _root.Q<Label>("archive-notice");
+            _archivePrev = Click("archive-prev", () => _daily.Archive.ShowMonth(-1));
+            _archiveNext = Click("archive-next", () => _daily.Archive.ShowMonth(1));
+            _archiveWatch = Click("archive-watch", _daily.WatchMine);
+            _archiveSolution = Click("archive-solution", _daily.ShowShortest);
+            Click("archive-restart", _daily.RestartPast);
+            Click("archive-today", OpenDaily);
+
+            VisualElement legend = _root.Q("archive-legend");
+            foreach ((string mark, string text) in new[] { ("perfect", "Perfect"), ("solved", "Solved"), ("tried", "Tried"), ("none", "Not played") })
+                legend.Add(LegendItem("legend-swatch cal-cell--" + mark, text));
+            legend.Add(LegendItem("legend-swatch cal-seen", "Saw the solution"));
+        }
+
+        private static VisualElement LegendItem(string classes, string text)
+        {
+            var item = new VisualElement();
+            item.AddToClassList("legend-item");
+            var swatch = new VisualElement();
+            foreach (string name in classes.Split(' '))
+                swatch.AddToClassList(name);
+            var label = new Label(text);
+            label.AddToClassList("legend-text");
+            item.Add(swatch);
+            item.Add(label);
+            return item;
+        }
+
+        private static string MarkClass(DailyDay day, int today) =>
+            day.Number == today ? "cal-cell--today" : "cal-cell--" + DailyArchive.Mark(day).ToString().ToLowerInvariant();
+
+        // The daily screen's last seven days: a past day opens it on the calendar.
+        private void ShowStrip(bool hidden)
+        {
+            DailyArchive archive = _daily.Archive;
+            IReadOnlyList<DailyDay> days = archive.LastDays(7);
+            bool show = !hidden && archive.Today > 1 && days.Count > 1;
+            _dailyPast.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
+            string key = show ? string.Join("|", days.Select(d => $"{d.Number}{MarkClass(d, archive.Today)}")) : "";
+            if (key == _shownStrip)
+                return;
+            _shownStrip = key;
+            _dailyStrip.Clear();
+            if (!show)
+                return;
+            foreach (DailyDay day in days)
+            {
+                DailyArchive.TryParse(day.Date, out DateTime date);
+                int number = day.Number;
+                var cell = new Button(() =>
+                {
+                    if (number != archive.Today)
+                        _daily.OpenArchive(number);
+                });
+                cell.AddToClassList("cal-cell");
+                cell.AddToClassList("strip-day");
+                cell.AddToClassList(MarkClass(day, archive.Today));
+                var dow = new Label(date.ToString("ddd", CultureInfo.InvariantCulture).ToUpperInvariant());
+                dow.AddToClassList("strip-dow");
+                var num = new Label(date.Day.ToString());
+                num.AddToClassList("strip-num");
+                cell.Add(dow);
+                cell.Add(num);
+                AddSeen(cell, day);
+                _dailyStrip.Add(cell);
+            }
+        }
+
+        private static void AddSeen(VisualElement cell, DailyDay day)
+        {
+            if (!day.SawSolution)
+                return;
+            var dot = new VisualElement();
+            dot.AddToClassList("cal-seen");
+            dot.pickingMode = PickingMode.Ignore;
+            cell.Add(dot);
+        }
+
+        private void ShowArchive()
+        {
+            DailyArchive archive = _daily.Archive;
+            _archiveSub.text = archive.HasCalendar
+                ? $"{archive.SolvedCount} of {archive.PastCount} solved, {archive.PerfectCount} perfect."
+                : archive.Error ?? "Loading...";
+            _archiveMonth.text = archive.ShownYear > 0
+                ? new DateTime(archive.ShownYear, archive.ShownMonth, 1).ToString("MMMM yyyy", CultureInfo.InvariantCulture) : "";
+            _archivePrev.SetEnabled(archive.CanShowMonth(-1));
+            _archiveNext.SetEnabled(archive.CanShowMonth(1));
+            ShowCalendar(archive);
+
+            PastPuzzle past = archive.Past;
+            int shown = past?.Number ?? archive.Selected;
+            DailyDay day = archive.Day(shown);
+            _archiveDay.style.display = shown > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            if (shown == 0)
+                return;
+            DailyArchive.TryParse(day?.Date ?? "", out DateTime date);
+            _archiveDayTitle.text = day != null
+                ? $"{date.ToString("dddd, MMM d", CultureInfo.InvariantCulture).ToUpperInvariant()}  ·  #{day.Number}" : $"#{shown}";
+            _archiveDayHeadline.text = past == null ? (archive.LoadingPast ? "Loading..." : "Couldn't load it")
+                : past.IsPerfect ? $"Perfect: {past.BestMoves} moves"
+                : past.BestMoves > 0 ? $"Solved in {past.BestMoves} moves"
+                : past.Opened || past.SawSolution ? "Not solved yet" : "Not played yet";
+            _archiveStats.style.display = past != null ? DisplayStyle.Flex : DisplayStyle.None;
+            _archiveWatch.style.display = past != null && past.MySolution.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            _archiveSolution.style.display = past != null ? DisplayStyle.Flex : DisplayStyle.None;
+            if (past == null)
+            {
+                _archiveDayDetail.text = archive.LoadingPast ? "" : archive.Error ?? "";
+                _archiveNotice.style.display = DisplayStyle.None;
+                return;
+            }
+            _archiveDayMoves.text = past.DayMoves > 0 ? past.DayMoves.ToString() : "-";
+            _archiveLaterMoves.text = past.LaterMoves > 0 ? past.LaterMoves.ToString() : "-";
+            _archiveShortest.text = past.ShortestLength.ToString();
+            string onTheDay = past.DayMoves > 0 ? $"On the day you solved it in {past.DayMoves} moves ({DailyState.Clock(past.DaySeconds)})."
+                : past.Opened ? "You opened it on the day but didn't solve it." : "You didn't play it on the day.";
+            string players = past.Players == 0 ? "Nobody solved it on the day." : past.Players == 1 ? "1 player solved it on the day."
+                : $"{past.Players} players solved it on the day.";
+            _archiveDayDetail.text = $"{onTheDay} {players}" + (past.SawSolution ? " You've seen the solution." : "");
+            _archiveSolution.text = past.SawSolution ? "Show the solution again" : "Show the solution";
+            string notice = _daily.Notice ?? (past.Submitting ? "Sending..." : null);
+            _archiveNotice.text = notice ?? "";
+            _archiveNotice.style.display = notice != null ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        // The shown month, Monday first: a cell per day, coloured by the player's result; rebuilt only when something changes.
+        private void ShowCalendar(DailyArchive archive)
+        {
+            if (archive.ShownYear == 0)
+            {
+                _archiveGrid.Clear();
+                _shownCalendar = null;
+                return;
+            }
+            var first = new DateTime(archive.ShownYear, archive.ShownMonth, 1);
+            int count = DateTime.DaysInMonth(first.Year, first.Month);
+            var key = new System.Text.StringBuilder($"{first:yyyy-MM}/{archive.Selected}/{archive.Today}/");
+            for (int d = 1; d <= count; d++)
+            {
+                DailyDay day = archive.DayOn(first.AddDays(d - 1));
+                key.Append(day == null ? "-" : MarkClass(day, archive.Today) + (day.SawSolution ? "s" : "")).Append(',');
+            }
+            if (key.ToString() == _shownCalendar)
+                return;
+            _shownCalendar = key.ToString();
+            _archiveGrid.Clear();
+
+            var head = new VisualElement();
+            head.AddToClassList("cal-row");
+            foreach (string name in new[] { "M", "T", "W", "T", "F", "S", "S" })
+            {
+                var label = new Label(name);
+                label.AddToClassList("cal-dow");
+                head.Add(label);
+            }
+            _archiveGrid.Add(head);
+
+            int offset = ((int)first.DayOfWeek + 6) % 7; // Monday = 0
+            int cells = (offset + count + 6) / 7 * 7;
+            VisualElement row = null;
+            for (int i = 0; i < cells; i++)
+            {
+                if (i % 7 == 0)
+                {
+                    row = new VisualElement();
+                    row.AddToClassList("cal-row");
+                    _archiveGrid.Add(row);
+                }
+                int dayOfMonth = i - offset + 1;
+                DailyDay day = dayOfMonth >= 1 && dayOfMonth <= count ? archive.DayOn(first.AddDays(dayOfMonth - 1)) : null;
+                int number = day?.Number ?? 0;
+                var cell = new Button(() =>
+                {
+                    if (number > 0)
+                        _daily.SelectPast(number);
+                });
+                cell.AddToClassList("cal-cell");
+                if (dayOfMonth < 1 || dayOfMonth > count)
+                {
+                    cell.AddToClassList("cal-cell--empty");
+                    cell.SetEnabled(false);
+                }
+                else
+                {
+                    cell.text = dayOfMonth.ToString();
+                    if (day == null)
+                    {
+                        cell.AddToClassList("cal-cell--off"); // before the first puzzle, or still to come
+                        cell.SetEnabled(false);
+                    }
+                    else
+                    {
+                        cell.AddToClassList(MarkClass(day, archive.Today));
+                        cell.EnableInClassList("is-selected", number == archive.Selected);
+                        AddSeen(cell, day);
+                    }
+                }
+                row.Add(cell);
+            }
         }
 
         private static VisualElement LeaderboardRow(int place, string name, int moves, double seconds, bool me)

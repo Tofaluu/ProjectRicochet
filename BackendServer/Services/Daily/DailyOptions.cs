@@ -30,6 +30,12 @@ namespace BackendServer.Services
         public int? MinMoves { get; set; }
         public int? MaxMoves { get; set; }
 
+        /// <summary>
+        /// For testing past puzzles on a fresh dev server (whose memory store has none): also generate this many days
+        /// before today. 0 in production, where every day's puzzle was made on time.
+        /// </summary>
+        public int BackfillDays { get; set; }
+
         /// <summary>Seeds board generation (for tests); null picks a random seed per puzzle.</summary>
         public int? Seed { get; set; }
     }

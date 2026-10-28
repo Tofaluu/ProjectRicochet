@@ -14,6 +14,7 @@ namespace BackendServer.Services
         public DbSet<DailyPuzzleRecord> Puzzles => Set<DailyPuzzleRecord>();
         public DbSet<DailyPlayerRecord> Players => Set<DailyPlayerRecord>();
         public DbSet<DailyEntryRecord> Entries => Set<DailyEntryRecord>();
+        public DbSet<DailyArchiveRecord> Archive => Set<DailyArchiveRecord>();
         public DbSet<UsageEventRecord> UsageEvents => Set<UsageEventRecord>();
 
         protected override void OnModelCreating(ModelBuilder model)
@@ -39,6 +40,13 @@ namespace BackendServer.Services
                 e.Property(x => x.GuestId).HasMaxLength(64);
                 // The leaderboard: one day's solvers, fewest moves then fastest.
                 e.HasIndex(x => new { x.Number, x.BestMoves, x.BestSeconds });
+                e.HasIndex(x => x.GuestId);
+            });
+            model.Entity<DailyArchiveRecord>(e =>
+            {
+                e.ToTable("daily_archive");
+                e.HasKey(x => new { x.Number, x.GuestId });
+                e.Property(x => x.GuestId).HasMaxLength(64);
                 e.HasIndex(x => x.GuestId);
             });
             model.Entity<UsageEventRecord>(e =>

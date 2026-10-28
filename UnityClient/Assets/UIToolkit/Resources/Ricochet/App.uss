@@ -567,3 +567,50 @@
 .history-row-text { font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
 .history-row-meta { font-size: 13px; color: var(--muted); margin-left: 8px; flex-shrink: 0; }
 .history-detail { padding: 2px 0 6px 14px; }
+
+/* ---- Daily: leaderboard switch, past puzzles strip and calendar (2026-10-28) ---- */
+.seg { flex-direction: row; background-color: var(--input); border-radius: 10px; padding: 3px; }
+.app .seg-btn { height: 30px; margin: 0; padding: 0 12px; border-width: 0; border-radius: 8px; background-color: rgba(0, 0, 0, 0);
+    font-size: 14px; color: var(--muted); -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.app .seg-btn:hover { color: var(--text); background-color: rgba(0, 0, 0, 0); }
+.app .seg-btn.is-on, .app .seg-btn.is-on:hover { background-color: var(--panel-hover); color: var(--text); }
+.lb-streak { width: 84px; font-size: 15px; -unity-text-align: middle-right; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.strip { flex-direction: row; }
+.cal-row { flex-direction: row; }
+.cal-dow { flex-grow: 1; flex-basis: 0; margin: 0 2px 4px 2px; font-size: 12px; color: var(--muted); -unity-text-align: middle-center;
+    -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.app .cal-cell { flex-grow: 1; flex-basis: 0; min-width: 0; height: 38px; margin: 2px; padding: 0; border-width: 2px; border-radius: 8px;
+    border-color: rgba(0, 0, 0, 0); background-color: var(--panel-2); color: var(--muted); font-size: 15px;
+    -unity-text-align: middle-center; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.app .cal-cell:hover { border-color: var(--line); }
+.app .strip-day { height: 52px; flex-direction: column; justify-content: center; align-items: center; }
+.strip-dow { font-size: 10px; letter-spacing: 1px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.strip-num { font-size: 16px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+.app .cal-cell--tried { background-color: rgba(0, 0, 0, 0); border-color: var(--line); color: var(--text); }
+.app .cal-cell--solved { background-color: var(--action); color: var(--on-action); }
+.app .cal-cell--perfect { background-color: var(--daily); color: var(--on-daily); }
+.app .cal-cell--today { background-color: rgba(0, 0, 0, 0); border-color: var(--daily-border); color: var(--daily-text); }
+.app .cal-cell--off { opacity: 0.25; }
+.app .cal-cell--off:hover { border-color: rgba(0, 0, 0, 0); }
+.app .cal-cell--empty { opacity: 0; }
+.app .cal-cell.is-selected { border-color: var(--text); border-width: 3px; }
+.cal-seen { position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 3px; background-color: var(--muted); }
+.cal-cell--solved .cal-seen, .cal-cell--perfect .cal-seen { background-color: rgba(0, 0, 0, 0.45); }
+.legend { flex-direction: row; flex-wrap: wrap; }
+.legend-item { flex-direction: row; align-items: center; margin: 0 12px 4px 0; }
+.legend-swatch { width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; border-width: 2px; border-color: rgba(0, 0, 0, 0); }
+.legend-swatch.cal-seen { position: relative; top: 0; right: 0; width: 6px; height: 6px; margin: 0 5px 0 3px; border-width: 0; }
+.legend-text { font-size: 13px; color: var(--muted); }
+/* The strip's labels take the day's text colour. */
+.app .cal-cell Label { color: var(--muted); }
+.app .cal-cell--tried Label { color: var(--text); }
+.app .cal-cell--solved Label { color: var(--on-action); }
+.app .cal-cell--perfect Label { color: var(--on-daily); }
+.app .cal-cell--today Label { color: var(--daily-text); }
+.legend-swatch.cal-cell--none { background-color: var(--panel-2); }
+/* Stat tiles: one height in a row, and room for "best possible" on one line beside the panel's scrollbar. */
+.app #daily-stats, .app #archive-stats { align-items: stretch; }
+.app .stat { padding: 10px 4px; justify-content: center; }
+/* The strip's two lines, centred in the day. */
+.app .strip-dow, .app .strip-num { margin: 0; padding: 0; -unity-text-align: middle-center; }
+.app .strip-dow { margin-bottom: 1px; }

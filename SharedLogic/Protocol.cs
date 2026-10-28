@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 13;
+        public const int ProtocolVersion = 14;
 
         // Client -> server
 
@@ -85,6 +85,31 @@ namespace SharedLogic
 
         /// <summary>(string guestId, int number) returns <see cref="DailyLeaderboard"/>: the top players and the caller's rank.</summary>
         public const string GetDailyLeaderboard = "GetDailyLeaderboard";
+
+        // Past puzzles (protocol 14). Any puzzle before today can be played again; those plays are kept apart from the
+        // day's own results, so they never change its leaderboard or anyone's streak. Today's puzzle and its solution are
+        // never sent through these.
+
+        /// <summary>(string guestId) returns <see cref="DailyCalendar"/>: every puzzle so far and how the player did on it.</summary>
+        public const string GetDailyCalendar = "GetDailyCalendar";
+
+        /// <summary>(string guestId, int number) returns <see cref="DailyPastInfo"/>: a past puzzle (before today) to play again.</summary>
+        public const string GetPastDaily = "GetPastDaily";
+
+        /// <summary>
+        /// (string guestId, int number, byte[] moves) returns <see cref="DailyPastResult"/>: a solution to a past puzzle,
+        /// recorded as played later (the player's best later play is kept).
+        /// </summary>
+        public const string SubmitPastDaily = "SubmitPastDaily";
+
+        /// <summary>
+        /// (string guestId, int number) returns <see cref="DailySolution"/>: a past puzzle's shortest solution. The player's
+        /// calendar marks the day as seen from then on.
+        /// </summary>
+        public const string ShowDailySolution = "ShowDailySolution";
+
+        /// <summary>(string guestId) returns <see cref="StreakLeaderboard"/>: the longest current streaks.</summary>
+        public const string GetStreakLeaderboard = "GetStreakLeaderboard";
 
         // Server -> client
 
@@ -397,6 +422,107 @@ namespace SharedLogic
         public double Seconds { get; set; }
 
         /// <summary>The asking player.</summary>
+        public bool IsMe { get; set; }
+    }
+
+    /// <summary>The answer to <see cref="HubMethods.GetDailyCalendar"/>.</summary>
+    public class DailyCalendar
+    {
+        /// <summary>Today's puzzle number (its day is in <see cref="Days"/> too, but can't be played from the calendar).</summary>
+        public int Today { get; set; }
+
+        /// <summary>Every puzzle from #1 to today, oldest first. Days the server has no puzzle for are left out.</summary>
+        public DailyDay[] Days { get; set; }
+    }
+
+    /// <summary>One day of <see cref="DailyCalendar"/>, from the asking player's side.</summary>
+    public class DailyDay
+    {
+        public int Number { get; set; }
+
+        /// <summary>"yyyy-MM-dd", Eastern time.</summary>
+        public string Date { get; set; }
+
+        public int ShortestLength { get; set; }
+
+        /// <summary>The player opened it on its day; <see cref="BestMoves"/> is their best then (0 = not solved).</summary>
+        public bool Opened { get; set; }
+        public int BestMoves { get; set; }
+
+        /// <summary>Their best when playing it later (0 = not solved later), and whether they've looked at its solution.</summary>
+        public int LaterMoves { get; set; }
+        public bool SawSolution { get; set; }
+    }
+
+    /// <summary>The answer to <see cref="HubMethods.GetPastDaily"/>: a past puzzle and the player's results on it.</summary>
+    public class DailyPastInfo
+    {
+        public int Number { get; set; }
+        public string Date { get; set; }
+
+        /// <summary><see cref="BoardCodec"/> bytes.</summary>
+        public byte[] Board { get; set; }
+
+        public int ShortestLength { get; set; }
+
+        /// <summary>The player's result on the day (moves 0 = not solved then), with their solution's <see cref="MoveCodec"/> bytes.</summary>
+        public bool Opened { get; set; }
+        public int BestMoves { get; set; }
+        public double BestSeconds { get; set; }
+        public byte[] BestSolution { get; set; }
+
+        /// <summary>Their best when playing it later (0 = none yet) and its moves.</summary>
+        public int LaterMoves { get; set; }
+        public byte[] LaterSolution { get; set; }
+
+        public bool SawSolution { get; set; }
+
+        /// <summary>How many solved it on its day.</summary>
+        public int Players { get; set; }
+    }
+
+    /// <summary>The answer to <see cref="HubMethods.SubmitPastDaily"/>.</summary>
+    public class DailyPastResult
+    {
+        public int Moves { get; set; }
+
+        /// <summary>It's the player's new best later play (their first, or fewer moves).</summary>
+        public bool Improved { get; set; }
+
+        public int LaterMoves { get; set; }
+        public byte[] LaterSolution { get; set; }
+    }
+
+    /// <summary>The answer to <see cref="HubMethods.ShowDailySolution"/>.</summary>
+    public class DailySolution
+    {
+        public int Number { get; set; }
+
+        /// <summary><see cref="MoveCodec"/> bytes of a shortest solution.</summary>
+        public byte[] Moves { get; set; }
+    }
+
+    /// <summary>The answer to <see cref="HubMethods.GetStreakLeaderboard"/>: longest current streak first.</summary>
+    public class StreakLeaderboard
+    {
+        public StreakEntry[] Top { get; set; }
+
+        /// <summary>The asking player's streak and place (0 = no streak), and how many players have one.</summary>
+        public int MyStreak { get; set; }
+        public int MyRank { get; set; }
+        public int Players { get; set; }
+    }
+
+    public class StreakEntry
+    {
+        public string Name { get; set; }
+
+        /// <summary>Days in a row solved, up to today (or yesterday, while today can still be saved).</summary>
+        public int Days { get; set; }
+
+        /// <summary>Equal streaks share a place.</summary>
+        public int Rank { get; set; }
+
         public bool IsMe { get; set; }
     }
 }

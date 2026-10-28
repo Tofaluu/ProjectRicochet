@@ -11,9 +11,12 @@ namespace BackendServer.Services
         private readonly DailyService _daily;
         private readonly TimeProvider _time;
         private readonly ILogger<DailyPrepareService> _log;
+        private readonly DailyOptions _options;
 
-        public DailyPrepareService(DailyService daily, TimeProvider time, ILogger<DailyPrepareService> log)
+        public DailyPrepareService(DailyService daily, TimeProvider time, ILogger<DailyPrepareService> log,
+            Microsoft.Extensions.Options.IOptions<DailyOptions> options)
         {
+            _options = options.Value;
             _daily = daily;
             _time = time;
             _log = log;
@@ -30,6 +33,8 @@ namespace BackendServer.Services
                         await _daily.EnsurePuzzleAsync(today);
                     if (today + 1 >= 1)
                         await _daily.EnsurePuzzleAsync(today + 1);
+                    for (int number = today - 1; number >= Math.Max(1, today - _options.BackfillDays); number--)
+                        await _daily.EnsurePuzzleAsync(number);
                 }
                 catch (Exception e)
                 {

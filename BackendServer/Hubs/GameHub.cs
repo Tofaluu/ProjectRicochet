@@ -49,6 +49,22 @@ namespace BackendServer.Hubs
         public Task<DailyLeaderboard> GetDailyLeaderboard(string guestId, int number) =>
             _daily.GetLeaderboardAsync(guestId, number);
 
+        [HubMethodName(HubMethods.GetDailyCalendar)]
+        public Task<DailyCalendar> GetDailyCalendar(string guestId) => _daily.GetCalendarAsync(guestId);
+
+        [HubMethodName(HubMethods.GetPastDaily)]
+        public Task<DailyPastInfo> GetPastDaily(string guestId, int number) => _daily.GetPastAsync(guestId, number);
+
+        [HubMethodName(HubMethods.SubmitPastDaily)]
+        public Task<DailyPastResult> SubmitPastDaily(string guestId, int number, byte[] moves) =>
+            _daily.SubmitPastAsync(guestId, number, moves);
+
+        [HubMethodName(HubMethods.ShowDailySolution)]
+        public Task<DailySolution> ShowDailySolution(string guestId, int number) => _daily.ShowSolutionAsync(guestId, number);
+
+        [HubMethodName(HubMethods.GetStreakLeaderboard)]
+        public Task<StreakLeaderboard> GetStreakLeaderboard(string guestId) => _daily.GetStreakLeaderboardAsync(guestId);
+
         [HubMethodName(HubMethods.LeaveLobby)]
         public Task LeaveLobby() => _lobbies.LeaveAsync(Context.ConnectionId);
 

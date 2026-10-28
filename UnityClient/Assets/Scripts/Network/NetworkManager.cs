@@ -233,6 +233,38 @@ namespace Ricochet.Client.Network
             return await _connection.InvokeAsync<DailyLeaderboard>(HubMethods.GetDailyLeaderboard, guestId, number);
         }
 
+        public async Task<DailyCalendar> GetDailyCalendarAsync(string guestId)
+        {
+            await EnsureConnectedAsync();
+            return await _connection.InvokeAsync<DailyCalendar>(HubMethods.GetDailyCalendar, guestId);
+        }
+
+        /// <summary>A puzzle from before today, to play again (never changes its leaderboard or a streak).</summary>
+        public async Task<DailyPastInfo> GetPastDailyAsync(string guestId, int number)
+        {
+            await EnsureConnectedAsync();
+            return await _connection.InvokeAsync<DailyPastInfo>(HubMethods.GetPastDaily, guestId, number);
+        }
+
+        public async Task<DailyPastResult> SubmitPastDailyAsync(string guestId, int number, IReadOnlyList<Move> moves)
+        {
+            await EnsureConnectedAsync();
+            return await _connection.InvokeAsync<DailyPastResult>(HubMethods.SubmitPastDaily, guestId, number, MoveCodec.Encode(moves));
+        }
+
+        /// <summary>A past puzzle's shortest solution (the player's calendar marks the day as seen).</summary>
+        public async Task<DailySolution> ShowDailySolutionAsync(string guestId, int number)
+        {
+            await EnsureConnectedAsync();
+            return await _connection.InvokeAsync<DailySolution>(HubMethods.ShowDailySolution, guestId, number);
+        }
+
+        public async Task<StreakLeaderboard> GetStreakLeaderboardAsync(string guestId)
+        {
+            await EnsureConnectedAsync();
+            return await _connection.InvokeAsync<StreakLeaderboard>(HubMethods.GetStreakLeaderboard, guestId);
+        }
+
         /// <summary>The server's message for a failed call (without the transport's prefix).</summary>
         public static string DescribeError(Exception e) => Describe(e);
 

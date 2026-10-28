@@ -40,6 +40,31 @@ namespace BackendServer.Services
         public DateTime? SolvedUtc { get; set; }
     }
 
+    /// <summary>
+    /// One player on a past puzzle played after its day (the <c>daily_archive</c> table): kept apart from
+    /// <see cref="DailyEntryRecord"/> so it never changes that day's leaderboard or a streak.
+    /// </summary>
+    public class DailyArchiveRecord
+    {
+        public int Number { get; set; }
+        public string GuestId { get; set; } = "";
+        public DateTime OpenedUtc { get; set; }
+
+        /// <summary>0 until solved.</summary>
+        public int BestMoves { get; set; }
+        public byte[]? BestSolution { get; set; }
+        public DateTime? SolvedUtc { get; set; }
+
+        /// <summary>When the player looked at the shortest solution (null = never).</summary>
+        public DateTime? SawSolutionUtc { get; set; }
+    }
+
     /// <summary>A leaderboard line.</summary>
     public sealed record DailyRow(string GuestId, string Name, int Moves, double Seconds);
+
+    /// <summary>A puzzle without its board, for the calendar.</summary>
+    public sealed record DailySummary(int Number, DateOnly Date, int ShortestLength);
+
+    /// <summary>A solved day of a player who has a streak going, for the streak leaderboard.</summary>
+    public sealed record DailySolve(string GuestId, string Name, int Number);
 }
