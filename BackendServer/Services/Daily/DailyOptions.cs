@@ -21,6 +21,12 @@ namespace BackendServer.Services
 
         public const int LongBoardMoves = 15;
 
+        /// <summary>
+        /// Time spent looking for a board needing the day's preferred number of robots (Sunday: all 4) before settling for the
+        /// required number (<see cref="DailyService.Robots"/>).
+        /// </summary>
+        public double PreferSeconds { get; set; } = 900;
+
         /// <summary>Time the solver gets per candidate board (boards it gives up on are skipped).</summary>
         public double SolverTimeLimitSeconds { get; set; } = 5;
 
@@ -29,6 +35,9 @@ namespace BackendServer.Services
         /// <summary>For testing (e.g. a dev server): every puzzle's length range instead of the weekday's.</summary>
         public int? MinMoves { get; set; }
         public int? MaxMoves { get; set; }
+
+        /// <summary>For testing: how many robots every shortest solution must move (else the weekday's; 1 when the length is overridden).</summary>
+        public int? MinRobots { get; set; }
 
         /// <summary>
         /// For testing past puzzles on a fresh dev server (whose memory store has none): also generate this many days

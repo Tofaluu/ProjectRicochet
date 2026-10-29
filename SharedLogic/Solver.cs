@@ -42,6 +42,7 @@ namespace SharedLogic
     /// Robots that can't finish are interchangeable, so positions differing only by swapping them share
     /// an entry. A whole position packs into one 32-bit key (boards are at most 256 cells).</item>
     /// </list>
+    /// Optionally only some robots may move (the rest stand still as blockers): <see cref="FewestRobots"/> uses it.
     /// </remarks>
     public sealed class Solver
     {
@@ -49,6 +50,8 @@ namespace SharedLogic
         public const long DefaultMaxNodes = 500_000_000;
         /// <summary>Caps the position table: at most ~80 MB (it only grows as needed).</summary>
         public const int DefaultMaxTableEntries = 1 << 23;
+        /// <summary>Every robot may move: one bit per <see cref="RobotColor"/> (1 &lt;&lt; (int)color).</summary>
+        public const int AllRobots = (1 << Robot.Count) - 1;
 
         private const int Unreachable = 255;
 
@@ -82,25 +85,65 @@ namespace SharedLogic
         /// <param name="maxMoves">Give up on solutions longer than this.</param>
         /// <param name="maxNodes">Give up after examining this many positions.</param>
         /// <param name="timeLimit">Give up after this long (null = no time limit).</param>
+        /// <param name="movableRobots">The robots that may move (bits, see <see cref="AllRobots"/>); the rest stand still.</param>
         public static SolverResult Solve(GridState grid, RobotPositions start, Target target,
-            int maxMoves = DefaultMaxMoves, long maxNodes = DefaultMaxNodes, TimeSpan? timeLimit = null)
+            int maxMoves = DefaultMaxMoves, long maxNodes = DefaultMaxNodes, TimeSpan? timeLimit = null,
+            int movableRobots = AllRobots)
         {
             if (grid == null) throw new ArgumentNullException(nameof(grid));
-            return new Solver(grid).Run(start, target, maxMoves, maxNodes, timeLimit);
+            return new Solver(grid).Run(start, target, maxMoves, maxNodes, timeLimit, movableRobots & AllRobots);
         }
 
         public static SolverResult Solve(RoundSetup round,
-            int maxMoves = DefaultMaxMoves, long maxNodes = DefaultMaxNodes, TimeSpan? timeLimit = null)
+            int maxMoves = DefaultMaxMoves, long maxNodes = DefaultMaxNodes, TimeSpan? timeLimit = null,
+            int movableRobots = AllRobots)
         {
             if (round == null) throw new ArgumentNullException(nameof(round));
-            return Solve(round.Grid, round.Robots, round.Target, maxMoves, maxNodes, timeLimit);
+            return Solve(round.Grid, round.Robots, round.Target, maxMoves, maxNodes, timeLimit, movableRobots);
         }
+
+        /// <summary>
+        /// The fewest robots that can solve <paramref name="round"/> in <paramref name="length"/> moves (its shortest
+        /// solution's length): 1 if the target robot can do it alone, 4 if every shortest solution moves all four. A
+        /// group the solver gives up on (<paramref name="timeLimit"/>) counts as able to, so the answer never overstates.
+        /// </summary>
+        public static int FewestRobots(RoundSetup round, int length, TimeSpan? timeLimit = null)
+        {
+            if (round == null) throw new ArgumentNullException(nameof(round));
+            for (int count = 1; count < Robot.Count; count++)
+            {
+                for (int group = 1; group < AllRobots; group++)
+                {
+                    if (BitCount(group) != count || !CanFinish(round.Target, group))
+                        continue;
+                    // HitLimit also means "none within length"; only a search cut short (nodes, time) leaves it open.
+                    var solver = new Solver(round.Grid);
+                    SolverResult result = solver.Run(round.Robots, round.Target, length, DefaultMaxNodes, timeLimit, group);
+                    if (result.Solved || solver._aborted)
+                        return count;
+                }
+            }
+            return Robot.Count;
+        }
+
+        private static int BitCount(int bits)
+        {
+            int count = 0;
+            for (; bits != 0; bits &= bits - 1)
+                count++;
+            return count;
+        }
+
+        private static bool CanFinish(Target target, int robots) =>
+            target.Robot.HasValue ? (robots & (1 << (int)target.Robot.Value)) != 0 : robots != 0;
 
         // ---- Search state (one search per Solver instance) ----
 
         private readonly int[] _pos = new int[Robot.Count];
         private readonly int[] _robotOrder = new int[Robot.Count];
         private int _finishers; // how many robots at the start of _robotOrder can finish the puzzle
+        private int _movable;   // how many robots at the start of _robotOrder may move (the finishers first)
+        private bool _restricted; // some robots stand still
         private int _targetCell;
         private int _targetRobot; // -1 = any robot
         private byte[] _lowerBound;
@@ -113,7 +156,7 @@ namespace SharedLogic
         private long _deadlineTicks;
         private bool _aborted;
 
-        private SolverResult Run(RobotPositions start, Target target, int maxMoves, long maxNodes, TimeSpan? timeLimit)
+        private SolverResult Run(RobotPositions start, Target target, int maxMoves, long maxNodes, TimeSpan? timeLimit, int movableRobots)
         {
             _clock = Stopwatch.StartNew();
             _deadlineTicks = timeLimit.HasValue ? (long)(timeLimit.Value.TotalSeconds * Stopwatch.Frequency) : long.MaxValue;
@@ -123,23 +166,25 @@ namespace SharedLogic
             _targetRobot = target.Robot.HasValue ? (int)target.Robot.Value : -1;
 
             // The robot(s) that can finish go first: they're tried first, and they're the only ones
-            // worth trying for the last move of a branch.
-            if (_targetRobot >= 0)
+            // worth trying for the last move of a branch. Then the other robots that may move, then those standing still.
+            _restricted = movableRobots != AllRobots;
+            int n = 0;
+            for (int pass = 0; pass < 3; pass++)
             {
-                _finishers = 1;
-                _robotOrder[0] = _targetRobot;
-                for (int r = 0, i = 1; r < Robot.Count; r++)
-                {
-                    if (r != _targetRobot)
-                        _robotOrder[i++] = r;
-                }
-            }
-            else
-            {
-                _finishers = Robot.Count;
                 for (int r = 0; r < Robot.Count; r++)
-                    _robotOrder[r] = r;
+                {
+                    bool movable = (movableRobots & (1 << r)) != 0;
+                    bool finishes = _targetRobot < 0 || _targetRobot == r;
+                    if (pass == 0 ? movable && finishes : pass == 1 ? movable && !finishes : !movable)
+                        _robotOrder[n++] = r;
+                }
+                if (pass == 0)
+                    _finishers = n;
+                else if (pass == 1)
+                    _movable = n;
             }
+            if (_finishers == 0)
+                return new SolverResult(null, false, 0, _clock.Elapsed); // no robot that may move can finish
 
             _lowerBound = ComputeLowerBounds(_targetCell);
             _maxNodes = maxNodes;
@@ -181,7 +226,7 @@ namespace SharedLogic
 
             int remaining = limit - depth - 1; // moves left after the one we're about to make
             // On the last move only a robot that can finish is worth moving.
-            int robotsToTry = remaining == 0 ? _finishers : Robot.Count;
+            int robotsToTry = remaining == 0 ? _finishers : _movable;
             for (int i = 0; i < robotsToTry; i++)
             {
                 int r = _robotOrder[i];
@@ -258,8 +303,8 @@ namespace SharedLogic
                 return _lowerBound[_pos[_targetRobot]];
 
             int best = Unreachable;
-            for (int r = 0; r < Robot.Count; r++)
-                best = Math.Min(best, _lowerBound[_pos[r]]);
+            for (int i = 0; i < _finishers; i++)
+                best = Math.Min(best, _lowerBound[_pos[_robotOrder[i]]]);
             return best;
         }
 
@@ -269,6 +314,9 @@ namespace SharedLogic
         /// </summary>
         private uint Key()
         {
+            // With robots standing still, swapping one for a moving one isn't the same position: no sorting.
+            if (_restricted)
+                return ((uint)_pos[0] << 24) | ((uint)_pos[1] << 16) | ((uint)_pos[2] << 8) | (uint)_pos[3];
             if (_targetRobot < 0)
                 return Pack(_pos[0], _pos[1], _pos[2], _pos[3]);
 

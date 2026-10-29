@@ -11,6 +11,55 @@ public class SolverTests
         new RobotPositions(red, P(13, 15), P(14, 15), P(15, 15));
 
     [Fact]
+    public void RobotsThatMayNotMove_StandStill()
+    {
+        // Red needs blue as a blocker (see UsesAnotherRobotAsABlocker); with blue standing still it can't be done in 2.
+        var grid = new GridState();
+        var robots = new RobotPositions(P(0, 0), P(6, 15), P(0, 15), P(1, 15));
+        var target = new Target(P(5, 0), RobotColor.Red);
+        int redOnly = 1 << (int)RobotColor.Red;
+
+        Assert.False(Solver.Solve(grid, robots, target, maxMoves: 2, movableRobots: redOnly).Solved);
+        Assert.False(Solver.Solve(grid, robots, target, movableRobots: 1 << (int)RobotColor.Blue).Solved); // red must move
+        Assert.Equal(2, Solver.Solve(grid, robots, target, movableRobots: redOnly | 1 << (int)RobotColor.Blue).Moves.Length);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    public void FewestRobots_IsTheSmallestGroupThatSolvesItAsQuickly(int seed)
+    {
+        RoundSetup round = BoardGenerator.GenerateRound(new Random(seed));
+        Move[] shortest = Solver.Solve(round).Moves;
+        int fewest = Solver.FewestRobots(round, shortest.Length);
+
+        Assert.InRange(fewest, 1, shortest.Select(m => m.Robot).Distinct().Count());
+        // Some group of that size solves it in the shortest length using only its own robots; no smaller group does.
+        bool any = false;
+        for (int group = 1; group < Solver.AllRobots; group++)
+        {
+            int size = System.Numerics.BitOperations.PopCount((uint)group);
+            if (size > fewest)
+                continue;
+            SolverResult result = Solver.Solve(round, shortest.Length, movableRobots: group);
+            if (size < fewest)
+                Assert.False(result.Solved);
+            else if (result.Solved)
+            {
+                any = true;
+                Assert.Equal(shortest.Length, result.Moves.Length);
+                Assert.All(result.Moves, m => Assert.True((group & (1 << (int)m.Robot)) != 0));
+                Assert.Equal(SolutionResult.Valid, GameRules.ValidateSolution(round.Grid, round.Robots, round.Target, result.Moves));
+            }
+        }
+        Assert.True(any);
+    }
+
+    [Fact]
     public void FindsASingleSlide()
     {
         var grid = new GridState();

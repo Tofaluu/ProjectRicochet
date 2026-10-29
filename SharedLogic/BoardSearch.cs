@@ -25,18 +25,28 @@ namespace SharedLogic
         private int _currentLength;
         private int _step;
 
-        public BoardSearch(int minMoves, Random random, TimeSpan? solverTimeLimit, int maxMoves = int.MaxValue)
+        /// <param name="minRobots">
+        /// Only boards whose every shortest solution moves at least this many robots count as found
+        /// (<see cref="Solver.FewestRobots"/>); 1 = any.
+        /// </param>
+        public BoardSearch(int minMoves, Random random, TimeSpan? solverTimeLimit, int maxMoves = int.MaxValue, int minRobots = 1)
         {
             if (random == null) throw new ArgumentNullException(nameof(random));
             if (maxMoves < minMoves) throw new ArgumentOutOfRangeException(nameof(maxMoves));
+            if (minRobots < 1 || minRobots > Robot.Count) throw new ArgumentOutOfRangeException(nameof(minRobots));
             MinMoves = minMoves;
             MaxMoves = maxMoves;
+            MinRobots = minRobots;
             _random = random;
             _solverTimeLimit = solverTimeLimit;
         }
 
         public int MinMoves { get; }
         public int MaxMoves { get; }
+        public int MinRobots { get; }
+
+        /// <summary>The found board's <see cref="Solver.FewestRobots"/> (0 until checked: when <see cref="MinRobots"/> is 1, never).</summary>
+        public int FoundRobots { get; private set; }
 
         /// <summary>Solves so far.</summary>
         public int Solves { get; private set; }
@@ -88,7 +98,7 @@ namespace SharedLogic
                     Longest = candidate;
                     LongestMoves = solved.Moves;
                 }
-                if (_currentLength >= MinMoves)
+                if (_currentLength >= MinMoves && HasEnoughRobots(candidate))
                 {
                     // The board that's in range (an earlier, equally long one may be Longest).
                     Longest = candidate;
@@ -97,6 +107,15 @@ namespace SharedLogic
                 }
             }
             return Found;
+        }
+
+        // Long enough boards that a smaller group of robots can solve as quickly keep the search going (nudged further).
+        private bool HasEnoughRobots(RoundSetup candidate)
+        {
+            if (MinRobots <= 1)
+                return true;
+            FoundRobots = Solver.FewestRobots(candidate, _currentLength, _solverTimeLimit);
+            return FoundRobots >= MinRobots;
         }
     }
 }

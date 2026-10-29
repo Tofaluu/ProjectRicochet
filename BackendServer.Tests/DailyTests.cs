@@ -59,6 +59,7 @@ public class DailyTests
         DailyPuzzleInfo monday = await daily.GetDailyAsync(Alice, "Alice");
         Assert.Equal(1, monday.Number);
         Assert.Equal(9, monday.ShortestLength);
+        Assert.True(Solver.FewestRobots(BoardCodec.Decode(monday.Board), 9) >= 2); // not the target robot alone
 
         time.Advance(TimeSpan.FromMinutes(2));
         DailyPuzzleInfo tuesday = await daily.GetDailyAsync(Alice, "Alice");
@@ -66,6 +67,9 @@ public class DailyTests
         Assert.InRange(tuesday.ShortestLength, 10, 11);
         Assert.Equal((10, 11), DailyService.Difficulty(DayOfWeek.Tuesday));
         Assert.Equal((16, 17), DailyService.Difficulty(DayOfWeek.Sunday));
+        Assert.Equal((2, 2), DailyService.Robots(DayOfWeek.Monday));
+        Assert.Equal((3, 3), DailyService.Robots(DayOfWeek.Friday));
+        Assert.Equal((3, 4), DailyService.Robots(DayOfWeek.Sunday));
     }
 
     [Fact]

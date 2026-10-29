@@ -59,6 +59,18 @@ namespace BackendServer.Services
         private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
         /// <summary>The puzzle day at <paramref name="utc"/> (its date where the puzzle changes).</summary>
+        /// <summary>
+        /// How many robots every shortest solution of the day's puzzle must move (user, 2026-10-29): Monday to Thursday not
+        /// the target robot alone, Friday and Saturday at least 3, Sunday at least 3 and all 4 if one is found in
+        /// <see cref="DailyOptions.PreferSeconds"/> (all-4 boards are rare: 2 of 222 measured).
+        /// </summary>
+        public static (int Required, int Preferred) Robots(DayOfWeek day) => day switch
+        {
+            DayOfWeek.Friday or DayOfWeek.Saturday => (3, 3),
+            DayOfWeek.Sunday => (3, 4),
+            _ => (2, 2),
+        };
+
         public DateOnly DayAt(DateTime utc) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utc, _zone));
 
         public int NumberOf(DateOnly day) => day.DayNumber - _launch.DayNumber + 1;
@@ -347,17 +359,37 @@ namespace BackendServer.Services
             int seed = _options.Seed.HasValue ? _options.Seed.Value * 10007 + number : Random.Shared.Next();
             var random = new Random(seed);
             int wanted = PickLength(min, max, random);
-            var search = new BoardSearch(wanted, random, TimeSpan.FromSeconds(_options.SolverTimeLimitSeconds), wanted);
+            // A length override (testing) drops the robots rule unless it's given too: tiny boards rarely need 3 robots.
+            (int needRobots, int preferRobots) = _options.MinRobots.HasValue ? (_options.MinRobots.Value, _options.MinRobots.Value)
+                : _options.MinMoves.HasValue ? (1, 1) : Robots(day.DayOfWeek);
+            var solverLimit = TimeSpan.FromSeconds(_options.SolverTimeLimitSeconds);
             // 15+ move boards (Saturday, Sunday) can take minutes to find on the server; there's a day to spare.
             var budget = TimeSpan.FromSeconds(wanted >= DailyOptions.LongBoardMoves ? _options.LongSearchSeconds : _options.SearchSeconds);
             var clock = Stopwatch.StartNew();
-            while (!search.Step(noTimeLimit: clock.Elapsed >= budget && search.Longest == null))
+            BoardSearch search = null;
+            if (preferRobots > needRobots)
             {
-                if (clock.Elapsed >= budget && search.Longest != null)
-                    break;
+                // First try for the preferred number of robots for part of the budget.
+                var preferred = new BoardSearch(wanted, random, solverLimit, wanted, preferRobots);
+                var preferBudget = TimeSpan.FromSeconds(Math.Min(_options.PreferSeconds, budget.TotalSeconds));
+                while (!preferred.Step() && clock.Elapsed < preferBudget) { }
+                if (preferred.Found)
+                    search = preferred;
             }
-            _log.LogInformation("Daily #{Number} ({Day:yyyy-MM-dd}, {Weekday}): shortest {Moves} moves, wanted {Wanted} of {Min}-{Max} ({Solves} solves, {Ms} ms)",
-                number, day, day.DayOfWeek, search.LongestMoves.Length, wanted, min, max, search.Solves, clock.ElapsedMilliseconds);
+            if (search == null)
+            {
+                search = new BoardSearch(wanted, random, solverLimit, wanted, needRobots);
+                // Out of time: the longest board found, even if fewer robots can solve it (never no puzzle).
+                while (!search.Step(noTimeLimit: clock.Elapsed >= budget && search.Longest == null))
+                {
+                    if (clock.Elapsed >= budget && search.Longest != null)
+                        break;
+                }
+            }
+            int robots = search.Found && search.FoundRobots > 0 ? search.FoundRobots
+                : Solver.FewestRobots(search.Longest, search.LongestMoves.Length, solverLimit);
+            _log.LogInformation("Daily #{Number} ({Day:yyyy-MM-dd}, {Weekday}): shortest {Moves} moves needing {Robots} robots, wanted {Wanted} of {Min}-{Max} and {Need}+ robots ({Solves} solves, {Ms} ms)",
+                number, day, day.DayOfWeek, search.LongestMoves.Length, robots, wanted, min, max, needRobots, search.Solves, clock.ElapsedMilliseconds);
             return new DailyPuzzleRecord
             {
                 Number = number,

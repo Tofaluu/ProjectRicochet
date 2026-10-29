@@ -42,6 +42,17 @@ public class BoardSearchTests
     }
 
     [Fact]
+    public void CanRequireEveryShortestSolutionToMoveSeveralRobots()
+    {
+        var search = new BoardSearch(8, new Random(3), TimeSpan.FromSeconds(5), 8, minRobots: 3);
+        while (!search.Step()) { }
+
+        Assert.Equal(8, search.LongestMoves.Length);
+        Assert.True(search.FoundRobots >= 3);
+        Assert.Equal(search.FoundRobots, Solver.FewestRobots(search.Longest, 8));
+    }
+
+    [Fact]
     public void NeverKeepsABoardPastTheMaximum()
     {
         var search = new BoardSearch(14, new Random(7), TimeSpan.FromSeconds(0.2), maxMoves: 14);
