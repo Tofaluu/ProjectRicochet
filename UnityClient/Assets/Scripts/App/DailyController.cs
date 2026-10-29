@@ -271,10 +271,21 @@ namespace Ricochet.Client.App
             Archive.Select(number);
             try
             {
+                // The day's leaderboard comes with it, so the card and the board change together.
                 DailyPastInfo info = await Network.GetPastDailyAsync(GuestIdentity.Id, number);
+                DailyLeaderboard board = null;
+                try
+                {
+                    board = await Network.GetDailyLeaderboardAsync(GuestIdentity.Id, number);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("[Daily] Past leaderboard failed: " + NetworkManager.DescribeError(e));
+                }
                 if (!Archive.IsOpen || Archive.Selected != number || Network.IsInLobby)
                     return;
                 Archive.OnPast(info);
+                Archive.Past.OnLeaderboard(board);
                 Scratchpad.ShowDaily(Archive.Past.Round);
                 _holdBoard = true;
             }

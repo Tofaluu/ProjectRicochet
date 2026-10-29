@@ -68,7 +68,9 @@ namespace Ricochet.Client.App
         private Label _dailyBoardEmpty, _archiveSub, _archiveMonth, _archiveDayTitle, _archiveDayHeadline, _archiveDayDetail;
         private Label _archiveDayMoves, _archiveLaterMoves, _archiveShortest, _archiveNotice;
         private Button _archivePrev, _archiveNext, _archiveWatch, _archiveSolution;
-        private string _shownStrip, _shownCalendar;
+        private string _shownStrip, _shownCalendar, _shownPastRows;
+        private VisualElement _archiveBoard, _archiveRows;
+        private Label _archiveBoardEmpty;
         private bool _streaksTab; // the daily leaderboard shows streaks instead of today's results
         private Screen? _scrolledFor; // the screen the side panel's scroll belongs to
         private Label _homeTitle, _homeDailyTitle, _homeDailyStreak, _playStatus, _profileAvatar, _profileName;
@@ -1503,6 +1505,9 @@ namespace Ricochet.Client.App
             _archiveLaterMoves = _root.Q<Label>("archive-later-moves");
             _archiveShortest = _root.Q<Label>("archive-shortest");
             _archiveNotice = _root.Q<Label>("archive-notice");
+            _archiveBoard = _root.Q("archive-board");
+            _archiveRows = _root.Q("archive-rows");
+            _archiveBoardEmpty = _root.Q<Label>("archive-board-empty");
             _archivePrev = Click("archive-prev", () => _daily.Archive.ShowMonth(-1));
             _archiveNext = Click("archive-next", () => _daily.Archive.ShowMonth(1));
             _archiveWatch = Click("archive-watch", _daily.WatchMine);
@@ -1511,8 +1516,12 @@ namespace Ricochet.Client.App
             Click("archive-today", OpenDaily);
 
             VisualElement legend = _root.Q("archive-legend");
-            foreach ((string mark, string text) in new[] { ("perfect", "Perfect"), ("solved", "Solved"), ("tried", "Tried"), ("none", "Not played") })
-                legend.Add(LegendItem("legend-swatch cal-cell--" + mark, text));
+            foreach ((string classes, string text) in new[]
+                {
+                    ("cal-cell--perfect", "Perfect"), ("cal-cell--solved", "Solved"), ("legend-ring cal-ring--solved", "Solved later"),
+                    ("cal-cell--none", "Not solved"),
+                })
+                legend.Add(LegendItem("legend-swatch " + classes, text));
             legend.Add(LegendItem("legend-swatch cal-seen", "Saw the solution"));
         }
 
@@ -1530,8 +1539,21 @@ namespace Ricochet.Client.App
             return item;
         }
 
-        private static string MarkClass(DailyDay day, int today) =>
-            day.Number == today ? "cal-cell--today" : "cal-cell--" + DailyArchive.Mark(day).ToString().ToLowerInvariant();
+        // A day's look: today in gold; else filled with the result on the day, ringed by a later play worth showing.
+        private static string MarkClass(DailyDay day, int today)
+        {
+            if (day.Number == today)
+                return "cal-cell--today";
+            string classes = "cal-cell--" + DailyArchive.DayResult(day).ToString().ToLowerInvariant();
+            DayMark ring = DailyArchive.LaterRing(day);
+            return ring == DayMark.None ? classes : classes + " cal-ring cal-ring--" + ring.ToString().ToLowerInvariant();
+        }
+
+        private static void AddMark(VisualElement cell, DailyDay day, int today)
+        {
+            foreach (string name in MarkClass(day, today).Split(' '))
+                cell.AddToClassList(name);
+        }
 
         // The daily screen's last seven days: a past day opens it on the calendar.
         private void ShowStrip(bool hidden)
@@ -1558,7 +1580,7 @@ namespace Ricochet.Client.App
                 });
                 cell.AddToClassList("cal-cell");
                 cell.AddToClassList("strip-day");
-                cell.AddToClassList(MarkClass(day, archive.Today));
+                AddMark(cell, day, archive.Today);
                 var dow = new Label(date.ToString("ddd", CultureInfo.InvariantCulture).ToUpperInvariant());
                 dow.AddToClassList("strip-dow");
                 var num = new Label(date.Day.ToString());
@@ -1596,6 +1618,7 @@ namespace Ricochet.Client.App
             int shown = past?.Number ?? archive.Selected;
             DailyDay day = archive.Day(shown);
             _archiveDay.style.display = shown > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            ShowPastLeaderboard(past);
             if (shown == 0)
                 return;
             DailyArchive.TryParse(day?.Date ?? "", out DateTime date);
@@ -1619,13 +1642,31 @@ namespace Ricochet.Client.App
             _archiveShortest.text = past.ShortestLength.ToString();
             string onTheDay = past.DayMoves > 0 ? $"On the day you solved it in {past.DayMoves} moves ({DailyState.Clock(past.DaySeconds)})."
                 : past.Opened ? "You opened it on the day but didn't solve it." : "You didn't play it on the day.";
-            string players = past.Players == 0 ? "Nobody solved it on the day." : past.Players == 1 ? "1 player solved it on the day."
-                : $"{past.Players} players solved it on the day.";
-            _archiveDayDetail.text = $"{onTheDay} {players}" + (past.SawSolution ? " You've seen the solution." : "");
+            _archiveDayDetail.text = onTheDay + (past.SawSolution ? " You've seen the solution." : "");
             _archiveSolution.text = past.SawSolution ? "Show the solution again" : "Show the solution";
             string notice = _daily.Notice ?? (past.Submitting ? "Sending..." : null);
             _archiveNotice.text = notice ?? "";
             _archiveNotice.style.display = notice != null ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        // The picked day's own leaderboard: its top 5, and the player's row if they solved it on the day but aren't in them.
+        private void ShowPastLeaderboard(PastPuzzle past)
+        {
+            DailyLeaderboard board = past?.Leaderboard;
+            _archiveBoard.style.display = board != null ? DisplayStyle.Flex : DisplayStyle.None;
+            bool any = board?.Top != null && board.Top.Length > 0;
+            _archiveBoardEmpty.style.display = board != null && !any ? DisplayStyle.Flex : DisplayStyle.None;
+            string rows = any ? board.Number + ":" + string.Join("|", Array.ConvertAll(board.Top, e => $"{e.Name}/{e.Moves}/{e.Seconds:0}/{e.IsMe}")) + board.MyRank : "";
+            if (rows == _shownPastRows)
+                return;
+            _shownPastRows = rows;
+            _archiveRows.Clear();
+            if (!any)
+                return;
+            for (int i = 0; i < board.Top.Length && i < 5; i++)
+                _archiveRows.Add(LeaderboardRow(i + 1, board.Top[i].IsMe ? "You" : board.Top[i].Name, board.Top[i].Moves, board.Top[i].Seconds, board.Top[i].IsMe));
+            if (board.MyRank > 5)
+                _archiveRows.Add(LeaderboardRow(board.MyRank, "You", past.DayMoves, past.DaySeconds, true));
         }
 
         // The shown month, Sunday first: a cell per day, coloured by the player's result; rebuilt only when something changes.
@@ -1695,7 +1736,7 @@ namespace Ricochet.Client.App
                     }
                     else
                     {
-                        cell.AddToClassList(MarkClass(day, archive.Today));
+                        AddMark(cell, day, archive.Today);
                         cell.EnableInClassList("is-selected", number == archive.Selected);
                         AddSeen(cell, day);
                     }

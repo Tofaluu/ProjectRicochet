@@ -203,6 +203,11 @@
                         <ui:Button name="archive-restart" text="Start over" class="btn" />
                         <ui:Label name="archive-notice" text="" class="notice" />
                     </ui:VisualElement>
+                    <ui:VisualElement name="archive-board" class="card">
+                        <ui:Label text="That day's leaderboard" class="h2 gap-s" />
+                        <ui:VisualElement name="archive-rows" />
+                        <ui:Label name="archive-board-empty" text="Nobody solved it on the day." class="muted small" />
+                    </ui:VisualElement>
                     <ui:Button name="archive-today" text="Back to today's puzzle" class="link-quiet" />
                 </ui:VisualElement>
 

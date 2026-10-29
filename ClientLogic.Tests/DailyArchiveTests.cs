@@ -42,11 +42,30 @@ namespace ClientLogic.Tests
         public void Marks_TakeTheBestOfTheDayAndLaterPlays()
         {
             Assert.Equal(DayMark.None, DailyArchive.Mark(new DailyDay { ShortestLength = 9 }));
-            Assert.Equal(DayMark.Tried, DailyArchive.Mark(new DailyDay { ShortestLength = 9, Opened = true }));
-            Assert.Equal(DayMark.Tried, DailyArchive.Mark(new DailyDay { ShortestLength = 9, SawSolution = true }));
+            Assert.Equal(DayMark.None, DailyArchive.Mark(new DailyDay { ShortestLength = 9, Opened = true, SawSolution = true }));
             Assert.Equal(DayMark.Solved, DailyArchive.Mark(new DailyDay { ShortestLength = 9, Opened = true, BestMoves = 12 }));
             Assert.Equal(DayMark.Perfect, DailyArchive.Mark(new DailyDay { ShortestLength = 9, Opened = true, BestMoves = 12, LaterMoves = 9 }));
             Assert.Equal(DayMark.Solved, DailyArchive.Mark(new DailyDay { ShortestLength = 9, LaterMoves = 10, SawSolution = true }));
+        }
+
+        [Fact]
+        public void TheCalendar_FillsTheDaysResult_AndRingsLaterPlays()
+        {
+            // Solved on the day: filled; a later play adds a ring only when it makes the day perfect.
+            var solvedThenPerfect = new DailyDay { ShortestLength = 9, Opened = true, BestMoves = 12, LaterMoves = 9 };
+            Assert.Equal(DayMark.Solved, DailyArchive.DayResult(solvedThenPerfect));
+            Assert.Equal(DayMark.Perfect, DailyArchive.LaterRing(solvedThenPerfect));
+            var solvedThenShorter = new DailyDay { ShortestLength = 9, Opened = true, BestMoves = 12, LaterMoves = 10 };
+            Assert.Equal(DayMark.None, DailyArchive.LaterRing(solvedThenShorter));
+            var perfectOnTheDay = new DailyDay { ShortestLength = 9, Opened = true, BestMoves = 9, LaterMoves = 9 };
+            Assert.Equal(DayMark.Perfect, DailyArchive.DayResult(perfectOnTheDay));
+            Assert.Equal(DayMark.None, DailyArchive.LaterRing(perfectOnTheDay));
+
+            // Not solved on the day: no fill, a ring in the later result's colour.
+            var later = new DailyDay { ShortestLength = 9, Opened = true, LaterMoves = 11 };
+            Assert.Equal(DayMark.None, DailyArchive.DayResult(later));
+            Assert.Equal(DayMark.Solved, DailyArchive.LaterRing(later));
+            Assert.Equal(DayMark.None, DailyArchive.LaterRing(new DailyDay { ShortestLength = 9, Opened = true }));
         }
 
         [Fact]
@@ -118,6 +137,11 @@ namespace ClientLogic.Tests
             Assert.Equal(9, past.Shortest.Length);
             Assert.True(past.SawSolution);
             Assert.True(archive.Day(7).SawSolution);
+
+            past.OnLeaderboard(new DailyLeaderboard { Number = 6, Top = new DailyLeaderboardEntry[0] }); // another day's
+            Assert.Null(past.Leaderboard);
+            past.OnLeaderboard(new DailyLeaderboard { Number = 7, Top = new DailyLeaderboardEntry[0], Players = 0 });
+            Assert.Equal(7, past.Leaderboard.Number);
 
             archive.Close();
             Assert.False(archive.IsOpen);

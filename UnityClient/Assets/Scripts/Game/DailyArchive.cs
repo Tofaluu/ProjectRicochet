@@ -5,15 +5,12 @@ using SharedLogic;
 
 namespace Ricochet.Client.Game
 {
-    /// <summary>How the player did on a day, as the calendar colours it.</summary>
+    /// <summary>A result as the calendar colours it: yellow solved, green perfect (the best possible length).</summary>
     public enum DayMark
     {
-        /// <summary>Never opened.</summary>
+        /// <summary>Not solved.</summary>
         None,
-        /// <summary>Opened (on the day or later) but not solved.</summary>
-        Tried,
         Solved,
-        /// <summary>Solved in the best possible number of moves (on the day or later).</summary>
         Perfect,
     }
 
@@ -111,15 +108,26 @@ namespace Ricochet.Client.Game
             return days;
         }
 
-        public static DayMark Mark(DailyDay day)
+        /// <summary>The player's best result on the day or later (the counts in the header).</summary>
+        public static DayMark Mark(DailyDay day) => day == null ? DayMark.None : MarkOf(Best(day.BestMoves, day.LaterMoves), day.ShortestLength);
+
+        /// <summary>The result on the day itself: the calendar fills the day with it.</summary>
+        public static DayMark DayResult(DailyDay day) => day == null ? DayMark.None : MarkOf(day.BestMoves, day.ShortestLength);
+
+        /// <summary>
+        /// A later play worth showing as a ring: any later solve of a day not solved on the day, or a later perfect of a day
+        /// solved (not perfectly) on the day. None otherwise.
+        /// </summary>
+        public static DayMark LaterRing(DailyDay day)
         {
-            if (day == null)
-                return DayMark.None;
-            int best = Best(day.BestMoves, day.LaterMoves);
-            if (best > 0)
-                return best <= day.ShortestLength ? DayMark.Perfect : DayMark.Solved;
-            return day.Opened || day.SawSolution ? DayMark.Tried : DayMark.None;
+            DayMark later = day == null ? DayMark.None : MarkOf(day.LaterMoves, day.ShortestLength);
+            DayMark onTheDay = DayResult(day);
+            return onTheDay == DayMark.None ? later
+                : onTheDay == DayMark.Solved && later == DayMark.Perfect ? DayMark.Perfect : DayMark.None;
         }
+
+        private static DayMark MarkOf(int moves, int shortest) =>
+            moves <= 0 ? DayMark.None : moves <= shortest ? DayMark.Perfect : DayMark.Solved;
 
         /// <summary>Past days (today not counted) solved, and of those the perfect ones.</summary>
         public int SolvedCount => Count(DayMark.Solved) + PerfectCount;
@@ -262,6 +270,15 @@ namespace Ricochet.Client.Game
 
         /// <summary>A solution is on its way to the server.</summary>
         public bool Submitting { get; private set; }
+
+        /// <summary>The day's own leaderboard (solves on the day only; later plays never count), once loaded.</summary>
+        public DailyLeaderboard Leaderboard { get; private set; }
+
+        public void OnLeaderboard(DailyLeaderboard leaderboard)
+        {
+            if (leaderboard != null && leaderboard.Number == Number)
+                Leaderboard = leaderboard;
+        }
 
         public int BestMoves => DailyArchive.Best(DayMoves, LaterMoves);
         public bool IsPerfect => BestMoves > 0 && BestMoves <= ShortestLength;
