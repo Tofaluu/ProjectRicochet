@@ -1628,7 +1628,7 @@ namespace Ricochet.Client.App
             _archiveNotice.style.display = notice != null ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        // The shown month, Monday first: a cell per day, coloured by the player's result; rebuilt only when something changes.
+        // The shown month, Sunday first: a cell per day, coloured by the player's result; rebuilt only when something changes.
         private void ShowCalendar(DailyArchive archive)
         {
             if (archive.ShownYear == 0)
@@ -1652,7 +1652,7 @@ namespace Ricochet.Client.App
 
             var head = new VisualElement();
             head.AddToClassList("cal-row");
-            foreach (string name in new[] { "M", "T", "W", "T", "F", "S", "S" })
+            foreach (string name in new[] { "S", "M", "T", "W", "T", "F", "S" })
             {
                 var label = new Label(name);
                 label.AddToClassList("cal-dow");
@@ -1660,7 +1660,7 @@ namespace Ricochet.Client.App
             }
             _archiveGrid.Add(head);
 
-            int offset = ((int)first.DayOfWeek + 6) % 7; // Monday = 0
+            int offset = (int)first.DayOfWeek; // Sunday first, as North American calendars are
             int cells = (offset + count + 6) / 7 * 7;
             VisualElement row = null;
             for (int i = 0; i < cells; i++)
