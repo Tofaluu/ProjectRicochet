@@ -48,5 +48,12 @@ namespace BackendServer.Services
 
         /// <summary>Every player's solved days (on the day) in [<paramref name="from"/>, <paramref name="to"/>], with their names.</summary>
         Task<IReadOnlyList<DailySolve>> GetSolvesAsync(int from, int to);
+
+        /// <summary>
+        /// Moves guest <paramref name="from"/>'s entries and past plays to <paramref name="into"/> (on numbers both have,
+        /// the better one stays: <see cref="DailyMerge"/>) and removes <paramref name="from"/>. Returns the rows moved or
+        /// merged (0 = nothing left of <paramref name="from"/>).
+        /// </summary>
+        Task<int> MergeGuestAsync(string from, string into);
     }
 }

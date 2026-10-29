@@ -83,7 +83,7 @@ namespace BackendServer.Services
 
         public async Task<DailyPuzzleInfo> GetDailyAsync(string guestId, string name)
         {
-            CheckGuestId(guestId);
+            guestId = Player(guestId);
             DateTime now = UtcNow;
             DateOnly today = DayAt(now);
             int number = NumberOf(today);
@@ -109,7 +109,7 @@ namespace BackendServer.Services
 
         public async Task<DailyResult> SubmitAsync(string guestId, int number, byte[] moveData)
         {
-            CheckGuestId(guestId);
+            guestId = Player(guestId);
             DateTime now = UtcNow;
             if (number != NumberOf(DayAt(now)))
                 throw new HubException("That daily puzzle is over. Load today's puzzle.");
@@ -152,7 +152,7 @@ namespace BackendServer.Services
 
         public async Task<DailyLeaderboard> GetLeaderboardAsync(string guestId, int number)
         {
-            CheckGuestId(guestId);
+            guestId = Player(guestId);
             if (number < 1 || number > TodaysNumber)
                 throw new HubException("There's no such daily puzzle.");
             (IReadOnlyList<DailyRow> top, int players) = await _store.GetLeaderboardAsync(number, _options.LeaderboardSize);
@@ -172,7 +172,7 @@ namespace BackendServer.Services
         /// <summary>Every puzzle so far (today's included, which the calendar shows but doesn't open) and the player's results.</summary>
         public async Task<DailyCalendar> GetCalendarAsync(string guestId)
         {
-            CheckGuestId(guestId);
+            guestId = Player(guestId);
             int today = TodaysNumber;
             IReadOnlyList<DailySummary> puzzles = await _store.GetSummariesAsync(today);
             Dictionary<int, DailyEntryRecord> entries = (await _store.GetEntriesAsync(guestId)).ToDictionary(e => e.Number);
@@ -201,7 +201,7 @@ namespace BackendServer.Services
         /// <summary>A puzzle from before today, to play again.</summary>
         public async Task<DailyPastInfo> GetPastAsync(string guestId, int number)
         {
-            CheckGuestId(guestId);
+            guestId = Player(guestId);
             DailyPuzzleRecord puzzle = await PastPuzzleAsync(number);
             DailyEntryRecord? entry = await _store.GetEntryAsync(number, guestId);
             DailyArchiveRecord? play = await _store.GetArchiveEntryAsync(number, guestId);
@@ -226,7 +226,7 @@ namespace BackendServer.Services
         /// <summary>A solution to a past puzzle: the player's best later play is kept (fewest moves).</summary>
         public async Task<DailyPastResult> SubmitPastAsync(string guestId, int number, byte[] moveData)
         {
-            CheckGuestId(guestId);
+            guestId = Player(guestId);
             DailyPuzzleRecord puzzle = await PastPuzzleAsync(number);
             Move[] moves = CheckSolution(puzzle, moveData);
             DateTime now = UtcNow;
@@ -252,7 +252,7 @@ namespace BackendServer.Services
         /// <summary>A past puzzle's shortest solution; the player's calendar marks the day as seen from now on.</summary>
         public async Task<DailySolution> ShowSolutionAsync(string guestId, int number)
         {
-            CheckGuestId(guestId);
+            guestId = Player(guestId);
             DailyPuzzleRecord puzzle = await PastPuzzleAsync(number);
             DateTime now = UtcNow;
             DailyArchiveRecord play = await _store.GetArchiveEntryAsync(number, guestId)
@@ -271,7 +271,7 @@ namespace BackendServer.Services
         /// </summary>
         public async Task<StreakLeaderboard> GetStreakLeaderboardAsync(string guestId)
         {
-            CheckGuestId(guestId);
+            guestId = Player(guestId);
             int today = TodaysNumber;
             IReadOnlyList<DailySolve> solves = await _store.GetSolvesAsync(Math.Max(1, today - StreakWindow), today);
             var streaks = solves.GroupBy(s => s.GuestId)
@@ -433,6 +433,32 @@ namespace BackendServer.Services
                 longest = Math.Max(longest, length);
             }
             return longest;
+        }
+
+        // A valid guest id, as the player it belongs to (a second device's id is its first's: DailyOptions.GuestAliases).
+        private string Player(string guestId)
+        {
+            CheckGuestId(guestId);
+            return _options.GuestAliases.TryGetValue(guestId, out string? first) && GuestIdPattern.IsMatch(first) ? first : guestId;
+        }
+
+        /// <summary>
+        /// Moves each aliased guest's results to the guest it's an alias of (<see cref="DailyOptions.GuestAliases"/>): on
+        /// days both played, the better result stays. Run on startup; once merged there's nothing left to move.
+        /// </summary>
+        public async Task MergeAliasesAsync()
+        {
+            foreach ((string second, string first) in _options.GuestAliases)
+            {
+                if (!GuestIdPattern.IsMatch(second) || !GuestIdPattern.IsMatch(first) || second == first)
+                {
+                    _log.LogWarning("Skipping a guest alias: both ids must be valid and different");
+                    continue;
+                }
+                int moved = await _store.MergeGuestAsync(second, first);
+                if (moved > 0)
+                    _log.LogInformation("Merged {Rows} daily rows of an aliased guest into its first id", moved);
+            }
         }
 
         private static void CheckGuestId(string guestId)

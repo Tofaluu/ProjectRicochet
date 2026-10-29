@@ -163,5 +163,51 @@ namespace BackendServer.Services
                 .ToListAsync();
             return rows.Select(r => new DailySolve(r.GuestId, r.Name, r.Number)).ToList();
         }
+
+        public async Task<int> MergeGuestAsync(string from, string into)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            int moved = 0;
+            // Keys can't change in place: the second id's rows are removed and, where they win, added under the first id.
+            foreach (DailyEntryRecord entry in await db.Entries.Where(e => e.GuestId == from).ToListAsync())
+            {
+                DailyEntryRecord? kept = await db.Entries.FindAsync(entry.Number, into);
+                db.Entries.Remove(entry);
+                if (kept == null || DailyMerge.IsBetter(entry, kept))
+                {
+                    if (kept != null)
+                        db.Entries.Remove(kept);
+                    await db.SaveChangesAsync();
+                    db.Entries.Add(new DailyEntryRecord
+                    {
+                        Number = entry.Number, GuestId = into, OpenedUtc = entry.OpenedUtc, BestMoves = entry.BestMoves,
+                        BestSeconds = entry.BestSeconds, BestSolution = entry.BestSolution, SolvedUtc = entry.SolvedUtc,
+                    });
+                }
+                moved++;
+            }
+            foreach (DailyArchiveRecord play in await db.Archive.Where(e => e.GuestId == from).ToListAsync())
+            {
+                DailyArchiveRecord? kept = await db.Archive.FindAsync(play.Number, into);
+                DailyArchiveRecord merged = DailyMerge.Combine(kept ?? play, play, into);
+                db.Archive.Remove(play);
+                if (kept != null)
+                    db.Archive.Remove(kept);
+                await db.SaveChangesAsync();
+                db.Archive.Add(merged);
+                moved++;
+            }
+            DailyPlayerRecord? player = await db.Players.FindAsync(from);
+            if (player != null)
+            {
+                if (await db.Players.FindAsync(into) == null)
+                    db.Players.Add(new DailyPlayerRecord { GuestId = into, Name = player.Name, CreatedUtc = player.CreatedUtc, LastSeenUtc = player.LastSeenUtc });
+                db.Players.Remove(player);
+            }
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return moved;
+        }
     }
 }

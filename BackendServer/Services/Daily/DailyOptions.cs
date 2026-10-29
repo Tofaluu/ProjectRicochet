@@ -45,6 +45,14 @@ namespace BackendServer.Services
         /// </summary>
         public int BackfillDays { get; set; }
 
+        /// <summary>
+        /// Guest ids that are another guest (the same person on a second device), until accounts can link them: second id ->
+        /// first id. The server's environment only (<c>Daily__GuestAliases__&lt;second&gt;=&lt;first&gt;</c> in db.env: guest
+        /// ids are secrets). On startup the second's results move to the first (<see cref="DailyService.MergeAliasesAsync"/>),
+        /// and every call with the second id is treated as the first.
+        /// </summary>
+        public Dictionary<string, string> GuestAliases { get; set; } = new();
+
         /// <summary>Seeds board generation (for tests); null picks a random seed per puzzle.</summary>
         public int? Seed { get; set; }
     }

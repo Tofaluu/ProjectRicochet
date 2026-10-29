@@ -59,6 +59,37 @@ namespace BackendServer.Services
         public DateTime? SawSolutionUtc { get; set; }
     }
 
+    /// <summary>Which of two results for the same puzzle stays when one guest's results merge into another's.</summary>
+    public static class DailyMerge
+    {
+        /// <summary>Solved beats unsolved, then fewer moves, then faster, then opened earlier.</summary>
+        public static bool IsBetter(DailyEntryRecord a, DailyEntryRecord b)
+        {
+            if ((a.BestMoves > 0) != (b.BestMoves > 0))
+                return a.BestMoves > 0;
+            if (a.BestMoves != b.BestMoves)
+                return a.BestMoves < b.BestMoves;
+            if (a.BestSeconds != b.BestSeconds)
+                return a.BestSeconds < b.BestSeconds;
+            return a.OpenedUtc < b.OpenedUtc;
+        }
+
+        /// <summary>The better past play (solved, then fewer moves), keeping the earlier look at the solution of either.</summary>
+        public static DailyArchiveRecord Combine(DailyArchiveRecord kept, DailyArchiveRecord other, string guestId)
+        {
+            bool otherBetter = (other.BestMoves > 0) != (kept.BestMoves > 0) ? other.BestMoves > 0
+                : other.BestMoves > 0 && other.BestMoves < kept.BestMoves;
+            DailyArchiveRecord best = otherBetter ? other : kept;
+            DateTime? saw = kept.SawSolutionUtc == null ? other.SawSolutionUtc
+                : other.SawSolutionUtc == null || kept.SawSolutionUtc < other.SawSolutionUtc ? kept.SawSolutionUtc : other.SawSolutionUtc;
+            return new DailyArchiveRecord
+            {
+                Number = best.Number, GuestId = guestId, OpenedUtc = kept.OpenedUtc < other.OpenedUtc ? kept.OpenedUtc : other.OpenedUtc,
+                BestMoves = best.BestMoves, BestSolution = best.BestSolution, SolvedUtc = best.SolvedUtc, SawSolutionUtc = saw,
+            };
+        }
+    }
+
     /// <summary>A leaderboard line.</summary>
     public sealed record DailyRow(string GuestId, string Name, int Moves, double Seconds);
 

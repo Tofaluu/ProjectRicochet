@@ -215,6 +215,74 @@ public class DailyTests
         await StreakScenario(Create(new EfDailyStore(new Factory(options))));
     }
 
+    [Fact]
+    public async Task ASecondDevicesResults_MergeIntoTheFirst()
+    {
+        await MergeScenario(new InMemoryDailyStore());
+    }
+
+    [Fact]
+    public async Task TheDatabaseStore_MergesASecondDevice()
+    {
+        using var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        var options = new DbContextOptionsBuilder<DailyDbContext>().UseSqlite(connection).Options;
+        using (var db = new DailyDbContext(options))
+            db.Database.EnsureCreated();
+        await MergeScenario(new EfDailyStore(new Factory(options)));
+    }
+
+    // Alice plays on two devices: day 1 on both (the second's solution shorter), day 2 on the second only, day 3 on the
+    // first only, and day 1 again later on the second. Merged, she's one player with a 3-day streak and the better day 1;
+    // the second device's id then plays as her.
+    private static async Task MergeScenario(IDailyStore store)
+    {
+        const string second = "alice-second-device-01";
+        var time = new FakeTimeProvider(LaunchNoon);
+        DailyService Service(Dictionary<string, string>? aliases = null) => new(store, Options.Create(new DailyOptions
+        {
+            LaunchDate = Launch, Seed = 7, SearchSeconds = 20, MinMoves = 4, MaxMoves = 5,
+            GuestAliases = aliases ?? new Dictionary<string, string>(),
+        }), time, NullLogger<DailyService>.Instance);
+
+        DailyService before = Service();
+        DailyPuzzleInfo dayOne = await before.GetDailyAsync(Alice, "Alice");
+        await before.GetDailyAsync(second, "Alice");
+        await before.SubmitAsync(Alice, 1, Encode(LobbyHarness.LongerSolution(BoardCodec.Decode(dayOne.Board))));
+        await before.SubmitAsync(second, 1, Encode(Shortest(dayOne)));
+        time.Advance(TimeSpan.FromDays(1));
+        DailyPuzzleInfo dayTwo = await before.GetDailyAsync(second, "Alice");
+        await before.SubmitAsync(second, 2, Encode(Shortest(dayTwo)));
+        await before.ShowSolutionAsync(second, 1);
+        time.Advance(TimeSpan.FromDays(1));
+        DailyPuzzleInfo dayThree = await before.GetDailyAsync(Alice, "Alice");
+        await before.SubmitAsync(Alice, 3, Encode(Shortest(dayThree)));
+        Assert.Equal(2, (await before.GetStreakLeaderboardAsync(Bob)).Players);
+
+        DailyService after = Service(new Dictionary<string, string> { [second] = Alice });
+        await after.MergeAliasesAsync();
+        await after.MergeAliasesAsync(); // nothing left to move
+
+        StreakLeaderboard streaks = await after.GetStreakLeaderboardAsync(Alice);
+        Assert.Equal(1, streaks.Players);
+        Assert.Equal(3, streaks.MyBest);
+        Assert.Equal(3, streaks.MyCurrent);
+        DailyCalendar calendar = await after.GetCalendarAsync(second); // the second id is her now
+        Assert.Equal(dayOne.ShortestLength, calendar.Days[0].BestMoves);
+        Assert.True(calendar.Days[0].SawSolution);
+        Assert.True(calendar.Days[1].BestMoves > 0);
+        DailyLeaderboard dayOneBoard = await after.GetLeaderboardAsync(second, 1);
+        Assert.Single(dayOneBoard.Top);
+        Assert.True(dayOneBoard.Top[0].IsMe);
+        Assert.Empty(await store.GetEntriesAsync(second));
+        Assert.Empty(await store.GetArchiveAsync(second));
+
+        // Playing on the second device now counts as her.
+        DailyPuzzleInfo today = await after.GetDailyAsync(second, "Alice");
+        Assert.True(today.BestMoves > 0); // day 3, solved on the first device
+        Assert.Empty(await store.GetEntriesAsync(second));
+    }
+
     // Alice solves day 1 (a longer solution), Bob never opens it. On day 2 both play day 1 again: Bob's solve and Alice's
     // look at the solution show on their calendars, but day 1's leaderboard and their streaks stay as they were.
     private static async Task PastPuzzleScenario((DailyService daily, FakeTimeProvider time) setup)

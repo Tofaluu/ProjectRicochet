@@ -24,6 +24,14 @@ namespace BackendServer.Services
 
         protected override async Task ExecuteAsync(CancellationToken stopping)
         {
+            try
+            {
+                await _daily.MergeAliasesAsync();
+            }
+            catch (Exception e)
+            {
+                _log.LogWarning(e, "Merging aliased guests failed");
+            }
             while (!stopping.IsCancellationRequested)
             {
                 try

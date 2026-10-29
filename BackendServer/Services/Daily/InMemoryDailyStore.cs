@@ -142,6 +142,36 @@ namespace BackendServer.Services
             }
         }
 
+        public Task<int> MergeGuestAsync(string from, string into)
+        {
+            lock (_gate)
+            {
+                int moved = 0;
+                foreach (DailyEntryRecord entry in _entries.Values.Where(e => e.GuestId == from).ToList())
+                {
+                    _entries.Remove((entry.Number, from));
+                    if (!_entries.TryGetValue((entry.Number, into), out DailyEntryRecord? kept) || DailyMerge.IsBetter(entry, kept))
+                    {
+                        DailyEntryRecord copy = Copy(entry);
+                        copy.GuestId = into;
+                        _entries[(entry.Number, into)] = copy;
+                    }
+                    moved++;
+                }
+                foreach (DailyArchiveRecord play in _archive.Values.Where(e => e.GuestId == from).ToList())
+                {
+                    _archive.Remove((play.Number, from));
+                    _archive[(play.Number, into)] = _archive.TryGetValue((play.Number, into), out DailyArchiveRecord? kept)
+                        ? DailyMerge.Combine(kept, play, into)
+                        : DailyMerge.Combine(play, play, into);
+                    moved++;
+                }
+                if (_players.Remove(from, out DailyPlayerRecord? player) && !_players.ContainsKey(into))
+                    _players[into] = new DailyPlayerRecord { GuestId = into, Name = player.Name, CreatedUtc = player.CreatedUtc, LastSeenUtc = player.LastSeenUtc };
+                return Task.FromResult(moved);
+            }
+        }
+
         private IEnumerable<DailyRow> Solved(int number) => _entries.Values
             .Where(e => e.Number == number && e.BestMoves > 0)
             .OrderBy(e => e.BestMoves).ThenBy(e => e.BestSeconds)
