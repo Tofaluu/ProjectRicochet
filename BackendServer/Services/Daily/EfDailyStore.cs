@@ -154,13 +154,11 @@ namespace BackendServer.Services
             }
         }
 
-        public async Task<IReadOnlyList<DailySolve>> GetStreakSolvesAsync(int from, int to)
+        public async Task<IReadOnlyList<DailySolve>> GetSolvesAsync(int from, int to)
         {
             await using DailyDbContext db = await _contexts.CreateDbContextAsync();
-            IQueryable<string> going = db.Entries.Where(e => e.BestMoves > 0 && e.Number >= to - 1 && e.Number <= to)
-                .Select(e => e.GuestId);
             var rows = await db.Entries
-                .Where(e => e.BestMoves > 0 && e.Number >= from && e.Number <= to && going.Contains(e.GuestId))
+                .Where(e => e.BestMoves > 0 && e.Number >= from && e.Number <= to)
                 .Join(db.Players, e => e.GuestId, p => p.GuestId, (e, p) => new { e.GuestId, p.Name, e.Number })
                 .ToListAsync();
             return rows.Select(r => new DailySolve(r.GuestId, r.Name, r.Number)).ToList();

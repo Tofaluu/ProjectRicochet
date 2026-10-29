@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using SharedLogic;
 
@@ -118,7 +119,20 @@ namespace Ricochet.Client.Game
 
         public void Select(RobotColor robot) => Selected = robot;
 
-        public void SelectNext() => Selected = (RobotColor)(((int)Selected + 1) % Robot.Count);
+        /// <summary>
+        /// Selects the next robot along the board as it stands: left to right by column, top first within a column
+        /// (<paramref name="step"/> -1 goes the other way); wraps round.
+        /// </summary>
+        public void SelectNext(int step = 1)
+        {
+            var order = new RobotColor[Robot.Count];
+            for (int r = 0; r < Robot.Count; r++)
+                order[r] = (RobotColor)r;
+            RobotPositions robots = Robots;
+            Array.Sort(order, (a, b) => robots[a].X != robots[b].X ? robots[a].X.CompareTo(robots[b].X) : robots[b].Y.CompareTo(robots[a].Y));
+            int at = Array.IndexOf(order, Selected);
+            Selected = order[((at + step) % Robot.Count + Robot.Count) % Robot.Count];
+        }
 
         /// <summary>Moves the selected robot; false if it can't move or the board is already solved.</summary>
         public bool TryMove(Direction direction)

@@ -1426,8 +1426,8 @@ namespace Ricochet.Client.App
                 StreakLeaderboard streaks = _daily.Archive.Streaks;
                 bool any = streaks?.Top != null && streaks.Top.Length > 0;
                 _dailyRank.text = streaks != null && streaks.MyRank == 0 ? "Solve today's puzzle to start a streak." : "";
-                _dailyBoardEmpty.text = streaks == null ? "Loading..." : any ? "" : "Nobody has a streak going yet.";
-                rows = "s" + (any ? string.Join("|", Array.ConvertAll(streaks.Top, e => $"{e.Name}/{e.Days}/{e.Rank}/{e.IsMe}")) + streaks.MyRank : "");
+                _dailyBoardEmpty.text = streaks == null ? "Loading..." : any ? "" : "Nobody has a streak yet.";
+                rows = "s" + (any ? string.Join("|", Array.ConvertAll(streaks.Top, e => $"{e.Name}/{e.Days}/{e.Current}/{e.Rank}/{e.IsMe}")) + streaks.MyRank + "/" + streaks.MyCurrent : "");
                 if (rows != _shownRows)
                 {
                     _shownRows = rows;
@@ -1435,9 +1435,9 @@ namespace Ricochet.Client.App
                     if (any)
                     {
                         for (int i = 0; i < streaks.Top.Length && i < 5; i++)
-                            _dailyRows.Add(StreakRow(streaks.Top[i].Rank, streaks.Top[i].IsMe ? "You" : streaks.Top[i].Name, streaks.Top[i].Days, streaks.Top[i].IsMe));
+                            _dailyRows.Add(StreakRow(streaks.Top[i].Rank, streaks.Top[i].IsMe ? "You" : streaks.Top[i].Name, streaks.Top[i].Days, streaks.Top[i].Current, streaks.Top[i].IsMe));
                         if (streaks.MyRank > 0 && Array.FindIndex(streaks.Top, e => e.IsMe) is int mine && (mine < 0 || mine >= 5))
-                            _dailyRows.Add(StreakRow(streaks.MyRank, "You", streaks.MyStreak, true));
+                            _dailyRows.Add(StreakRow(streaks.MyRank, "You", streaks.MyBest, streaks.MyCurrent, true));
                     }
                 }
             }
@@ -1469,7 +1469,8 @@ namespace Ricochet.Client.App
 
         private static string Days(int days) => days == 1 ? "1 day" : $"{days} days";
 
-        private static VisualElement StreakRow(int place, string name, int days, bool me)
+        // A player's longest streak, tagged "active" when that one is still going, else "now on N" for a newer one going.
+        private static VisualElement StreakRow(int place, string name, int days, int current, bool me)
         {
             var row = new VisualElement();
             row.AddToClassList("lb-row");
@@ -1484,6 +1485,13 @@ namespace Ricochet.Client.App
             count.AddToClassList("lb-streak");
             row.Add(rank);
             row.Add(who);
+            if (current > 0)
+            {
+                var tag = new Label(current >= days ? "active" : $"now on {current}");
+                tag.AddToClassList("lb-streak-tag");
+                tag.EnableInClassList("is-active", current >= days);
+                row.Add(tag);
+            }
             row.Add(count);
             return row;
         }

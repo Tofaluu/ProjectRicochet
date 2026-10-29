@@ -115,7 +115,16 @@
                     <ui:VisualElement class="card">
                         <ui:Label text="HOW TO PLAY" class="h3 gap-s" />
                         <ui:Label text="Robots slide until they hit a wall or another robot. Get the robot shown above onto its target in as few moves as you can." class="body gap-m" />
-                        <ui:Label text="Click a robot, then click a dot to move it, or drag it. Keys: 1-4 or Tab to pick, arrows or WASD to move, Z undo, R reset, N new board, H shortest solution." class="muted small" />
+                        <ui:Label text="Click a robot, then a dot to move it, or drag it." class="muted small gap-s" />
+                        <!-- Keys, one per row (1-4 and Tab still pick robots too; left out to keep it short). Hidden on touch screens. -->
+                        <ui:VisualElement name="practice-keys" class="key-list">
+                            <ui:VisualElement class="key-row"><ui:Label text="Q / E" class="key-name" /><ui:Label text="Next robot left / right" class="key-what" /></ui:VisualElement>
+                            <ui:VisualElement class="key-row"><ui:Label text="Arrows / WASD" class="key-name" /><ui:Label text="Move" class="key-what" /></ui:VisualElement>
+                            <ui:VisualElement class="key-row"><ui:Label text="Z" class="key-name" /><ui:Label text="Undo" class="key-what" /></ui:VisualElement>
+                            <ui:VisualElement class="key-row"><ui:Label text="R" class="key-name" /><ui:Label text="Reset" class="key-what" /></ui:VisualElement>
+                            <ui:VisualElement class="key-row"><ui:Label text="N" class="key-name" /><ui:Label text="New board" class="key-what" /></ui:VisualElement>
+                            <ui:VisualElement class="key-row"><ui:Label text="H" class="key-name" /><ui:Label text="Shortest solution" class="key-what" /></ui:VisualElement>
+                        </ui:VisualElement>
                         <ui:Button name="practice-tutorial" text="Play the tutorial" class="btn btn--small tutorial-replay" />
                     </ui:VisualElement>
                 </ui:VisualElement>

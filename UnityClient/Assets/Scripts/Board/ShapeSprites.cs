@@ -38,21 +38,6 @@ namespace Ricochet.Client.Board
                 0, SpriteMeshType.FullRect, new Vector4(border, border, border, border));
         });
 
-        /// <summary>A rounded square filling the sprite, its corners <paramref name="radius"/> of the half-side (not sliced: for masks).</summary>
-        public static Sprite RoundedSquare(float radius) =>
-            Get("square" + Mathf.Round(radius * 1000f), () => FromSdf(p => RoundedBox(p, radius), 512));
-
-        /// <summary>
-        /// The replay frame's sheen: light and dark shading twice round (clockwise from the top), clear in between so the
-        /// frame keeps its own colour, to lay over the frame and turn. Faint: stronger washed dark frames (ebony) out to grey.
-        /// White renderer colour.
-        /// </summary>
-        public static Sprite FrameSheen => Get("frame-sheen", () => FromColor(p =>
-        {
-            float k = Mathf.Cos(4f * Mathf.PI * Turn(p));
-            return k > 0f ? new Color(1f, 1f, 1f, 0.16f * k) : new Color(0f, 0f, 0f, -0.2f * k);
-        }));
-
         /// <summary>
         /// A ring of <paramref name="dashes"/> square-ended dashes (half of it dashes, half gaps, like a CSS dashed border)
         /// whose band is <paramref name="width"/> of the radius.

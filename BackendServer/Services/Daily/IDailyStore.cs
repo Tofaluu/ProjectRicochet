@@ -46,10 +46,7 @@ namespace BackendServer.Services
         /// <summary>Adds or replaces the player's past-puzzle play for that number.</summary>
         Task SaveArchiveEntryAsync(DailyArchiveRecord entry);
 
-        /// <summary>
-        /// Solved days in [<paramref name="from"/>, <paramref name="to"/>] of the players who solved
-        /// <paramref name="to"/> or the day before (only they can have a streak going), with their names.
-        /// </summary>
-        Task<IReadOnlyList<DailySolve>> GetStreakSolvesAsync(int from, int to);
+        /// <summary>Every player's solved days (on the day) in [<paramref name="from"/>, <paramref name="to"/>], with their names.</summary>
+        Task<IReadOnlyList<DailySolve>> GetSolvesAsync(int from, int to);
     }
 }

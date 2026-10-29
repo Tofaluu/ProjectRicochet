@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 14;
+        public const int ProtocolVersion = 15;
 
         // Client -> server
 
@@ -108,7 +108,7 @@ namespace SharedLogic
         /// </summary>
         public const string ShowDailySolution = "ShowDailySolution";
 
-        /// <summary>(string guestId) returns <see cref="StreakLeaderboard"/>: the longest current streaks.</summary>
+        /// <summary>(string guestId) returns <see cref="StreakLeaderboard"/>: the longest streaks ever, marking those still going.</summary>
         public const string GetStreakLeaderboard = "GetStreakLeaderboard";
 
         // Server -> client
@@ -502,13 +502,17 @@ namespace SharedLogic
         public byte[] Moves { get; set; }
     }
 
-    /// <summary>The answer to <see cref="HubMethods.GetStreakLeaderboard"/>: longest current streak first.</summary>
+    /// <summary>
+    /// The answer to <see cref="HubMethods.GetStreakLeaderboard"/>: each player's longest streak ever, longest first (protocol 15;
+    /// it was current streaks only, too few names while the game is small).
+    /// </summary>
     public class StreakLeaderboard
     {
         public StreakEntry[] Top { get; set; }
 
-        /// <summary>The asking player's streak and place (0 = no streak), and how many players have one.</summary>
-        public int MyStreak { get; set; }
+        /// <summary>The asking player's longest streak and place (0 = never solved one), their streak going now, and how many players are listed.</summary>
+        public int MyBest { get; set; }
+        public int MyCurrent { get; set; }
         public int MyRank { get; set; }
         public int Players { get; set; }
     }
@@ -517,8 +521,14 @@ namespace SharedLogic
     {
         public string Name { get; set; }
 
-        /// <summary>Days in a row solved, up to today (or yesterday, while today can still be saved).</summary>
+        /// <summary>The player's longest run of days in a row solved.</summary>
         public int Days { get; set; }
+
+        /// <summary>
+        /// Their streak going now (up to today, or yesterday while today can still be saved; 0 = none). Equal to
+        /// <see cref="Days"/> when the longest is the one still going.
+        /// </summary>
+        public int Current { get; set; }
 
         /// <summary>Equal streaks share a place.</summary>
         public int Rank { get; set; }

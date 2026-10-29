@@ -27,6 +27,26 @@ namespace ClientLogic.Tests
         }
 
         [Fact]
+        public void SelectNext_GoesAlongTheBoard_LeftToRight_TopFirstInAColumn()
+        {
+            BoardSession board = Loaded();
+            RobotPositions robots = board.Robots;
+            var expected = new[] { RobotColor.Red, RobotColor.Blue, RobotColor.Green, RobotColor.Yellow };
+            Array.Sort(expected, (a, b) => robots[a].X != robots[b].X ? robots[a].X.CompareTo(robots[b].X) : robots[b].Y.CompareTo(robots[a].Y));
+
+            board.Select(expected[0]);
+            for (int i = 1; i <= 4; i++)
+            {
+                board.SelectNext();
+                Assert.Equal(expected[i % 4], board.Selected); // wraps from the rightmost to the leftmost
+            }
+            board.SelectNext(-1);
+            Assert.Equal(expected[3], board.Selected);
+            board.SelectNext(-1);
+            Assert.Equal(expected[2], board.Selected);
+        }
+
+        [Fact]
         public void Load_PracticeOrRound()
         {
             BoardSession board = Loaded(practice: true);

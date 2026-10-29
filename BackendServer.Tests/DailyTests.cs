@@ -281,17 +281,21 @@ public class DailyTests
         Assert.Equal(dayTwo.ShortestLength, alices.Days[1].ShortestLength);
     }
 
-    // Day 3: Alice solved days 1-3 (3), Bob days 2-3 (2), Dave day 2 only (1: today can still be saved), Carol day 1 only
-    // (broken), plus a later play of day 2 that doesn't count.
+    // Day 5: Alice solved days 1-3 (3, over), Bob days 3-5 (3, going), Erin days 1-2 then 5 (best 2, now on 1), Dave day 4
+    // only (1, going: today can still be saved), Carol day 1 only (1, over), plus a later play of day 2 by Carol that
+    // doesn't count.
     private static async Task StreakScenario((DailyService daily, FakeTimeProvider time) setup)
     {
         var (daily, time) = setup;
         const string dave = "dave-guest-id-00004";
+        const string erin = "erin-guest-id-00005";
         var solvers = new[]
         {
-            new[] { Alice, Carol },
-            new[] { Alice, Bob, dave },
+            new[] { Alice, Carol, erin },
+            new[] { Alice, erin },
             new[] { Alice, Bob },
+            new[] { Bob, dave },
+            new[] { Bob, erin },
         };
         for (int day = 0; day < solvers.Length; day++)
         {
@@ -307,18 +311,26 @@ public class DailyTests
         await daily.SubmitPastAsync(Carol, 2, Encode(Solver.Solve(BoardCodec.Decode(dayTwo.Board)).Moves));
 
         StreakLeaderboard board = await daily.GetStreakLeaderboardAsync(Bob);
-        Assert.Equal(new[] { "alice", "bob", "dave" }, board.Top.Select(e => e.Name));
-        Assert.Equal(new[] { 3, 2, 1 }, board.Top.Select(e => e.Days));
-        Assert.Equal(new[] { 1, 2, 3 }, board.Top.Select(e => e.Rank));
-        Assert.True(board.Top[1].IsMe);
-        Assert.Equal(2, board.MyStreak);
-        Assert.Equal(2, board.MyRank);
-        Assert.Equal(3, board.Players);
+        // Equal longest streaks share a place; the one going now (Bob's 3) is listed before one that's over (Alice's).
+        Assert.Equal(new[] { "bob", "alice", "erin", "dave", "carol" }, board.Top.Select(e => e.Name));
+        Assert.Equal(new[] { 3, 3, 2, 1, 1 }, board.Top.Select(e => e.Days));
+        Assert.Equal(new[] { 3, 0, 1, 1, 0 }, board.Top.Select(e => e.Current));
+        Assert.Equal(new[] { 1, 1, 3, 4, 4 }, board.Top.Select(e => e.Rank));
+        Assert.True(board.Top[0].IsMe);
+        Assert.Equal(3, board.MyBest);
+        Assert.Equal(3, board.MyCurrent);
+        Assert.Equal(1, board.MyRank);
+        Assert.Equal(5, board.Players);
 
-        StreakLeaderboard carols = await daily.GetStreakLeaderboardAsync(Carol);
-        Assert.Equal(0, carols.MyStreak);
-        Assert.Equal(0, carols.MyRank);
-        Assert.DoesNotContain(carols.Top, e => e.IsMe);
+        StreakLeaderboard erins = await daily.GetStreakLeaderboardAsync(erin);
+        Assert.Equal(2, erins.MyBest);
+        Assert.Equal(1, erins.MyCurrent);
+        Assert.Equal(3, erins.MyRank);
+
+        StreakLeaderboard franks = await daily.GetStreakLeaderboardAsync("frank-guest-id-0006");
+        Assert.Equal(0, franks.MyBest);
+        Assert.Equal(0, franks.MyRank);
+        Assert.DoesNotContain(franks.Top, e => e.IsMe);
     }
 
     // Bob and Carol tie on moves, Bob faster; Alice, first to finish, takes more moves. Alice renames herself.

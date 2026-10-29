@@ -253,26 +253,33 @@ namespace BackendServer.Services
             return new DailySolution { Number = number, Moves = puzzle.Shortest };
         }
 
-        /// <summary>The longest current streaks (equal streaks share a place) and the asking player's.</summary>
+        /// <summary>
+        /// Every player's longest streak ever (equal ones share a place; among them, those still going first) with the streak
+        /// each has going now, and the asking player's.
+        /// </summary>
         public async Task<StreakLeaderboard> GetStreakLeaderboardAsync(string guestId)
         {
             CheckGuestId(guestId);
             int today = TodaysNumber;
-            IReadOnlyList<DailySolve> solves = await _store.GetStreakSolvesAsync(Math.Max(1, today - StreakWindow), today);
+            IReadOnlyList<DailySolve> solves = await _store.GetSolvesAsync(Math.Max(1, today - StreakWindow), today);
             var streaks = solves.GroupBy(s => s.GuestId)
-                .Select(g => (GuestId: g.Key, Name: g.First().Name, Days: CountStreak(g.Select(s => s.Number).ToHashSet(), today)))
-                .Where(s => s.Days > 0)
-                .OrderByDescending(s => s.Days).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(g =>
+                {
+                    HashSet<int> solved = g.Select(s => s.Number).ToHashSet();
+                    return (GuestId: g.Key, Name: g.First().Name, Days: LongestStreak(solved), Current: CountStreak(solved, today));
+                })
+                .OrderByDescending(s => s.Days).ThenByDescending(s => s.Current).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
             int RankOf(int days) => 1 + streaks.Count(s => s.Days > days);
-            int mine = streaks.FirstOrDefault(s => s.GuestId == guestId).Days;
+            var mine = streaks.FirstOrDefault(s => s.GuestId == guestId);
             return new StreakLeaderboard
             {
                 Top = streaks.Take(_options.LeaderboardSize)
-                    .Select(s => new StreakEntry { Name = s.Name, Days = s.Days, Rank = RankOf(s.Days), IsMe = s.GuestId == guestId })
+                    .Select(s => new StreakEntry { Name = s.Name, Days = s.Days, Current = s.Current, Rank = RankOf(s.Days), IsMe = s.GuestId == guestId })
                     .ToArray(),
-                MyStreak = mine,
-                MyRank = mine > 0 ? RankOf(mine) : 0,
+                MyBest = mine.Days,
+                MyCurrent = mine.Current,
+                MyRank = mine.Days > 0 ? RankOf(mine.Days) : 0,
                 Players = streaks.Count,
             };
         }
@@ -378,6 +385,22 @@ namespace BackendServer.Services
                 day--;
             }
             return streak;
+        }
+
+        // The longest run of consecutive numbers.
+        private static int LongestStreak(HashSet<int> solved)
+        {
+            int longest = 0;
+            foreach (int day in solved)
+            {
+                if (solved.Contains(day - 1))
+                    continue; // not a run's first day
+                int length = 1;
+                while (solved.Contains(day + length))
+                    length++;
+                longest = Math.Max(longest, length);
+            }
+            return longest;
         }
 
         private static void CheckGuestId(string guestId)

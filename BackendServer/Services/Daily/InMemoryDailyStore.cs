@@ -131,14 +131,12 @@ namespace BackendServer.Services
             return Task.CompletedTask;
         }
 
-        public Task<IReadOnlyList<DailySolve>> GetStreakSolvesAsync(int from, int to)
+        public Task<IReadOnlyList<DailySolve>> GetSolvesAsync(int from, int to)
         {
             lock (_gate)
             {
-                var going = _entries.Values.Where(e => e.BestMoves > 0 && e.Number >= to - 1 && e.Number <= to)
-                    .Select(e => e.GuestId).ToHashSet();
                 IReadOnlyList<DailySolve> list = _entries.Values
-                    .Where(e => e.BestMoves > 0 && e.Number >= from && e.Number <= to && going.Contains(e.GuestId))
+                    .Where(e => e.BestMoves > 0 && e.Number >= from && e.Number <= to)
                     .Select(e => new DailySolve(e.GuestId, _players[e.GuestId].Name, e.Number)).ToList();
                 return Task.FromResult(list);
             }

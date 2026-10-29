@@ -27,7 +27,7 @@ namespace Ricochet.Client.Scratchpad
     /// board and the UI (App/AppUI) what's around it.
     /// </summary>
     /// <remarks>
-    /// Controls: click a robot (or 1-4 / Tab) to select it, arrows / WASD or drag to move,
+    /// Controls: click a robot (or 1-4, or Q / E / Tab along the board) to select it, arrows / WASD or drag to move,
     /// Z / Backspace to undo, R to reset, N for a new board, H for the shortest solution (offline).
     /// </remarks>
     public class ScratchpadController : MonoBehaviour
@@ -721,9 +721,12 @@ namespace Ricochet.Client.Scratchpad
             if (keyboard.digit2Key.wasPressedThisFrame) Select(RobotColor.Blue);
             if (keyboard.digit3Key.wasPressedThisFrame) Select(RobotColor.Green);
             if (keyboard.digit4Key.wasPressedThisFrame) Select(RobotColor.Yellow);
-            if (keyboard.tabKey.wasPressedThisFrame)
+            // Along the board: E / Tab the next robot to the right, Q / Shift+Tab the next to the left.
+            bool back = keyboard.qKey.wasPressedThisFrame || (keyboard.tabKey.wasPressedThisFrame && keyboard.shiftKey.isPressed);
+            bool next = keyboard.eKey.wasPressedThisFrame || (keyboard.tabKey.wasPressedThisFrame && !keyboard.shiftKey.isPressed);
+            if (back || next)
             {
-                Session.SelectNext();
+                Session.SelectNext(back ? -1 : 1);
                 _boardView.ShowSelection(Session.Selected);
             }
 

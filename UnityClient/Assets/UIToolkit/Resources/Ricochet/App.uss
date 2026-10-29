@@ -366,6 +366,11 @@
 .board-controls .btn { flex-grow: 1; flex-basis: 0; margin: 0 5px; }
 /* Replay buttons keep their own widths in the row; one width for Pause / Play / Again so nothing shifts. */
 .board-controls .replay-bar .btn { flex-grow: 0; flex-basis: auto; }
+/* How to play's key list: the key on the left, what it does beside it. */
+.key-list { margin-bottom: 12px; }
+.key-row { flex-direction: row; margin-bottom: 2px; }
+.key-name { width: 100px; flex-shrink: 0; font-size: 13px; -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
+.key-what { flex-grow: 1; font-size: 13px; color: var(--muted); }
 .app #replay-pause { width: 96px; padding: 0; }
 
 /* ---- Daily result ---- */
@@ -575,6 +580,9 @@
 .app .seg-btn:hover { color: var(--text); background-color: rgba(0, 0, 0, 0); }
 .app .seg-btn.is-on, .app .seg-btn.is-on:hover { background-color: var(--panel-hover); color: var(--text); }
 .lb-streak { width: 84px; font-size: 15px; -unity-text-align: middle-right; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
+/* "active" (the longest streak is still going) or "now on N" (a newer one is). */
+.lb-streak-tag { flex-shrink: 0; margin-left: 6px; font-size: 13px; color: var(--muted); -unity-text-align: middle-right; }
+.lb-streak-tag.is-active { color: var(--action); -unity-font: url("/Assets/Fonts/Nunito-Bold.ttf"); }
 .strip { flex-direction: row; }
 .cal-row { flex-direction: row; }
 .cal-dow { flex-grow: 1; flex-basis: 0; margin: 0 2px 4px 2px; font-size: 12px; color: var(--muted); -unity-text-align: middle-center;

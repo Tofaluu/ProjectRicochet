@@ -29,7 +29,7 @@ namespace Ricochet.Client.App
 
         private Layout _layout = Layout.Desktop;
         private PanelSettings _panelSettings;
-        private VisualElement _app, _nav;
+        private VisualElement _app, _nav, _practiceKeys;
         private Button _topbarSettings;
         private Label _topbarAvatar;
         private int _cameraMask = ~0;
@@ -60,6 +60,7 @@ namespace Ricochet.Client.App
         private void InitLayout()
         {
             _app = _root.Q("app");
+            _practiceKeys = _root.Q("practice-keys");
             _nav = _root.Q("nav");
             _topbarSettings = Click("topbar-settings", () => TogglePopover(_settings));
             _topbarAvatar = _root.Q<Label>("topbar-avatar");
@@ -87,6 +88,8 @@ namespace Ricochet.Client.App
             Layout layout = width >= height
                 ? (height < RotateBelowHeight && width < 1000f ? Layout.Rotate : width < CompactBelowWidth ? Layout.Compact : Layout.Desktop)
                 : Layout.Compact;
+            // How to play's key list is for keyboards.
+            _practiceKeys.style.display = Touch || layout == Layout.Compact ? DisplayStyle.None : DisplayStyle.Flex;
 
             if (layout == Layout.Desktop)
             {
