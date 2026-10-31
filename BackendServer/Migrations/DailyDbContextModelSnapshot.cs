@@ -135,6 +135,22 @@ namespace BackendServer.Migrations
                     b.ToTable("daily_puzzles", (string)null);
                 });
 
+            modelBuilder.Entity("BackendServer.Services.OnlinePeakRecord", b =>
+                {
+                    b.Property<DateOnly>("Day")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("AtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Peak")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Day");
+
+                    b.ToTable("usage_online_peaks", (string)null);
+                });
+
             modelBuilder.Entity("BackendServer.Services.UsageEventRecord", b =>
                 {
                     b.Property<long>("Id")

@@ -16,6 +16,7 @@ namespace BackendServer.Services
         public DbSet<DailyEntryRecord> Entries => Set<DailyEntryRecord>();
         public DbSet<DailyArchiveRecord> Archive => Set<DailyArchiveRecord>();
         public DbSet<UsageEventRecord> UsageEvents => Set<UsageEventRecord>();
+        public DbSet<OnlinePeakRecord> OnlinePeaks => Set<OnlinePeakRecord>();
 
         protected override void OnModelCreating(ModelBuilder model)
         {
@@ -57,6 +58,11 @@ namespace BackendServer.Services
                 e.Property(x => x.Kind).HasMaxLength(32);
                 e.HasIndex(x => x.AtUtc);
                 e.HasIndex(x => x.GuestId);
+            });
+            model.Entity<OnlinePeakRecord>(e =>
+            {
+                e.ToTable("usage_online_peaks");
+                e.HasKey(x => x.Day);
             });
         }
     }

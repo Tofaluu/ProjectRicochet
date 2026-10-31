@@ -25,7 +25,23 @@ namespace Ricochet.Client.App
 
         [DllImport("__Internal")]
         private static extern float Ricochet_TakeWheel();
+
+        [DllImport("__Internal")]
+        private static extern int Ricochet_PageVisible();
 #endif
+
+        /// <summary>The game is on screen: its browser tab is showing (elsewhere: the window has focus).</summary>
+        public static bool PageVisible
+        {
+            get
+            {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                return Ricochet_PageVisible() == 1;
+#else
+                return UnityEngine.Application.isFocused;
+#endif
+            }
+        }
 
         /// <summary>Starts listening for the browser's wheel events (call once at startup; see <see cref="TakeWheel"/>).</summary>
         public static void ListenForWheel() => TakeWheel(out _);

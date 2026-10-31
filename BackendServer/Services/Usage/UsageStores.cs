@@ -7,6 +7,7 @@ namespace BackendServer.Services
     {
         private readonly object _gate = new();
         private readonly List<UsageEventRecord> _events = new();
+        private readonly Dictionary<DateOnly, int> _peaks = new();
 
         public Task AddAsync(UsageEventRecord e)
         {
@@ -34,6 +35,20 @@ namespace BackendServer.Services
                     .ToDictionary(g => g.Key, g => g.Min(e => e.AtUtc));
                 return Task.FromResult(first);
             }
+        }
+
+        public Task RaisePeakAsync(DateOnly day, int peak, DateTime atUtc)
+        {
+            lock (_gate)
+                if (peak > _peaks.GetValueOrDefault(day))
+                    _peaks[day] = peak;
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyDictionary<DateOnly, int>> GetPeaksAsync(DateOnly first)
+        {
+            lock (_gate)
+                return Task.FromResult<IReadOnlyDictionary<DateOnly, int>>(_peaks.Where(p => p.Key >= first).ToDictionary(p => p.Key, p => p.Value));
         }
     }
 
@@ -69,6 +84,28 @@ namespace BackendServer.Services
                 .GroupBy(e => e.GuestId)
                 .Select(g => new { g.Key, First = g.Min(e => e.AtUtc) })
                 .ToDictionaryAsync(x => x.Key, x => x.First);
+        }
+
+        public async Task RaisePeakAsync(DateOnly day, int peak, DateTime atUtc)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            OnlinePeakRecord? row = await db.OnlinePeaks.FindAsync(day);
+            if (row == null)
+                db.OnlinePeaks.Add(new OnlinePeakRecord { Day = day, Peak = peak, AtUtc = atUtc });
+            else if (peak > row.Peak)
+            {
+                row.Peak = peak;
+                row.AtUtc = atUtc;
+            }
+            else
+                return;
+            await db.SaveChangesAsync();
+        }
+
+        public async Task<IReadOnlyDictionary<DateOnly, int>> GetPeaksAsync(DateOnly first)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            return await db.OnlinePeaks.AsNoTracking().Where(p => p.Day >= first).ToDictionaryAsync(p => p.Day, p => p.Peak);
         }
     }
 }

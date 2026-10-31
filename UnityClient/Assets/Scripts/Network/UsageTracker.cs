@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using Ricochet.Client.App;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -11,13 +12,17 @@ namespace Ricochet.Client.Network
     /// Fire and forget: failures are ignored. A device marked internal (<c>?internal=1</c> once in the browser,
     /// <c>-internal</c> on the desktop, always in the Editor; <c>?internal=0</c> unmarks it) still reports, flagged,
     /// and the stats leave it out. Added by <c>AppUI</c> at start-up.
+    /// While the game is on screen it also pings <c>/api/online</c> about once a minute (and as soon as the tab shows
+    /// again), for the stats page's "online now".
     /// </summary>
     public class UsageTracker : MonoBehaviour
     {
         private const string InternalPrefKey = "Ricochet.Internal";
+        private const float PingSeconds = 60f;
 
         private static UsageTracker _instance;
         private Func<string> _hubUrl;
+        private float _nextPing; // realtime; 0 = ping on the next visible frame
 
         public static bool IsInternal => Application.isEditor || PlayerPrefs.GetInt(InternalPrefKey, 0) == 1;
 
@@ -45,12 +50,29 @@ namespace Ricochet.Client.Network
                 _instance.Send(kind);
         }
 
-        private void Send(string kind)
+        private void Update()
+        {
+            if (_hubUrl == null)
+                return;
+            if (!Viewport.PageVisible)
+            {
+                _nextPing = 0f; // ping as soon as it shows again
+                return;
+            }
+            if (Time.realtimeSinceStartup < _nextPing)
+                return;
+            _nextPing = Time.realtimeSinceStartup + PingSeconds;
+            Post("/api/online", "{\"guestId\":\"" + GuestIdentity.Id + "\",\"internal\":" + (IsInternal ? "true" : "false") + "}");
+        }
+
+        private void Send(string kind) =>
+            Post("/api/events", "{\"guestId\":\"" + GuestIdentity.Id + "\",\"kind\":\"" + kind + "\",\"internal\":" + (IsInternal ? "true" : "false") + "}");
+
+        private void Post(string endpoint, string json)
         {
             string hub = _hubUrl();
             int path = hub.LastIndexOf("/gamehub", StringComparison.OrdinalIgnoreCase);
-            string url = (path >= 0 ? hub.Substring(0, path) : hub.TrimEnd('/')) + "/api/events";
-            string json = "{\"guestId\":\"" + GuestIdentity.Id + "\",\"kind\":\"" + kind + "\",\"internal\":" + (IsInternal ? "true" : "false") + "}";
+            string url = (path >= 0 ? hub.Substring(0, path) : hub.TrimEnd('/')) + endpoint;
 
             var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST)
             {

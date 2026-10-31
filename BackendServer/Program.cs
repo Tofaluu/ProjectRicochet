@@ -63,6 +63,8 @@ app.MapGet("/", () => "Ricochet Game Server is running!");
 // Usage tracking (Services/Usage): the game reports events; the stats page needs the key from the server's environment.
 app.MapPost("/api/events", async (UsageEventRequest request, UsageService usage) =>
     await usage.RecordAsync(request) ? Results.NoContent() : Results.BadRequest());
+app.MapPost("/api/online", async (OnlinePingRequest request, UsageService usage) =>
+    await usage.PingAsync(request) ? Results.NoContent() : Results.BadRequest());
 app.MapGet("/api/stats", async (string? key, UsageService usage) =>
     usage.StatsKeyMatches(key) ? Results.Content(UsagePage.Render(await usage.SummaryAsync()), "text/html") : Results.NotFound());
 

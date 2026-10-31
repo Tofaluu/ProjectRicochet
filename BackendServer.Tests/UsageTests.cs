@@ -71,6 +71,47 @@ public class UsageTests
         using (var db = new DailyDbContext(options))
             db.Database.EnsureCreated();
         await SummaryScenario(new EfUsageStore(new Factory(options)));
+        await OnlineScenario(new EfUsageStore(new Factory(options)));
+    }
+
+    [Fact]
+    public async Task Online_CountsRecentPings_AndKeepsEachDaysPeak()
+    {
+        await OnlineScenario(new InMemoryUsageStore());
+    }
+
+    // Alice and Bob ping (the developer's device too, never counted); Bob closes the game, so after 2 minutes only Alice is
+    // online, but the day's peak stays 2. A new service (server restart) never lowers the stored peak. Next day starts at 0.
+    private static async Task OnlineScenario(IUsageStore store)
+    {
+        var (usage, time) = Create(store, start: Noon.AddDays(10));
+        Assert.False(await usage.PingAsync(new OnlinePingRequest { GuestId = "short" }));
+        Assert.True(await usage.PingAsync(new OnlinePingRequest { GuestId = Alice }));
+        Assert.True(await usage.PingAsync(new OnlinePingRequest { GuestId = Bob }));
+        Assert.True(await usage.PingAsync(new OnlinePingRequest { GuestId = Me, Internal = true }));
+        UsageSummary summary = await usage.SummaryAsync();
+        Assert.Equal(2, summary.OnlineNow);
+        Assert.Equal(2, summary.Days[0].PeakOnline);
+
+        time.Advance(TimeSpan.FromSeconds(60));
+        await usage.PingAsync(new OnlinePingRequest { GuestId = Alice });
+        time.Advance(TimeSpan.FromSeconds(70)); // Bob's last ping is 130 s old, Alice's 70 s
+        summary = await usage.SummaryAsync();
+        Assert.Equal(1, summary.OnlineNow);
+        Assert.Equal(2, summary.Days[0].PeakOnline);
+
+        var (restarted, _) = Create(store, start: time.GetUtcNow());
+        Assert.True(await restarted.PingAsync(new OnlinePingRequest { GuestId = Bob }));
+        summary = await restarted.SummaryAsync();
+        Assert.Equal(1, summary.OnlineNow); // memory only: Alice's earlier ping is gone
+        Assert.Equal(2, summary.Days[0].PeakOnline);
+
+        time.Advance(TimeSpan.FromDays(1));
+        summary = await usage.SummaryAsync();
+        Assert.Equal(0, summary.OnlineNow);
+        Assert.Equal(0, summary.Days[0].PeakOnline);
+        Assert.Equal(2, summary.Days[1].PeakOnline);
+        Assert.Contains("Online now: <b>0</b>", UsagePage.Render(summary));
     }
 
     // Yesterday: Alice visits and solves in practice. Today: Alice comes back, Bob is new and opens + solves the daily,
@@ -92,14 +133,15 @@ public class UsageTests
         await usage.RecordAsync(E(Me, "visit", isInternal: true));
         await usage.RecordAsync(E(Me, "lobby_join", isInternal: true));
 
-        IReadOnlyList<UsageDay> days = await usage.SummaryAsync();
+        UsageSummary summary = await usage.SummaryAsync();
+        IReadOnlyList<UsageDay> days = summary.Days;
         Assert.Equal(3, days.Count); // StatsDays, newest first
         Assert.Equal(new DateOnly(2026, 10, 19), days[0].Day);
-        Assert.Equal(new UsageDay(new DateOnly(2026, 10, 19), 2, 1, 1, 2, 0, 0, 1, 1, 1, 1, 0), days[0]);
-        Assert.Equal(new UsageDay(new DateOnly(2026, 10, 18), 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0), days[1]);
+        Assert.Equal(new UsageDay(new DateOnly(2026, 10, 19), 2, 1, 1, 2, 0, 0, 1, 1, 1, 1, 0, 0), days[0]);
+        Assert.Equal(new UsageDay(new DateOnly(2026, 10, 18), 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0), days[1]);
         Assert.Equal(0, days[2].Players);
 
-        string page = UsagePage.Render(days);
+        string page = UsagePage.Render(summary);
         Assert.Contains("Mon Oct 19", page);
         Assert.Contains("Tutorial finished", page);
         Assert.DoesNotContain(Me, page); // no ids on the page

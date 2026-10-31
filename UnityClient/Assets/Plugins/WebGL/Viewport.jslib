@@ -44,6 +44,11 @@ mergeInto(LibraryManager.library, {
     return dy;
   },
 
+  // 1 while the page's tab is showing (hidden tabs and minimized windows report 0).
+  Ricochet_PageVisible: function () {
+    return document.visibilityState === 'hidden' ? 0 : 1;
+  },
+
   // The palette's colours for the loading page (index.html reads them on the next visit, before the game starts).
   Ricochet_SaveLoadingColors: function (json) {
     try { localStorage.setItem('ricochet.loadingColors', UTF8ToString(json)); } catch (e) { }
