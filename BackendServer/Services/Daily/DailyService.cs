@@ -61,13 +61,13 @@ namespace BackendServer.Services
         /// <summary>The puzzle day at <paramref name="utc"/> (its date where the puzzle changes).</summary>
         /// <summary>
         /// How many robots every shortest solution of the day's puzzle must move (user, 2026-10-29): Monday to Thursday not
-        /// the target robot alone, Friday and Saturday at least 3, Sunday at least 3 and all 4 if one is found in
-        /// <see cref="DailyOptions.PreferSeconds"/> (all-4 boards are rare: 2 of 222 measured).
+        /// the target robot alone, Friday to Sunday at least 3. Preferred &gt; required tries for more robots for
+        /// <see cref="DailyOptions.PreferSeconds"/> first; Sunday preferred all 4 until 2026-11-02 (user: too hard to find,
+        /// 2 of 222 boards measured).
         /// </summary>
         public static (int Required, int Preferred) Robots(DayOfWeek day) => day switch
         {
-            DayOfWeek.Friday or DayOfWeek.Saturday => (3, 3),
-            DayOfWeek.Sunday => (3, 4),
+            DayOfWeek.Friday or DayOfWeek.Saturday or DayOfWeek.Sunday => (3, 3),
             _ => (2, 2),
         };
 

@@ -69,7 +69,7 @@ public class DailyTests
         Assert.Equal((16, 17), DailyService.Difficulty(DayOfWeek.Sunday));
         Assert.Equal((2, 2), DailyService.Robots(DayOfWeek.Monday));
         Assert.Equal((3, 3), DailyService.Robots(DayOfWeek.Friday));
-        Assert.Equal((3, 4), DailyService.Robots(DayOfWeek.Sunday));
+        Assert.Equal((3, 3), DailyService.Robots(DayOfWeek.Sunday));
     }
 
     [Fact]
