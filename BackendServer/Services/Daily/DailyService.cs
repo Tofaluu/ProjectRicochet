@@ -40,17 +40,17 @@ namespace BackendServer.Services
         /// <summary>
         /// The day's board length (shortest solution), easy on Monday to hard on Sunday like a newspaper crossword. Each
         /// puzzle gets one of these lengths, picked at random with equal odds (<see cref="PickLength"/>): a search for the
-        /// whole range would mostly stop at its lower end.
+        /// whole range would mostly stop at its lower end. Eased after playtests (user, 2026-11-04; was Mon 9 ... Sun 16-17).
         /// </summary>
         public static (int Min, int Max) Difficulty(DayOfWeek day) => day switch
         {
-            DayOfWeek.Monday => (9, 9),
-            DayOfWeek.Tuesday => (10, 11),
-            DayOfWeek.Wednesday => (11, 12),
-            DayOfWeek.Thursday => (12, 13),
-            DayOfWeek.Friday => (13, 14),
+            DayOfWeek.Monday => (5, 6),
+            DayOfWeek.Tuesday => (6, 7),
+            DayOfWeek.Wednesday => (8, 9),
+            DayOfWeek.Thursday => (10, 11),
+            DayOfWeek.Friday => (12, 13),
             DayOfWeek.Saturday => (14, 15),
-            _ => (16, 17),
+            _ => (15, 16),
         };
 
         /// <summary>One length from <paramref name="min"/>..<paramref name="max"/>, each equally likely.</summary>
@@ -60,14 +60,14 @@ namespace BackendServer.Services
 
         /// <summary>The puzzle day at <paramref name="utc"/> (its date where the puzzle changes).</summary>
         /// <summary>
-        /// How many robots every shortest solution of the day's puzzle must move (user, 2026-10-29): Monday to Thursday not
-        /// the target robot alone, Friday to Sunday at least 3. Preferred &gt; required tries for more robots for
-        /// <see cref="DailyOptions.PreferSeconds"/> first; Sunday preferred all 4 until 2026-11-02 (user: too hard to find,
-        /// 2 of 222 boards measured).
+        /// How many robots every shortest solution of the day's puzzle must move (user, 2026-11-04): Monday to Wednesday
+        /// any, Thursday to Sunday not the target robot alone (2+). Preferred &gt; required tries for more robots for
+        /// <see cref="DailyOptions.PreferSeconds"/> first (unused now). Earlier: Mon-Thu 2+, Fri-Sun 3+ (Sunday preferring
+        /// all 4 until 2026-11-02: too hard to find, 2 of 222 boards measured).
         /// </summary>
         public static (int Required, int Preferred) Robots(DayOfWeek day) => day switch
         {
-            DayOfWeek.Friday or DayOfWeek.Saturday or DayOfWeek.Sunday => (3, 3),
+            DayOfWeek.Monday or DayOfWeek.Tuesday or DayOfWeek.Wednesday => (1, 1),
             _ => (2, 2),
         };
 
