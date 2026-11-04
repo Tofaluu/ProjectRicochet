@@ -16,8 +16,9 @@ namespace Ricochet.Client.Game
     }
 
     /// <summary>
-    /// Today's daily puzzle as this player sees it: the board, their clock (counting from the server's
-    /// "first opened"), their best, streak, rank and the leaderboard, plus the share text. Plain C#: the views
+    /// Today's daily puzzle as this player sees it: the board, their clock (the server's "seconds played", running only
+    /// while the puzzle is on screen: <see cref="Pause"/> / <see cref="Resume"/>), their best, streak, rank and the
+    /// leaderboard, plus the share text. Plain C#: the views
     /// read it; times are passed in as <c>now</c> (seconds on any steady clock).
     /// </summary>
     public sealed class DailyState
@@ -51,8 +52,12 @@ namespace Ricochet.Client.Game
         /// <summary>A solution is on its way to the server.</summary>
         public bool Submitting { get; private set; }
 
-        private double _openedSeconds;
+        private double _played; // seconds on the clock before _runningSince
+        private float _runningSince;
         private double _untilNext;
+
+        /// <summary>The clock is running (the puzzle is on screen); the server's runs alongside.</summary>
+        public bool ClockRunning { get; private set; }
 
         public bool IsActive => Stage != DailyStage.Off;
 
@@ -75,7 +80,9 @@ namespace Ricochet.Client.Game
             BestSeconds = info.BestSeconds;
             BestSolution = Decode(info.BestSolution);
             Streak = info.Streak;
-            _openedSeconds = info.SecondsSinceOpened;
+            _played = info.SecondsPlayed;
+            _runningSince = now;
+            ClockRunning = true; // the server started it with this answer
             _untilNext = info.SecondsUntilNext;
             _loadedAt = now;
             Rank = 0;
@@ -136,8 +143,33 @@ namespace Ricochet.Client.Game
             Submitting = false;
         }
 
-        /// <summary>The player's clock: since they first opened today's puzzle.</summary>
-        public double Elapsed(float now) => _openedSeconds + Math.Max(0f, now - _loadedAt);
+        /// <summary>The player's clock: time spent with today's puzzle on screen.</summary>
+        public double Elapsed(float now) => _played + (ClockRunning ? Math.Max(0f, now - _runningSince) : 0f);
+
+        /// <summary>Stops the clock (the puzzle went out of sight); the caller tells the server.</summary>
+        public void Pause(float now)
+        {
+            if (!ClockRunning)
+                return;
+            _played = Elapsed(now);
+            ClockRunning = false;
+        }
+
+        /// <summary>Starts the clock again (the puzzle is back on screen); the caller tells the server.</summary>
+        public void Resume(float now)
+        {
+            if (ClockRunning)
+                return;
+            _runningSince = now;
+            ClockRunning = true;
+        }
+
+        /// <summary>The server's clock (its answer to a pause or resume): it wins over the local count.</summary>
+        public void SyncClock(double seconds, float now)
+        {
+            _played = seconds;
+            _runningSince = now;
+        }
 
         /// <summary>Until the next puzzle (midnight Eastern).</summary>
         public double UntilNext(float now) => Math.Max(0.0, _untilNext - Math.Max(0f, now - _loadedAt));

@@ -81,7 +81,7 @@
                             </ui:VisualElement>
                             <ui:Label name="home-daily-streak" text="5-day streak" class="pill pill--daily" />
                         </ui:VisualElement>
-                        <ui:Label text="One board for everyone. Fewest moves wins; your time counts from when you first open it." class="body gap-m" />
+                        <ui:Label text="One board for everyone. Fewest moves wins; your time only counts while the puzzle is on screen." class="body gap-m" />
                         <ui:VisualElement class="row">
                             <ui:Button name="home-daily-play" text="Play today's puzzle" class="btn btn--daily" />
                         </ui:VisualElement>

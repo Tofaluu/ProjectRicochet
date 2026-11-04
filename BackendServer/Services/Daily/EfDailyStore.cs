@@ -48,7 +48,7 @@ namespace BackendServer.Services
             DailyEntryRecord? entry = await db.Entries.FindAsync(number, guestId);
             if (entry == null)
             {
-                entry = new DailyEntryRecord { Number = number, GuestId = guestId, OpenedUtc = now };
+                entry = new DailyEntryRecord { Number = number, GuestId = guestId, OpenedUtc = now, PlayedSeconds = 0, ClockSinceUtc = now };
                 db.Entries.Add(entry);
             }
             try
@@ -62,6 +62,13 @@ namespace BackendServer.Services
                 return await again.Entries.AsNoTracking().FirstAsync(e => e.Number == number && e.GuestId == guestId);
             }
             return entry;
+        }
+
+        public async Task SetClockAsync(int number, string guestId, double playedSeconds, DateTime? since)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            await db.Entries.Where(e => e.Number == number && e.GuestId == guestId)
+                .ExecuteUpdateAsync(u => u.SetProperty(e => e.PlayedSeconds, playedSeconds).SetProperty(e => e.ClockSinceUtc, since));
         }
 
         public async Task<DailyEntryRecord?> GetEntryAsync(int number, string guestId)
@@ -183,6 +190,7 @@ namespace BackendServer.Services
                     {
                         Number = entry.Number, GuestId = into, OpenedUtc = entry.OpenedUtc, BestMoves = entry.BestMoves,
                         BestSeconds = entry.BestSeconds, BestSolution = entry.BestSolution, SolvedUtc = entry.SolvedUtc,
+                        PlayedSeconds = entry.PlayedSeconds, ClockSinceUtc = entry.ClockSinceUtc,
                     });
                 }
                 moved++;

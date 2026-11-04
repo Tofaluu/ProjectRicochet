@@ -49,6 +49,13 @@ mergeInto(LibraryManager.library, {
     return document.visibilityState === 'hidden' ? 0 : 1;
   },
 
+  // Calls back (no arguments) whenever the tab is hidden or shown: hidden tabs run no frames, so the game can't poll.
+  Ricochet_OnVisibilityChange: function (callback) {
+    document.addEventListener('visibilitychange', function () {
+      {{{ makeDynCall('v', 'callback') }}}();
+    });
+  },
+
   // The palette's colours for the loading page (index.html reads them on the next visit, before the game starts).
   Ricochet_SaveLoadingColors: function (json) {
     try { localStorage.setItem('ricochet.loadingColors', UTF8ToString(json)); } catch (e) { }

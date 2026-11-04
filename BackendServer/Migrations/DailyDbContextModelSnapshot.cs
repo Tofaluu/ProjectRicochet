@@ -71,8 +71,14 @@ namespace BackendServer.Migrations
                     b.Property<byte[]>("BestSolution")
                         .HasColumnType("bytea");
 
+                    b.Property<DateTime?>("ClockSinceUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("OpenedUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("PlayedSeconds")
+                        .HasColumnType("double precision");
 
                     b.Property<DateTime?>("SolvedUtc")
                         .HasColumnType("timestamp with time zone");

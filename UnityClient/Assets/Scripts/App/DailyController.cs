@@ -61,12 +61,65 @@ namespace Ricochet.Client.App
         {
             _game = game;
             Scratchpad.Solved += OnSolved;
+            Viewport.PageVisibilityChanged += SyncClock;
+            Network.Reconnected += OnReconnected;
         }
 
         private void OnDestroy()
         {
-            if (_game != null && Scratchpad != null)
+            Viewport.PageVisibilityChanged -= SyncClock;
+            if (_game == null)
+                return;
+            if (Scratchpad != null)
                 Scratchpad.Solved -= OnSolved;
+            Network.Reconnected -= OnReconnected;
+        }
+
+        // ---- The clock: it runs only while today's unfinished puzzle is on screen ----
+
+        private bool ClockShouldRun => State.Stage == DailyStage.Playing && State.Number > 0 && !State.IsPerfect && Viewport.PageVisible;
+
+        /// <summary>
+        /// Pauses or resumes the clock (and the server's) when the puzzle goes out of sight - tab hidden, window
+        /// unfocused on desktop, another screen - or comes back. Every frame, and at once when the tab's visibility changes.
+        /// </summary>
+        private void SyncClock()
+        {
+            bool run = ClockShouldRun;
+            if (run == State.ClockRunning || State.Number <= 0)
+                return;
+            int number = State.Number;
+            if (run)
+            {
+                State.Resume(Time.time);
+                TellServer(Network.ResumeDailyAsync(GuestIdentity.Id, number), number);
+            }
+            else
+            {
+                State.Pause(Time.time);
+                TellServer(Network.PauseDailyAsync(GuestIdentity.Id, number), number);
+            }
+        }
+
+        // The server dropped this player's clock with the old connection: start it again if it should run.
+        private void OnReconnected()
+        {
+            if (State.ClockRunning && ClockShouldRun)
+                TellServer(Network.ResumeDailyAsync(GuestIdentity.Id, State.Number), State.Number);
+        }
+
+        private async void TellServer(System.Threading.Tasks.Task<double> call, int number)
+        {
+            try
+            {
+                double seconds = await call;
+                if (State.Number == number)
+                    State.SyncClock(seconds, Time.time);
+            }
+            catch (Exception)
+            {
+                // Offline: the local clock carries on; the server's paused when the connection dropped.
+            }
         }
 
         // ---- Flow ----
@@ -442,6 +495,7 @@ namespace Ricochet.Client.App
         {
             if (_game == null)
                 return;
+            SyncClock();
             // A lobby takes the board over.
             if ((State.IsActive || Archive.IsOpen) && Network.IsInLobby)
                 Close(backToPractice: false);

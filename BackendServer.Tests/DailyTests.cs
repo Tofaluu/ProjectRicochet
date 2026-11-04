@@ -95,7 +95,7 @@ public class DailyTests
     }
 
     [Fact]
-    public async Task Solutions_AreTimedFromFirstOpening_AndOnlyFewerMovesImprove()
+    public async Task Solutions_AreTimedByThePlayersClock_AndOnlyFewerMovesImprove()
     {
         var (daily, time) = Create();
         DailyPuzzleInfo info = await daily.GetDailyAsync(Alice, "Alice");
@@ -110,7 +110,7 @@ public class DailyTests
 
         // Opening again doesn't restart the clock.
         time.Advance(TimeSpan.FromSeconds(30));
-        Assert.Equal(60, (await daily.GetDailyAsync(Alice, "Alice")).SecondsSinceOpened, 3);
+        Assert.Equal(60, (await daily.GetDailyAsync(Alice, "Alice")).SecondsPlayed, 3);
 
         DailyResult better = await daily.SubmitAsync(Alice, 1, Encode(shortest));
         Assert.True(better.Improved);
@@ -181,6 +181,42 @@ public class DailyTests
         await LeaderboardScenario(Create(store));
         Assert.Equal(new[] { 1 }, await store.GetSolvedNumbersAsync(Alice, 1, 5));
         Assert.NotNull(await store.GetPuzzleAsync(1));
+        await ClockScenario(Create(store), Bob);
+    }
+
+    [Fact]
+    public async Task TheClock_PausesWhileThePuzzleIsOutOfSight()
+    {
+        await ClockScenario(Create(), Alice);
+    }
+
+    // 30 s playing, an hour hidden (paused), 20 s back: solved in 50 s. A dropped connection pauses too, and only
+    // today's puzzle has a clock.
+    private static async Task ClockScenario((DailyService daily, FakeTimeProvider time) setup, string guest)
+    {
+        var (daily, time) = setup;
+        DailyPuzzleInfo info = await daily.GetDailyAsync(guest, "Player", "conn-1");
+        Assert.Equal(0, info.SecondsPlayed, 3);
+
+        time.Advance(TimeSpan.FromSeconds(30));
+        Assert.Equal(30, await daily.PauseDailyAsync(guest, 1, "conn-1"), 3);
+        Assert.Equal(30, await daily.PauseDailyAsync(guest, 1, "conn-1"), 3); // pausing twice is harmless
+        time.Advance(TimeSpan.FromHours(1));
+        Assert.Equal(30, (await daily.GetDailyAsync(guest, "Player", "conn-1")).SecondsPlayed, 3); // opening resumes it
+        time.Advance(TimeSpan.FromSeconds(10));
+        Assert.Equal(40, await daily.ResumeDailyAsync(guest, 1, "conn-1"), 3); // already running: no change
+        time.Advance(TimeSpan.FromSeconds(10));
+        DailyResult solved = await daily.SubmitAsync(guest, 1, Encode(Shortest(info)));
+        Assert.Equal(50, solved.Seconds, 3);
+
+        await daily.DisconnectedAsync("conn-1");
+        time.Advance(TimeSpan.FromMinutes(5));
+        Assert.Equal(50, await daily.ResumeDailyAsync(guest, 1, "conn-2"), 3);
+        time.Advance(TimeSpan.FromSeconds(5));
+        Assert.Equal(55, await daily.PauseDailyAsync(guest, 1, "conn-2"), 3);
+        await daily.DisconnectedAsync("conn-2"); // already paused: nothing to do
+
+        Assert.Equal(0, await daily.ResumeDailyAsync(guest, 2, "conn-2")); // not opened (and not today's)
     }
 
     [Fact]

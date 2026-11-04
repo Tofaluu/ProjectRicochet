@@ -30,14 +30,26 @@ namespace BackendServer.Services
         public int Number { get; set; }
         public string GuestId { get; set; } = "";
 
-        /// <summary>The player's clock starts here.</summary>
+        /// <summary>When they first opened it.</summary>
         public DateTime OpenedUtc { get; set; }
+
+        /// <summary>
+        /// The player's clock (protocol 16): seconds played before <see cref="ClockSinceUtc"/>, which is when it last
+        /// started running (null = paused: the game was hidden, closed or on another screen). Null seconds = an entry from
+        /// before the clock could pause, timed from <see cref="OpenedUtc"/>.
+        /// </summary>
+        public double? PlayedSeconds { get; set; }
+        public DateTime? ClockSinceUtc { get; set; }
 
         /// <summary>0 until solved.</summary>
         public int BestMoves { get; set; }
         public double BestSeconds { get; set; }
         public byte[]? BestSolution { get; set; }
         public DateTime? SolvedUtc { get; set; }
+
+        /// <summary>The player's clock at <paramref name="now"/>.</summary>
+        public double Played(DateTime now) => PlayedSeconds == null ? (now - OpenedUtc).TotalSeconds
+            : PlayedSeconds.Value + (ClockSinceUtc.HasValue ? Math.Max(0, (now - ClockSinceUtc.Value).TotalSeconds) : 0);
     }
 
     /// <summary>

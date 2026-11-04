@@ -9,8 +9,9 @@ namespace BackendServer.Services
     /// <summary>
     /// The daily puzzle's rules: one board a day for everyone, changing at midnight in <see cref="DailyOptions.TimeZone"/>
     /// and getting harder through the week (<see cref="Difficulty"/>). Players are guests known by a secret id kept on
-    /// their device. They may keep improving until the reset; their best is the fewest moves, timed from when they
-    /// first opened the puzzle (server time), and every solution is checked here, so results can't be faked.
+    /// their device. They may keep improving until the reset; their best is the fewest moves, timed by the server's clock
+    /// while the puzzle is on their screen (it pauses when the game says it's hidden or on another screen, and when the
+    /// connection drops), and every solution is checked here, so results can't be faked.
     /// </summary>
     public class DailyService
     {
@@ -26,6 +27,8 @@ namespace BackendServer.Services
         private readonly TimeZoneInfo _zone;
         private readonly DateOnly _launch;
         private readonly SemaphoreSlim _generating = new(1, 1);
+        // Connections whose player's clock is running on today's puzzle, to pause it if the connection drops.
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string GuestId, int Number)> _running = new();
 
         public DailyService(IDailyStore store, IOptions<DailyOptions> options, TimeProvider time, ILogger<DailyService> log)
         {
@@ -81,7 +84,8 @@ namespace BackendServer.Services
         private DateTime NextResetUtc(DateOnly day) =>
             TimeZoneInfo.ConvertTimeToUtc(day.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), _zone);
 
-        public async Task<DailyPuzzleInfo> GetDailyAsync(string guestId, string name)
+        /// <param name="connectionId">The caller's connection: its clock pauses if the connection drops (null = never).</param>
+        public async Task<DailyPuzzleInfo> GetDailyAsync(string guestId, string name, string? connectionId = null)
         {
             guestId = Player(guestId);
             DateTime now = UtcNow;
@@ -92,19 +96,74 @@ namespace BackendServer.Services
 
             DailyPuzzleRecord puzzle = await EnsurePuzzleAsync(number);
             DailyEntryRecord entry = await _store.OpenAsync(number, guestId, CleanName(name), now);
+            await StartClockAsync(entry, now, connectionId);
             return new DailyPuzzleInfo
             {
                 Number = number,
                 Date = today.ToString("yyyy-MM-dd"),
                 Board = puzzle.Board,
                 ShortestLength = puzzle.Shortest.Length, // one byte per move
-                SecondsSinceOpened = (now - entry.OpenedUtc).TotalSeconds,
+                SecondsPlayed = entry.Played(now),
                 SecondsUntilNext = (NextResetUtc(today) - now).TotalSeconds,
                 BestMoves = entry.BestMoves,
                 BestSeconds = entry.BestSeconds,
                 BestSolution = entry.BestSolution ?? Array.Empty<byte>(),
                 Streak = await StreakAsync(guestId, number),
             };
+        }
+
+        /// <summary>
+        /// Pauses the player's clock on today's puzzle (the game went out of sight, or to another screen); returns the
+        /// seconds played. Nothing for another day's puzzle, or entries timed the old way.
+        /// </summary>
+        public async Task<double> PauseDailyAsync(string guestId, int number, string? connectionId = null)
+        {
+            guestId = Player(guestId);
+            if (connectionId != null)
+                _running.TryRemove(connectionId, out _);
+            DateTime now = UtcNow;
+            DailyEntryRecord? entry = await _store.GetEntryAsync(number, guestId);
+            if (entry == null)
+                return 0;
+            if (number == NumberOf(DayAt(now)) && entry.PlayedSeconds != null && entry.ClockSinceUtc != null)
+            {
+                double played = entry.Played(now);
+                await _store.SetClockAsync(number, guestId, played, null);
+                return played;
+            }
+            return entry.Played(now);
+        }
+
+        /// <summary>Starts the player's clock on today's puzzle again (the game is back in sight); returns the seconds played.</summary>
+        public async Task<double> ResumeDailyAsync(string guestId, int number, string? connectionId = null)
+        {
+            guestId = Player(guestId);
+            DateTime now = UtcNow;
+            DailyEntryRecord? entry = await _store.GetEntryAsync(number, guestId);
+            if (entry == null)
+                return 0;
+            if (number == NumberOf(DayAt(now)))
+                await StartClockAsync(entry, now, connectionId);
+            return entry.Played(now);
+        }
+
+        /// <summary>The connection dropped: pause the clock it was running.</summary>
+        public async Task DisconnectedAsync(string connectionId)
+        {
+            if (_running.TryRemove(connectionId, out var running))
+                await PauseDailyAsync(running.GuestId, running.Number);
+        }
+
+        private async Task StartClockAsync(DailyEntryRecord entry, DateTime now, string? connectionId)
+        {
+            if (entry.PlayedSeconds == null)
+                return; // the old way: since opening
+            if (connectionId != null)
+                _running[connectionId] = (entry.GuestId, entry.Number);
+            if (entry.ClockSinceUtc != null)
+                return;
+            entry.ClockSinceUtc = now;
+            await _store.SetClockAsync(entry.Number, entry.GuestId, entry.PlayedSeconds.Value, now);
         }
 
         public async Task<DailyResult> SubmitAsync(string guestId, int number, byte[] moveData)
@@ -121,7 +180,7 @@ namespace BackendServer.Services
                 ?? throw new HubException("Open today's puzzle first.");
             Move[] moves = CheckSolution(puzzle, moveData);
 
-            double seconds = (now - entry.OpenedUtc).TotalSeconds;
+            double seconds = entry.Played(now);
             bool improved = entry.BestMoves == 0 || moves.Length < entry.BestMoves;
             int bestMoves = entry.BestMoves;
             double bestSeconds = entry.BestSeconds;

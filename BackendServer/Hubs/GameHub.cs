@@ -38,8 +38,16 @@ namespace BackendServer.Hubs
         public Task<DailyPuzzleInfo> GetDaily(string guestId, string name, int protocolVersion)
         {
             CheckVersion(protocolVersion);
-            return _daily.GetDailyAsync(guestId, name);
+            return _daily.GetDailyAsync(guestId, name, Context.ConnectionId);
         }
+
+        [HubMethodName(HubMethods.PauseDaily)]
+        public Task<double> PauseDaily(string guestId, int number) =>
+            _daily.PauseDailyAsync(guestId, number, Context.ConnectionId);
+
+        [HubMethodName(HubMethods.ResumeDaily)]
+        public Task<double> ResumeDaily(string guestId, int number) =>
+            _daily.ResumeDailyAsync(guestId, number, Context.ConnectionId);
 
         [HubMethodName(HubMethods.SubmitDaily)]
         public Task<DailyResult> SubmitDaily(string guestId, int number, byte[] moves) =>
@@ -91,6 +99,7 @@ namespace BackendServer.Hubs
         {
             // Unlike LeaveLobby, the seat is kept for a while in case they reconnect.
             await _lobbies.DisconnectAsync(Context.ConnectionId);
+            await _daily.DisconnectedAsync(Context.ConnectionId);
             await base.OnDisconnectedAsync(exception);
         }
     }

@@ -1,5 +1,6 @@
 #if UNITY_WEBGL && !UNITY_EDITOR
 using System.Runtime.InteropServices;
+using AOT;
 #endif
 
 namespace Ricochet.Client.App
@@ -28,7 +29,48 @@ namespace Ricochet.Client.App
 
         [DllImport("__Internal")]
         private static extern int Ricochet_PageVisible();
+
+        private delegate void VisibilityCallback();
+
+        [DllImport("__Internal")]
+        private static extern void Ricochet_OnVisibilityChange(VisibilityCallback callback);
+
+        private static bool _listening;
+
+        [MonoPInvokeCallback(typeof(VisibilityCallback))]
+        private static void OnVisibilityChange()
+        {
+            try
+            {
+                _visibilityChanged?.Invoke();
+            }
+            catch (System.Exception e)
+            {
+                UnityEngine.Debug.LogException(e);
+            }
+        }
 #endif
+
+        /// <summary>
+        /// Raised at once when the browser tab is hidden or shown, even while hidden (hidden tabs stop running frames, so
+        /// polling <see cref="PageVisible"/> in Update would only notice on the way back). Browsers only; elsewhere poll.
+        /// </summary>
+        public static event System.Action PageVisibilityChanged
+        {
+            add
+            {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                if (!_listening)
+                {
+                    _listening = true;
+                    Ricochet_OnVisibilityChange(OnVisibilityChange);
+                }
+                _visibilityChanged += value;
+#endif
+            }
+            remove { _visibilityChanged -= value; }
+        }
+        private static System.Action _visibilityChanged;
 
         /// <summary>The game is on screen: its browser tab is showing (elsewhere: the window has focus).</summary>
         public static bool PageVisible

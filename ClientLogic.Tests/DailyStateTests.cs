@@ -15,7 +15,7 @@ namespace ClientLogic.Tests
             Date = "2026-10-18",
             Board = BoardCodec.Encode(Round),
             ShortestLength = 8,
-            SecondsSinceOpened = opened,
+            SecondsPlayed = opened,
             SecondsUntilNext = 3600,
             BestMoves = bestMoves,
             BestSeconds = bestMoves > 0 ? 102 : 0,
@@ -31,6 +31,25 @@ namespace ClientLogic.Tests
             for (int i = 0; i < length; i++)
                 moves[i] = new Move(order[i % 4], Direction.Up);
             return moves;
+        }
+
+        [Fact]
+        public void TheClock_StopsWhilePaused_AndTheServersCountWins()
+        {
+            var daily = new DailyState();
+            daily.OnLoaded(Info(opened: 30), now: 0f);
+            Assert.True(daily.ClockRunning);
+            Assert.Equal(40, daily.Elapsed(10f), 3);
+
+            daily.Pause(10f);
+            daily.Pause(20f); // twice is harmless
+            Assert.False(daily.ClockRunning);
+            Assert.Equal(40, daily.Elapsed(500f), 3); // hidden: no time passes
+
+            daily.Resume(500f);
+            Assert.Equal(45, daily.Elapsed(505f), 3);
+            daily.SyncClock(44, 505f); // the server's answer to the resume
+            Assert.Equal(46, daily.Elapsed(507f), 3);
         }
 
         [Fact]

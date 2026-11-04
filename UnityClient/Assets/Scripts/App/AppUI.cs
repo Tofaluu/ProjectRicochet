@@ -1386,7 +1386,7 @@ namespace Ricochet.Client.App
                 : loading ? ""
                 : daily.IsPerfect ? "You found the best possible solution. See you tomorrow!"
                 : solved ? "Keep going: a shorter solution beats your best, until midnight."
-                : "Solve it in as few moves as you can. Your time counts from when you first opened it, and you can keep improving until midnight (Eastern).";
+                : "Solve it in as few moves as you can. Your time only counts while it's on screen (it pauses when you leave), and you can keep improving until midnight (Eastern).";
             _dailyCopy.style.display = solved ? DisplayStyle.Flex : DisplayStyle.None;
             _dailyRetry.style.display = error ? DisplayStyle.Flex : DisplayStyle.None;
             string notice = _daily.Notice ?? (daily.Submitting ? "Sending..." : null);

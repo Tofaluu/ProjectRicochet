@@ -51,6 +51,8 @@ namespace Ricochet.Client.Network
         public event Action<string> RequestFailed;
         /// <summary>(this player's name in the lobby) The join (or rejoin) went through. Usually comes after the first LobbyStateChanged.</summary>
         public event Action<string> Joined;
+        /// <summary>The connection came back after a drop (a new connection id: the server forgot what it was doing for it).</summary>
+        public event Action Reconnected;
 
         public bool IsInLobby { get; private set; }
 
@@ -221,6 +223,20 @@ namespace Ricochet.Client.Network
             return await _connection.InvokeAsync<DailyPuzzleInfo>(HubMethods.GetDaily, guestId, playerName, HubMethods.ProtocolVersion);
         }
 
+        /// <summary>Pauses the player's clock on today's puzzle; the seconds played.</summary>
+        public async Task<double> PauseDailyAsync(string guestId, int number)
+        {
+            await EnsureConnectedAsync();
+            return await _connection.InvokeAsync<double>(HubMethods.PauseDaily, guestId, number);
+        }
+
+        /// <summary>Starts the player's clock on today's puzzle again; the seconds played.</summary>
+        public async Task<double> ResumeDailyAsync(string guestId, int number)
+        {
+            await EnsureConnectedAsync();
+            return await _connection.InvokeAsync<double>(HubMethods.ResumeDaily, guestId, number);
+        }
+
         public async Task<DailyResult> SubmitDailyAsync(string guestId, int number, IReadOnlyList<Move> moves)
         {
             await EnsureConnectedAsync();
@@ -339,8 +355,10 @@ namespace Ricochet.Client.Network
             {
                 Post(() =>
                 {
-                    if (_connection == connection)
-                        Rejoin();
+                    if (_connection != connection)
+                        return;
+                    Reconnected?.Invoke();
+                    Rejoin();
                 });
             };
             // Also raised when the automatic reconnect gives up.

@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 15;
+        public const int ProtocolVersion = 16;
 
         // Client -> server
 
@@ -71,15 +71,25 @@ namespace SharedLogic
 
         /// <summary>
         /// (string guestId, string name, int protocolVersion) returns <see cref="DailyPuzzleInfo"/>: today's puzzle
-        /// and how the player stands on it. The day's first call starts the player's clock; name is shown on the
+        /// and how the player stands on it. Starts (or restarts) the player's clock; name is shown on the
         /// leaderboard (updated each call). Fails if protocolVersion != <see cref="ProtocolVersion"/>.
         /// </summary>
         public const string GetDaily = "GetDaily";
 
         /// <summary>
+        /// (string guestId, int number) returns double: the seconds played. Protocol 16: the clock only runs while today's
+        /// puzzle is on the player's screen - the game pauses it when the tab is hidden or the player leaves the daily
+        /// screen, and resumes it when they're back (no button); a dropped connection pauses it too.
+        /// </summary>
+        public const string PauseDaily = "PauseDaily";
+
+        /// <summary>(string guestId, int number) returns double: the seconds played. Starts the clock again (see <see cref="PauseDaily"/>).</summary>
+        public const string ResumeDaily = "ResumeDaily";
+
+        /// <summary>
         /// (string guestId, int number, byte[] moves) returns <see cref="DailyResult"/>. A solution to today's puzzle
         /// (number = <see cref="DailyPuzzleInfo.Number"/>). Players may keep improving until the reset; their best is
-        /// the fewest moves, timed from first opening the puzzle (a later solution of the same length doesn't replace it).
+        /// the fewest moves, timed by the player's clock (a later solution of the same length doesn't replace it).
         /// </summary>
         public const string SubmitDaily = "SubmitDaily";
 
@@ -364,8 +374,8 @@ namespace SharedLogic
         /// <summary>The shortest possible solution's length (the solution itself is never sent).</summary>
         public int ShortestLength { get; set; }
 
-        /// <summary>Since the player first opened today's puzzle (their clock).</summary>
-        public double SecondsSinceOpened { get; set; }
+        /// <summary>The player's clock: time spent with today's puzzle on screen (it runs from this answer on).</summary>
+        public double SecondsPlayed { get; set; }
 
         /// <summary>Until the next puzzle (midnight Eastern).</summary>
         public double SecondsUntilNext { get; set; }
@@ -384,7 +394,7 @@ namespace SharedLogic
     /// <summary>The answer to <see cref="HubMethods.SubmitDaily"/>.</summary>
     public class DailyResult
     {
-        /// <summary>This solution: its length and the time since the player first opened the puzzle.</summary>
+        /// <summary>This solution: its length and the player's clock when it was sent.</summary>
         public int Moves { get; set; }
         public double Seconds { get; set; }
 

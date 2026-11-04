@@ -37,11 +37,22 @@ namespace BackendServer.Services
                 }
                 if (!_entries.TryGetValue((number, guestId), out DailyEntryRecord? entry))
                 {
-                    entry = new DailyEntryRecord { Number = number, GuestId = guestId, OpenedUtc = now };
+                    entry = new DailyEntryRecord { Number = number, GuestId = guestId, OpenedUtc = now, PlayedSeconds = 0, ClockSinceUtc = now };
                     _entries[(number, guestId)] = entry;
                 }
                 return Task.FromResult(Copy(entry));
             }
+        }
+
+        public Task SetClockAsync(int number, string guestId, double playedSeconds, DateTime? since)
+        {
+            lock (_gate)
+                if (_entries.TryGetValue((number, guestId), out DailyEntryRecord? entry))
+                {
+                    entry.PlayedSeconds = playedSeconds;
+                    entry.ClockSinceUtc = since;
+                }
+            return Task.CompletedTask;
         }
 
         public Task<DailyEntryRecord?> GetEntryAsync(int number, string guestId)
@@ -182,6 +193,7 @@ namespace BackendServer.Services
         {
             Number = e.Number, GuestId = e.GuestId, OpenedUtc = e.OpenedUtc, BestMoves = e.BestMoves,
             BestSeconds = e.BestSeconds, BestSolution = e.BestSolution, SolvedUtc = e.SolvedUtc,
+            PlayedSeconds = e.PlayedSeconds, ClockSinceUtc = e.ClockSinceUtc,
         };
 
         private static DailyArchiveRecord Copy(DailyArchiveRecord e) => new()
