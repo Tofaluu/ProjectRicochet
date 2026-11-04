@@ -58,7 +58,7 @@ public class DailyTests
         time.SetUtcNow(new DateTimeOffset(2026, 10, 13, 3, 59, 0, TimeSpan.Zero)); // 23:59 in Toronto
         DailyPuzzleInfo monday = await daily.GetDailyAsync(Alice, "Alice");
         Assert.Equal(1, monday.Number);
-        Assert.InRange(monday.ShortestLength, 4, 5);
+        Assert.Equal(5, monday.ShortestLength);
 
         time.Advance(TimeSpan.FromMinutes(2));
         DailyPuzzleInfo tuesday = await daily.GetDailyAsync(Alice, "Alice");
@@ -70,7 +70,7 @@ public class DailyTests
         Assert.Equal(4, thursday.Number);
         Assert.InRange(thursday.ShortestLength, 10, 11);
         Assert.True(Solver.FewestRobots(BoardCodec.Decode(thursday.Board), thursday.ShortestLength) >= 2); // not the target robot alone
-        Assert.Equal((4, 5), DailyService.Difficulty(DayOfWeek.Monday));
+        Assert.Equal((5, 5), DailyService.Difficulty(DayOfWeek.Monday));
         Assert.Equal((8, 9), DailyService.Difficulty(DayOfWeek.Wednesday));
         Assert.Equal((15, 16), DailyService.Difficulty(DayOfWeek.Sunday));
         Assert.Equal((1, 1), DailyService.Robots(DayOfWeek.Wednesday));

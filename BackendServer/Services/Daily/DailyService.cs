@@ -44,7 +44,7 @@ namespace BackendServer.Services
         /// </summary>
         public static (int Min, int Max) Difficulty(DayOfWeek day) => day switch
         {
-            DayOfWeek.Monday => (4, 5),
+            DayOfWeek.Monday => (5, 5),
             DayOfWeek.Tuesday => (6, 7),
             DayOfWeek.Wednesday => (8, 9),
             DayOfWeek.Thursday => (10, 11),
