@@ -446,6 +446,15 @@
 /* Asks before a nav tab leaves the lobby: next to the nav, near the top. */
 .popover--leave { top: 90px; bottom: auto; }
 .app .leave-confirm { margin-left: 10px; }
+.account-actions { margin-top: 12px; }
+.app .account-actions .btn { margin: 0; }
+.app .account-actions .account-gap { margin-right: 8px; }
+.app .account-delete-confirm { background-color: #b8473f; color: #fff6ee; }
+.app .account-delete-confirm:hover { background-color: #c9554c; }
+.account-confirm { display: none; margin-top: 12px; }
+.account-confirm.is-open { display: flex; }
+.account-link { margin-top: 12px; -unity-text-align: middle-left; }
+.account-link:hover { color: var(--text); }
 .palette-label { margin-top: 12px; margin-bottom: 8px; }
 .swatches { flex-direction: row; justify-content: space-between; }
 .app .swatch { width: 32px; height: 32px; margin: 0; padding: 0; border-radius: 9px; border-width: 2px; border-color: var(--line); align-items: center; justify-content: center; }

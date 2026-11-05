@@ -12,12 +12,27 @@ namespace BackendServer.Hubs
     {
         private readonly LobbyManager _lobbies;
         private readonly DailyService _daily;
+        private readonly AccountService _accounts;
 
-        public GameHub(LobbyManager lobbies, DailyService daily)
+        public GameHub(LobbyManager lobbies, DailyService daily, AccountService accounts)
         {
             _lobbies = lobbies;
             _daily = daily;
+            _accounts = accounts;
         }
+
+        [HubMethodName(HubMethods.SignInWithGoogle)]
+        public Task<AccountInfo> SignInWithGoogle(string guestId, string idToken, int protocolVersion)
+        {
+            CheckVersion(protocolVersion);
+            return _accounts.SignInWithGoogleAsync(guestId, idToken);
+        }
+
+        [HubMethodName(HubMethods.GetAccount)]
+        public Task<AccountInfo?> GetAccount(string guestId) => _accounts.GetAccountAsync(guestId);
+
+        [HubMethodName(HubMethods.DeleteAccount)]
+        public Task DeleteAccount(string guestId) => _accounts.DeleteAccountAsync(guestId);
 
         private static void CheckVersion(int protocolVersion)
         {

@@ -83,6 +83,10 @@ The server (and its Docker image) uses these NuGet packages to store daily puzzl
   https://github.com/npgsql/efcore.pg - licensed under the PostgreSQL License; the full text is in each
   repository's `LICENSE` file.
 
+Accounts: Google sign-in tokens are checked with Google.Apis.Auth (Google APIs Client Library for .NET),
+https://github.com/googleapis/google-api-dotnet-client - Copyright Google LLC, Apache License 2.0; the full
+text is in the repository's `LICENSE` file.
+
 The database itself runs from the official `postgres` Docker image (PostgreSQL License), pulled by the
 server; it isn't part of this repository.
 

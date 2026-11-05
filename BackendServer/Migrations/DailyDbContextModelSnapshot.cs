@@ -22,6 +22,60 @@ namespace BackendServer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("BackendServer.Services.AccountLoginRecord", b =>
+                {
+                    b.Property<string>("Provider")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Provider", "Subject");
+
+                    b.HasIndex("AccountId");
+
+                    b.ToTable("account_logins", (string)null);
+                });
+
+            modelBuilder.Entity("BackendServer.Services.AccountRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("HomeGuestId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("LastSignInUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HomeGuestId")
+                        .IsUnique();
+
+                    b.ToTable("accounts", (string)null);
+                });
+
             modelBuilder.Entity("BackendServer.Services.DailyArchiveRecord", b =>
                 {
                     b.Property<int>("Number")
@@ -188,6 +242,15 @@ namespace BackendServer.Migrations
                     b.HasIndex("GuestId");
 
                     b.ToTable("usage_events", (string)null);
+                });
+
+            modelBuilder.Entity("BackendServer.Services.AccountLoginRecord", b =>
+                {
+                    b.HasOne("BackendServer.Services.AccountRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

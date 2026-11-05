@@ -80,6 +80,9 @@ namespace BackendServer.Services
 
         /// <summary>The online peaks of the days from <paramref name="first"/> on.</summary>
         Task<IReadOnlyDictionary<DateOnly, int>> GetPeaksAsync(DateOnly first);
+
+        /// <summary>Removes this guest's events (an account deletion).</summary>
+        Task DeleteGuestAsync(string guestId);
     }
 
     /// <summary>

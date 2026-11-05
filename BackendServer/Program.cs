@@ -9,6 +9,7 @@ builder.Services.AddSignalR();
 builder.Services.Configure<GameOptions>(builder.Configuration.GetSection("Game"));
 builder.Services.Configure<DailyOptions>(builder.Configuration.GetSection("Daily"));
 builder.Services.Configure<UsageOptions>(builder.Configuration.GetSection("Usage"));
+builder.Services.Configure<AccountOptions>(builder.Configuration.GetSection("Accounts"));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LobbyManager>();
 
@@ -20,14 +21,18 @@ if (!string.IsNullOrWhiteSpace(dailyDatabase))
     builder.Services.AddDbContextFactory<DailyDbContext>(options => options.UseNpgsql(dailyDatabase));
     builder.Services.AddSingleton<IDailyStore, EfDailyStore>();
     builder.Services.AddSingleton<IUsageStore, EfUsageStore>();
+    builder.Services.AddSingleton<IAccountStore, EfAccountStore>();
 }
 else
 {
     builder.Services.AddSingleton<IDailyStore, InMemoryDailyStore>();
     builder.Services.AddSingleton<IUsageStore, InMemoryUsageStore>();
+    builder.Services.AddSingleton<IAccountStore, InMemoryAccountStore>();
 }
 builder.Services.AddSingleton<UsageService>();
 builder.Services.AddSingleton<DailyService>();
+builder.Services.AddSingleton<IGoogleTokenValidator, GoogleTokenValidator>();
+builder.Services.AddSingleton<AccountService>();
 builder.Services.AddHostedService<DailyPrepareService>();
 
 // Only browser clients (e.g. a future WebGL build) need CORS; the Unity desktop client doesn't.

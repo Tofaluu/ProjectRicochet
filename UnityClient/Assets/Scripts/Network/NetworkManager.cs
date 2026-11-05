@@ -282,6 +282,28 @@ namespace Ricochet.Client.Network
         }
 
         /// <summary>The server's message for a failed call (without the transport's prefix).</summary>
+        // ---- Accounts (optional; see AccountService on the server) ----
+
+        /// <summary>Signs in with a Google ID token; the device plays as <see cref="AccountInfo.GuestId"/> from then on.</summary>
+        public async Task<AccountInfo> SignInWithGoogleAsync(string guestId, string idToken)
+        {
+            await EnsureConnectedAsync();
+            return await _connection.InvokeAsync<AccountInfo>(HubMethods.SignInWithGoogle, guestId, idToken, HubMethods.ProtocolVersion);
+        }
+
+        /// <summary>The account this guest id belongs to, or null (a plain guest, or the account was deleted).</summary>
+        public async Task<AccountInfo> GetAccountAsync(string guestId)
+        {
+            await EnsureConnectedAsync();
+            return await _connection.InvokeAsync<AccountInfo>(HubMethods.GetAccount, guestId);
+        }
+
+        public async Task DeleteAccountAsync(string guestId)
+        {
+            await EnsureConnectedAsync();
+            await _connection.InvokeAsync(HubMethods.DeleteAccount, guestId);
+        }
+
         public static string DescribeError(Exception e) => Describe(e);
 
         // Reuses a live connection (never resets a lobby's); connects otherwise.

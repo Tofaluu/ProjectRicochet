@@ -17,6 +17,8 @@ namespace BackendServer.Services
         public DbSet<DailyArchiveRecord> Archive => Set<DailyArchiveRecord>();
         public DbSet<UsageEventRecord> UsageEvents => Set<UsageEventRecord>();
         public DbSet<OnlinePeakRecord> OnlinePeaks => Set<OnlinePeakRecord>();
+        public DbSet<AccountRecord> Accounts => Set<AccountRecord>();
+        public DbSet<AccountLoginRecord> AccountLogins => Set<AccountLoginRecord>();
 
         protected override void OnModelCreating(ModelBuilder model)
         {
@@ -63,6 +65,23 @@ namespace BackendServer.Services
             {
                 e.ToTable("usage_online_peaks");
                 e.HasKey(x => x.Day);
+            });
+            model.Entity<AccountRecord>(e =>
+            {
+                e.ToTable("accounts");
+                e.HasKey(x => x.Id);
+                e.Property(x => x.HomeGuestId).HasMaxLength(64);
+                e.Property(x => x.Email).HasMaxLength(320);
+                e.HasIndex(x => x.HomeGuestId).IsUnique();
+            });
+            model.Entity<AccountLoginRecord>(e =>
+            {
+                e.ToTable("account_logins");
+                e.HasKey(x => new { x.Provider, x.Subject });
+                e.Property(x => x.Provider).HasMaxLength(16);
+                e.Property(x => x.Subject).HasMaxLength(255);
+                e.HasIndex(x => x.AccountId);
+                e.HasOne<AccountRecord>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

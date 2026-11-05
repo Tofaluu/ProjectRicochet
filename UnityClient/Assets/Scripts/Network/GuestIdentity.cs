@@ -28,5 +28,15 @@ namespace Ricochet.Client.Network
                 return id;
             }
         }
+
+        /// <summary>Plays as another id from now on: an account's home id after signing in.</summary>
+        public static void Switch(string id)
+        {
+            PlayerPrefs.SetString(PrefKey, id);
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>A new, empty guest (signing out: the account's id stays with the account, not this device).</summary>
+        public static string NewId() => Guid.NewGuid().ToString("N");
     }
 }

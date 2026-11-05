@@ -58,5 +58,8 @@ namespace BackendServer.Services
         /// merged (0 = nothing left of <paramref name="from"/>).
         /// </summary>
         Task<int> MergeGuestAsync(string from, string into);
+
+        /// <summary>Removes everything stored under this guest id: entries, past plays and the player (an account deletion).</summary>
+        Task DeleteGuestAsync(string guestId);
     }
 }

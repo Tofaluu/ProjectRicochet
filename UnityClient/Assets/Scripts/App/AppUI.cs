@@ -91,6 +91,10 @@ namespace Ricochet.Client.App
         private bool _scrollGliding;
         private const float WheelStep = 60f, GlideRate = 18f;
         private TextField _nameField, _codeField, _profileNameField;
+        private AccountController _account;
+        private Label _profileSub, _accountTitle, _accountBody, _accountMessage;
+        private Button _signIn, _signOut, _deleteAccount;
+        private VisualElement _accountActions, _accountConfirm;
         private readonly List<(Button Switch, Func<bool> IsOn)> _switches = new List<(Button, Func<bool>)>();
         private readonly List<(Label Value, Button Minus, Button Plus)> _steppers = new List<(Label, Button, Button)>();
 
@@ -122,6 +126,7 @@ namespace Ricochet.Client.App
         {
             _game = game;
             _daily = daily;
+            _account = new AccountController(game, daily);
 
             var settings = ScriptableObject.CreateInstance<PanelSettings>();
             settings.themeStyleSheet = Resources.Load<ThemeStyleSheet>("Ricochet/RicochetTheme");
@@ -229,6 +234,18 @@ namespace Ricochet.Client.App
             _navSettings = Click("nav-settings", () => TogglePopover(_settings));
             _profileButton = _root.Q("profile-button");
             _profileButton.RegisterCallback<ClickEvent>(_ => TogglePopover(_profilePopover));
+            _profileSub = _root.Q<Label>("profile-sub");
+            _accountTitle = _root.Q<Label>("account-title");
+            _accountBody = _root.Q<Label>("account-body");
+            _accountMessage = _root.Q<Label>("account-message");
+            _accountActions = _root.Q("account-actions");
+            _accountConfirm = _root.Q("account-confirm");
+            _signIn = Click("account-sign-in", _account.SignIn);
+            _signOut = Click("account-sign-out", _account.SignOut);
+            _deleteAccount = Click("account-delete", () => _account.ConfirmingDelete = true);
+            Click("account-delete-cancel", () => _account.ConfirmingDelete = false);
+            Click("account-delete-confirm", _account.DeleteAccount);
+            _root.Q<Label>("account-privacy").RegisterCallback<ClickEvent>(_ => Application.OpenURL(PrivacyUrl));
 
             _undo = Click("control-undo", () => Scratchpad.Perform(ControlAction.Undo));
             _reset = Click("control-reset", () => Scratchpad.Perform(ControlAction.Reset));
@@ -1785,6 +1802,42 @@ namespace Ricochet.Client.App
                     field.SetValueWithoutNotify(name);
             _profileAvatar.text = name.Length > 0 ? name.Substring(0, 1).ToUpperInvariant() : "?";
             _topbarAvatar.text = _profileAvatar.text;
+            ShowAccount();
+        }
+
+        private const string PrivacyUrl = "https://ricochet.thomasliu.dev/privacy.html";
+
+        // The profile popover's account part: a guest gets "Sign in with Google", a signed-in player sign out / delete.
+        private void ShowAccount()
+        {
+            bool signedIn = _account.SignedIn, open = _profilePopover.ClassListContains("is-open");
+            if (open)
+                _account.Check();
+            else if (!_account.Busy)
+            {
+                _account.ConfirmingDelete = false;
+                _account.ClearMessage();
+            }
+            _profileSub.text = signedIn ? "Signed in" : "Playing as a guest";
+            _accountTitle.text = signedIn ? "Signed in" : "Playing as a guest";
+            _accountBody.text = signedIn
+                ? $"As {_account.Email}. Your streak and daily results are saved to your account, on every device you sign in on."
+                : GoogleSignIn.Supported
+                    ? "Your streak and daily results are saved in this browser only. Sign in to keep them on every device."
+                    : "Your streak and daily results are saved on this device. Signing in works in the browser version for now.";
+            _signIn.style.display = signedIn ? DisplayStyle.None : DisplayStyle.Flex;
+            _signIn.text = _account.Busy ? "Signing in..." : "Sign in with Google";
+            _signIn.SetEnabled(GoogleSignIn.Supported && !_account.Busy);
+            _signOut.style.display = signedIn ? DisplayStyle.Flex : DisplayStyle.None;
+            _deleteAccount.style.display = signedIn ? DisplayStyle.Flex : DisplayStyle.None;
+            _signOut.SetEnabled(!_account.Busy);
+            _deleteAccount.SetEnabled(!_account.Busy);
+            bool confirming = signedIn && _account.ConfirmingDelete;
+            _accountActions.style.display = confirming ? DisplayStyle.None : DisplayStyle.Flex;
+            _accountConfirm.EnableInClassList("is-open", confirming);
+            string message = _account.Message;
+            _accountMessage.text = message ?? "";
+            _accountMessage.style.display = string.IsNullOrEmpty(message) ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         private void ShowHome()

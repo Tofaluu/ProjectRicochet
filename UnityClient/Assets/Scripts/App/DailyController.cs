@@ -33,8 +33,8 @@ namespace Ricochet.Client.App
         private string _notice;
         private float _noticeUntil;
 
-        public DailyState State { get; } = new DailyState();
-        public DailyArchive Archive { get; } = new DailyArchive();
+        public DailyState State { get; private set; } = new DailyState();
+        public DailyArchive Archive { get; private set; } = new DailyArchive();
 
         /// <summary>A short message to show for a moment ("Copied!", "Not shorter than your best"), else null.</summary>
         public string Notice => Time.time < _noticeUntil ? _notice : null;
@@ -197,6 +197,33 @@ namespace Ricochet.Client.App
                     Scratchpad.PlayOffline();
             }
             _practice = null;
+        }
+
+        /// <summary>
+        /// The device now plays as another guest id (signed in or out): today's puzzle and the calendar are the old
+        /// player's, so they're dropped (the clock paused on the server first) and, if the player was on them, loaded again.
+        /// </summary>
+        public void ChangePlayer(string guestId)
+        {
+            bool daily = State.IsActive, archive = Archive.IsOpen;
+            if (State.ClockRunning && State.Number > 0)
+            {
+                int number = State.Number;
+                State.Pause(Time.time);
+                TellServer(Network.PauseDailyAsync(GuestIdentity.Id, number), number);
+            }
+            if (daily || archive)
+                Close(backToPractice: true);
+            GuestIdentity.Switch(guestId);
+            State = new DailyState();
+            Archive = new DailyArchive();
+            _attempt = null;
+            PlayerPrefs.DeleteKey(StreakPrefKey);
+            PlayerPrefs.DeleteKey(NumberPrefKey);
+            if (daily)
+                Open();
+            else if (archive)
+                OpenArchive();
         }
 
         public void CopyResult()

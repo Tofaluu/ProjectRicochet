@@ -45,6 +45,13 @@ namespace BackendServer.Services
             return Task.CompletedTask;
         }
 
+        public Task DeleteGuestAsync(string guestId)
+        {
+            lock (_gate)
+                _events.RemoveAll(e => e.GuestId == guestId);
+            return Task.CompletedTask;
+        }
+
         public Task<IReadOnlyDictionary<DateOnly, int>> GetPeaksAsync(DateOnly first)
         {
             lock (_gate)
@@ -100,6 +107,12 @@ namespace BackendServer.Services
             else
                 return;
             await db.SaveChangesAsync();
+        }
+
+        public async Task DeleteGuestAsync(string guestId)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            await db.UsageEvents.Where(e => e.GuestId == guestId).ExecuteDeleteAsync();
         }
 
         public async Task<IReadOnlyDictionary<DateOnly, int>> GetPeaksAsync(DateOnly first)

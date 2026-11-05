@@ -153,6 +153,19 @@ namespace BackendServer.Services
             }
         }
 
+        public Task DeleteGuestAsync(string guestId)
+        {
+            lock (_gate)
+            {
+                foreach (var key in _entries.Keys.Where(k => k.Item2 == guestId).ToList())
+                    _entries.Remove(key);
+                foreach (var key in _archive.Keys.Where(k => k.Item2 == guestId).ToList())
+                    _archive.Remove(key);
+                _players.Remove(guestId);
+            }
+            return Task.CompletedTask;
+        }
+
         public Task<int> MergeGuestAsync(string from, string into)
         {
             lock (_gate)

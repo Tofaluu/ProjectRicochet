@@ -171,6 +171,14 @@ namespace BackendServer.Services
             return rows.Select(r => new DailySolve(r.GuestId, r.Name, r.Number)).ToList();
         }
 
+        public async Task DeleteGuestAsync(string guestId)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            await db.Entries.Where(e => e.GuestId == guestId).ExecuteDeleteAsync();
+            await db.Archive.Where(e => e.GuestId == guestId).ExecuteDeleteAsync();
+            await db.Players.Where(p => p.GuestId == guestId).ExecuteDeleteAsync();
+        }
+
         public async Task<int> MergeGuestAsync(string from, string into)
         {
             await using DailyDbContext db = await _contexts.CreateDbContextAsync();

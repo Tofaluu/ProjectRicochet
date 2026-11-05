@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 16;
+        public const int ProtocolVersion = 17;
 
         // Client -> server
 
@@ -120,6 +120,22 @@ namespace SharedLogic
 
         /// <summary>(string guestId) returns <see cref="StreakLeaderboard"/>: the longest streaks ever, marking those still going.</summary>
         public const string GetStreakLeaderboard = "GetStreakLeaderboard";
+
+        // Accounts (protocol 17, optional): an account is a "home" guest id that every signed-in device plays as. Signing in
+        // hands the device that id (the device's own progress is merged into it, or becomes it on a first sign-in); signing
+        // out is the client starting a fresh guest id.
+
+        /// <summary>
+        /// (string guestId, string googleIdToken, int protocolVersion) returns <see cref="AccountInfo"/>: signs in with a Google
+        /// ID token (Google Identity Services); the client then uses <see cref="AccountInfo.GuestId"/> as its guest id.
+        /// </summary>
+        public const string SignInWithGoogle = "SignInWithGoogle";
+
+        /// <summary>(string guestId) returns <see cref="AccountInfo"/>, or null when the id isn't an account's (plain guest, or deleted).</summary>
+        public const string GetAccount = "GetAccount";
+
+        /// <summary>(string guestId): deletes the account whose home this id is and everything stored under it.</summary>
+        public const string DeleteAccount = "DeleteAccount";
 
         // Server -> client
 
@@ -357,6 +373,19 @@ namespace SharedLogic
         /// the current board can't be solved any more. Tells a player who (re)joins then.
         /// </summary>
         public bool RoundOver { get; set; }
+    }
+
+    /// <summary>A signed-in account (<see cref="HubMethods.SignInWithGoogle"/>, <see cref="HubMethods.GetAccount"/>).</summary>
+    public class AccountInfo
+    {
+        /// <summary>The account's home guest id: the device plays as it from now on (keep it secret, like any guest id).</summary>
+        public string GuestId { get; set; }
+
+        /// <summary>Who the player is signed in as (may be empty if the provider gave no verified email).</summary>
+        public string Email { get; set; }
+
+        /// <summary>This sign-in brought the device's guest progress into the account.</summary>
+        public bool Merged { get; set; }
     }
 
     /// <summary>Today's daily puzzle and how the asking player stands on it (<see cref="HubMethods.GetDaily"/>).</summary>
