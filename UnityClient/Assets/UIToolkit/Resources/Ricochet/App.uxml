@@ -326,6 +326,7 @@
             <ui:TextField name="profile-name-field" max-length="20" class="field" />
             <ui:Label text="Shown in lobbies and on the daily leaderboard." class="muted small popover-note" />
             <ui:Label name="account-title" text="Playing as a guest" class="setting-label" style="margin-top: 16px;" />
+            <ui:Label name="account-email" class="account-email" />
             <ui:Label name="account-body" class="muted small popover-note" />
             <ui:VisualElement name="account-actions" class="row account-actions">
                 <ui:Button name="account-sign-in" text="Sign in with Google" class="btn btn--primary btn--small grow" />

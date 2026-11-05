@@ -1,0 +1,40 @@
+/* The game's look outside the game: the sign-in dialog (Plugins/WebGL/GoogleSignIn.jslib, over index.html) and
+   privacy.html. Colours are the UI's own (App.uss): the game saves the player's palette in localStorage
+   "ricochet.loadingColors" (AppUI.SavePageColors) and each page applies them; until then, Toybox night. */
+@font-face { font-family: "Nunito"; src: url("fonts/Nunito-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("fonts/Nunito-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("fonts/Nunito-ExtraBold.ttf") format("truetype"); font-weight: 800; font-display: swap; }
+
+:root {
+  --panel: #2b231c; --panel-2: #382e25; --panel-hover: #43372c;
+  --line: rgba(236, 222, 193, 0.35); --card-border: rgba(236, 222, 193, 0.7); --ink: #ecdec1;
+  --action: #26914f; --action-hover: #2da35b; --on-action: #ffffff;
+}
+
+.rc-overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: rgba(0, 0, 0, 0.55); font-family: "Nunito", system-ui, sans-serif; }
+.rc-card { box-sizing: border-box; background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 18px; padding: 22px 20px 18px; }
+.rc-overlay .rc-card { width: 100%; max-width: 340px; text-align: center; }
+.rc-title { margin: 0 0 8px; font-size: 22px; font-weight: 800; line-height: 1.2; }
+.rc-body { margin: 0 0 18px; font-size: 15px; line-height: 1.45; color: var(--muted); }
+.rc-slot { display: flex; justify-content: center; min-height: 44px; }
+
+.rc-btn { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; height: 40px;
+  padding: 0 18px; border: 0; border-radius: 13px; background: var(--panel-2); color: var(--text);
+  font-family: "Nunito", system-ui, sans-serif; font-size: 15px; font-weight: 800; text-decoration: none; cursor: pointer; }
+.rc-btn:hover { background: var(--panel-hover); }
+.rc-btn--primary { background: var(--action); color: var(--on-action); }
+.rc-btn--primary:hover { background: var(--action-hover); }
+.rc-overlay .rc-btn { margin-top: 16px; min-width: 120px; }
+
+/* Toybox night: cream ink outlines and a black press-down shadow under buttons. */
+[data-palette="toynight"] .rc-card { border-width: 2px; border-color: var(--card-border); }
+[data-palette="toynight"] .rc-btn { border: 2px solid rgba(236, 222, 193, 0.45); box-shadow: 0 4px 0 #000; }
+[data-palette="toynight"] .rc-btn--primary { border: 3px solid var(--ink); }
+[data-palette="toynight"] .rc-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #000; }
+/* Toybox: thick ink outlines, buttons pressed down by their bottom edge. */
+[data-palette="toybox"] .rc-card { border-width: 3px; border-color: var(--card-border); }
+[data-palette="toybox"] .rc-btn { border: 2px solid var(--line); border-bottom-width: 5px; }
+[data-palette="toybox"] .rc-btn:active { border-bottom-width: 2px; }
+[data-palette="table"] .rc-card, [data-palette="chalk"] .rc-card { border-color: var(--card-border); }

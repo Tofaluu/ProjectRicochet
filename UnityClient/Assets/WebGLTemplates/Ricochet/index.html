@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en-us">
+<html lang="en-us" data-palette="toynight">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,6 +7,7 @@
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <title>{{{ PRODUCT_NAME }}}</title>
+    <link rel="stylesheet" href="page.css">
     <style>
       /* The default palette (Toybox night); the script below swaps in the player's own palette, which the game saves. */
       :root { --bg: #1f1914; --text: #f6eedd; --muted: #a0998d; --accent: #26914f; --track: #3f3932; }
@@ -25,12 +26,16 @@
       #error { display: none; color: #f07a7a; max-width: 480px; }
     </style>
     <script>
-      // The palette the player picked last visit (saved by the game: Theme/Palette.cs, Plugins/WebGL/Viewport.jslib).
+      // The palette the player picked last visit (saved by the game: Theme/Palette.cs, Plugins/WebGL/Viewport.jslib); the
+      // sign-in dialog (page.css) uses it too. privacy.html has the same script.
       try {
-        var saved = JSON.parse(localStorage.getItem("ricochet.loadingColors") || "null");
+        var saved = JSON.parse(localStorage.getItem("ricochet.loadingColors") || "null") || {};
+        var root = document.documentElement;
         for (var key in saved)
-          if (/^#[0-9a-f]{6}$/i.test(saved[key]))
-            document.documentElement.style.setProperty("--" + key, saved[key]);
+          if (/^[a-z0-9-]+$/.test(key) && /^(#[0-9a-f]{6}|rgba\(\d{1,3},\d{1,3},\d{1,3},[0-9.]+\))$/i.test(saved[key]))
+            root.style.setProperty("--" + key, saved[key]);
+        if (/^[a-z]+$/.test(saved.palette || "")) root.setAttribute("data-palette", saved.palette);
+        if (saved.light === "1") root.setAttribute("data-light", "1");
       } catch (e) { }
     </script>
   </head>

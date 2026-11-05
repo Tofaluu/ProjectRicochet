@@ -1,69 +1,70 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-palette="toynight">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <title>Ricochet privacy policy</title>
+<link rel="stylesheet" href="page.css">
 <style>
-  :root { --bg: #1f1914; --text: #f6eedd; --muted: #a0998d; --line: #3f3932; --link: #e9b949; }
+  /* Toybox night until the game has saved the player's palette (same script as index.html). */
+  :root { --bg: #1f1914; --text: #fbf0d9; --muted: #c8b697; --body: #eadcc2; }
   html { background: var(--bg); }
-  body { margin: 0 auto; max-width: 680px; padding: 32px 16px 64px; color: var(--text); line-height: 1.6;
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; }
-  h1 { font-size: 28px; margin: 0 0 4px; }
-  h2 { font-size: 19px; margin: 32px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
-  p, li { color: var(--text); }
+  body { margin: 0 auto; max-width: 680px; padding: 28px 16px 56px; color: var(--text); line-height: 1.6;
+    font-family: "Nunito", system-ui, sans-serif; font-size: 16px; }
+  .brand { margin: 0 0 18px; font-size: 15px; font-weight: 800; color: var(--muted); letter-spacing: 0.04em; }
+  .brand a { color: inherit; text-decoration: none; }
+  h1 { margin: 0 0 4px; font-size: 32px; font-weight: 800; line-height: 1.15; }
+  h2 { margin: 0 0 6px; font-size: 19px; font-weight: 800; }
+  .rc-card { margin-top: 16px; padding: 18px 20px; }
+  .rc-card p, .rc-card li { margin: 0 0 8px; }
+  .rc-card > :last-child { margin-bottom: 0; }
+  ul { padding-left: 22px; margin: 0 0 8px; }
   .muted { color: var(--muted); }
-  a { color: var(--link); }
-  ul { padding-left: 22px; }
+  a { color: var(--text); text-decoration-color: var(--muted); }
+  .back { margin-top: 24px; }
 </style>
+<script>
+  try {
+    var saved = JSON.parse(localStorage.getItem("ricochet.loadingColors") || "null") || {};
+    var root = document.documentElement;
+    for (var key in saved)
+      if (/^[a-z0-9-]+$/.test(key) && /^(#[0-9a-f]{6}|rgba\(\d{1,3},\d{1,3},\d{1,3},[0-9.]+\))$/i.test(saved[key]))
+        root.style.setProperty("--" + key, saved[key]);
+    if (/^[a-z]+$/.test(saved.palette || "")) root.setAttribute("data-palette", saved.palette);
+    if (saved.light === "1") root.setAttribute("data-light", "1");
+  } catch (e) { }
+</script>
 </head>
 <body>
+<p class="brand"><a href="./">RICOCHET</a></p>
 <h1>Privacy policy</h1>
-<p class="muted">Ricochet, at ricochet.thomasliu.dev. Last updated November 5, 2026.</p>
-
-<p>Ricochet is a small puzzle game made by one developer. It collects only what it needs to run the game, its
-daily puzzle and its leaderboards. There are no ads, no third-party analytics or trackers, and nothing is sold or
-shared with anyone.</p>
-
-<h2>Playing as a guest</h2>
-<p>On your first visit the game makes a random player id and saves it in your browser, along with your settings
-(sound, palette, board style) and your name. The id is how the server knows your daily puzzle results are yours. It
-isn't linked to who you are.</p>
-<p>The server stores, under that id:</p>
-<ul>
-  <li>the name you enter (shown in lobbies and on the daily leaderboards);</li>
-  <li>your daily puzzle results: your best solution, how many moves it took, how long you spent, and when you played;</li>
-  <li>simple usage counts: when you visit, solve a practice board, join a lobby or open the daily puzzle, and whether
-    the game is open (to count how many people are playing). These don't include your IP address or device details.</li>
-</ul>
-<p>Lobbies and matches with friends live only in the server's memory and are gone when the lobby closes.</p>
-
-<h2>Signing in with Google (optional)</h2>
-<p>If you sign in, Google tells the game your Google account's id and your email address. The game stores them so
-your streak and results follow you to every device you sign in on. It doesn't get your password, contacts or
-anything else from your Google account. Google's sign-in button is only loaded when you choose to sign in; Google's
-own handling of it is covered by <a href="https://policies.google.com/privacy">Google's privacy policy</a>.</p>
-
+<p class="muted">Last updated November 5, 2026.</p>
+<div class="rc-card">
+<h2>What we store</h2>
+<p>The game gives your browser a random player id. Under that id, the server stores the name you enter, your daily
+puzzle results (best solution, moves, time, date) and simple usage counts, like visits and puzzles opened. No IP
+addresses or device details.</p>
+</div>
+<div class="rc-card">
+<h2>Signing in with Google</h2>
+<p>Optional. If you sign in, we store your Google account id and email so your results follow you to other devices.
+Nothing else from your Google account. See also <a href="https://policies.google.com/privacy">Google's privacy policy</a>.</p>
+</div>
+<div class="rc-card">
+<h2>What we don't do</h2>
+<p>No ads, no third-party analytics or trackers, and your data is never sold or shared.</p>
+</div>
+<div class="rc-card">
 <h2>Where it's kept</h2>
-<p>Everything is stored on the game's server in the United States (Amazon Web Services). A backup copy of the
-database is made every day and each backup is deleted after 30 days.</p>
-
-<h2>Deleting your data</h2>
-<ul>
-  <li><strong>With an account:</strong> open your profile in the game and choose <em>Delete account</em>. Your account,
-    results, name and usage counts are deleted from the server at once (and from the backups within 30 days).</li>
-  <li><strong>As a guest:</strong> clearing the site's data in your browser removes your player id; the results stored
-    under it can no longer be linked to you. To have them deleted from the server too, contact the developer below.</li>
-</ul>
-
-<h2>Children</h2>
-<p>The game isn't aimed at children under 13 and doesn't knowingly collect anything from them beyond what's above.</p>
-
-<h2>Changes and contact</h2>
-<p>If this policy changes, the date at the top changes too. Questions or deletion requests:
-<a href="mailto:tommyli90201@gmail.com">tommyli90201@gmail.com</a>.</p>
-
-<p class="muted"><a href="./">Back to the game</a></p>
+<p>On the game's server in the United States (Amazon Web Services). Daily backups are deleted after 30 days.</p>
+</div>
+<div class="rc-card">
+<h2>Deleting it and contact</h2>
+<p>Signed in: choose Delete account in your profile and everything is deleted right away (from backups within 30
+days). As a guest, or for any question, email <a href="mailto:tommyli90201@gmail.com">tommyli90201@gmail.com</a></p>
+</div>
+<p class="back"><a class="rc-btn rc-btn--primary" href="./">Back to the game</a></p>
 </body>
 </html>

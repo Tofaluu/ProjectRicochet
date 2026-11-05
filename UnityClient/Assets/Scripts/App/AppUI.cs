@@ -92,7 +92,7 @@ namespace Ricochet.Client.App
         private const float WheelStep = 60f, GlideRate = 18f;
         private TextField _nameField, _codeField, _profileNameField;
         private AccountController _account;
-        private Label _profileSub, _accountTitle, _accountBody, _accountMessage;
+        private Label _profileSub, _accountTitle, _accountEmail, _accountBody, _accountMessage;
         private Button _signIn, _signOut, _deleteAccount;
         private VisualElement _accountActions, _accountConfirm;
         private readonly List<(Button Switch, Func<bool> IsOn)> _switches = new List<(Button, Func<bool>)>();
@@ -236,6 +236,7 @@ namespace Ricochet.Client.App
             _profileButton.RegisterCallback<ClickEvent>(_ => TogglePopover(_profilePopover));
             _profileSub = _root.Q<Label>("profile-sub");
             _accountTitle = _root.Q<Label>("account-title");
+            _accountEmail = _root.Q<Label>("account-email");
             _accountBody = _root.Q<Label>("account-body");
             _accountMessage = _root.Q<Label>("account-message");
             _accountActions = _root.Q("account-actions");
@@ -406,6 +407,20 @@ namespace Ricochet.Client.App
             _boardStyleLabel.text = $"Board: {BoardStyle.Current.Name}";
         }
 
+        // The UI colours the web pages outside the game use (WebGLTemplates/Ricochet/page.css: the sign-in dialog, the
+        // privacy page), saved whenever #app's palette variables resolve (start-up and every palette change).
+        private static readonly string[] PageColorNames =
+            { "bg", "panel", "panel-2", "panel-hover", "line", "card-border", "ink", "text", "muted", "action", "action-hover", "on-action" };
+
+        private void SavePageColors()
+        {
+            var colors = new Dictionary<string, Color>();
+            foreach (string name in PageColorNames)
+                if (_app.customStyle.TryGetValue(new CustomStyleProperty<Color>("--" + name), out Color color))
+                    colors[name] = color;
+            Palette.Current.RememberForLoadingPage(colors);
+        }
+
         // Re-colours everything for the current palette: the UI's variables (a class on #app), the swatches, the board's frame.
         private void ApplyPalette()
         {
@@ -415,7 +430,6 @@ namespace Ricochet.Client.App
             foreach ((Button swatch, Palette palette) in _swatches)
                 swatch.EnableInClassList("is-active", palette == current);
             _paletteLabel.text = $"Palette: {current.Name}";
-            current.RememberForLoadingPage();
             _root.Query<Button>(className: "btn").ForEach(b => b.MarkDirtyRepaint());
             Scratchpad.View?.RefreshFrame();
         }
@@ -1819,9 +1833,11 @@ namespace Ricochet.Client.App
                 _account.ClearMessage();
             }
             _profileSub.text = signedIn ? "Signed in" : "Playing as a guest";
-            _accountTitle.text = signedIn ? "Signed in" : "Playing as a guest";
+            _accountTitle.text = signedIn ? "Signed in as" : "Playing as a guest";
+            _accountEmail.text = signedIn ? _account.Email : "";
+            _accountEmail.style.display = signedIn ? DisplayStyle.Flex : DisplayStyle.None;
             _accountBody.text = signedIn
-                ? $"As {_account.Email}. Your streak and daily results are saved to your account, on every device you sign in on."
+                ? "Your streak and daily results are saved to your account and follow you to every device you sign in on."
                 : GoogleSignIn.Supported
                     ? "Your streak and daily results are saved in this browser only. Sign in to keep them on every device."
                     : "Your streak and daily results are saved on this device. Signing in works in the browser version for now.";

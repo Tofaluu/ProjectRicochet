@@ -24,26 +24,23 @@ var RicochetGoogleSignIn = {
       return gsi.loading;
     },
 
-    // The dialog in the loading page's colours (index.html's --bg / --text / --muted / --track, the player's palette).
+    // The dialog in the game's look: page.css (linked from index.html) styles it with the player's palette.
     dialog: function (title, body, finish) {
       var overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;' +
-        'padding:16px;background:rgba(0,0,0,0.55);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;';
+      overlay.className = 'rc-overlay';
       var card = document.createElement('div');
-      card.style.cssText = 'box-sizing:border-box;width:100%;max-width:340px;padding:22px 20px 14px;border-radius:16px;' +
-        'background:var(--bg,#1f1914);color:var(--text,#f6eedd);border:2px solid var(--track,#3f3932);text-align:center;';
+      card.className = 'rc-card';
       var heading = document.createElement('h2');
+      heading.className = 'rc-title';
       heading.textContent = title;
-      heading.style.cssText = 'margin:0 0 8px;font-size:20px;font-weight:700;';
       var text = document.createElement('p');
+      text.className = 'rc-body';
       text.textContent = body;
-      text.style.cssText = 'margin:0 0 18px;font-size:14px;line-height:1.4;color:var(--muted,#a0998d);';
       var slot = document.createElement('div');
-      slot.style.cssText = 'display:flex;justify-content:center;min-height:44px;';
+      slot.className = 'rc-slot';
       var cancel = document.createElement('button');
+      cancel.className = 'rc-btn';
       cancel.textContent = 'Cancel';
-      cancel.style.cssText = 'margin-top:12px;padding:8px 16px;border:0;background:none;color:var(--muted,#a0998d);' +
-        'font:inherit;font-size:14px;cursor:pointer;';
       card.appendChild(heading);
       card.appendChild(text);
       card.appendChild(slot);
@@ -95,7 +92,8 @@ var RicochetGoogleSignIn = {
           cancel_on_tap_outside: false
         });
       }
-      google.accounts.id.renderButton(box.slot, { theme: 'outline', size: 'large', text: 'signin_with', shape: 'rectangular', width: 260 });
+      var light = document.documentElement.getAttribute('data-light') === '1';
+      google.accounts.id.renderButton(box.slot, { theme: light ? 'outline' : 'filled_black', size: 'large', text: 'signin_with', shape: 'rectangular', width: 260 });
     }, function (e) {
       box.close(-1, e.message);
     });

@@ -69,7 +69,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 `UnityClient/Assets/Fonts/Nunito-*.ttf` - Copyright 2014 The Nunito Project Authors
 (https://github.com/googlefonts/nunito), licensed under the SIL Open Font License 1.1; the full licence
-is in `UnityClient/Assets/Fonts/OFL.txt`. The fonts may be bundled and sold with software; they may not be
+is in `UnityClient/Assets/Fonts/OFL.txt`. A copy of the fonts and the licence also ships with the web page
+(`UnityClient/Assets/WebGLTemplates/Ricochet/fonts/`) for the sign-in dialog and the privacy page. The fonts may be bundled and sold with software; they may not be
 sold on their own.
 
 ## Server database components

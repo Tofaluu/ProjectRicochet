@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 #if UNITY_WEBGL && !UNITY_EDITOR
 using System.Runtime.InteropServices;
 #endif
@@ -79,14 +80,33 @@ namespace Ricochet.Client.Theme
         /// Browser builds: saves this palette's colours where the loading page (WebGLTemplates/Ricochet/index.html) finds
         /// them on the next visit, so the page shown while the game downloads matches the game.
         /// </summary>
-        public void RememberForLoadingPage()
+        /// <param name="ui">The UI's own colours (App.uss variables without the "--", read off #app by AppUI), for the
+        /// sign-in dialog and the privacy page (WebGLTemplates/Ricochet/page.css), which use the same names.</param>
+        public void RememberForLoadingPage(IReadOnlyDictionary<string, Color> ui)
         {
 #if UNITY_WEBGL && !UNITY_EDITOR
             Color text = IsLight ? Rgb(0x2b2117) : Rgb(0xf6eedd);
-            string Hex(Color c) => "#" + ColorUtility.ToHtmlStringRGB(c);
-            Ricochet_SaveLoadingColors($"{{\"bg\":\"{Hex(Ground)}\",\"text\":\"{Hex(text)}\",\"muted\":\"{Hex(Color.Lerp(Ground, text, 0.6f))}\"," +
-                $"\"accent\":\"{Hex(Accent)}\",\"track\":\"{Hex(Color.Lerp(Ground, text, 0.15f))}\"}}");
+            var colors = new Dictionary<string, string>
+            {
+                ["bg"] = Css(Ground), ["text"] = Css(text), ["muted"] = Css(Color.Lerp(Ground, text, 0.6f)),
+                ["accent"] = Css(Accent), ["track"] = Css(Color.Lerp(Ground, text, 0.15f)),
+            };
+            foreach (KeyValuePair<string, Color> pair in ui)
+                colors[pair.Key] = Css(pair.Value);
+            var json = new System.Text.StringBuilder("{");
+            foreach (KeyValuePair<string, string> pair in colors)
+                json.Append('"').Append(pair.Key).Append("\":\"").Append(pair.Value).Append("\",");
+            json.Append("\"palette\":\"").Append(Id).Append("\",\"light\":\"").Append(IsLight ? "1" : "0").Append("\"}");
+            Ricochet_SaveLoadingColors(json.ToString());
 #endif
+        }
+
+        private static string Css(Color c)
+        {
+            if (c.a >= 0.999f)
+                return "#" + ColorUtility.ToHtmlStringRGB(c);
+            Color32 b = c;
+            return $"rgba({b.r},{b.g},{b.b},{c.a.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)})";
         }
 
         private static Palette Find(string id) => Array.Find(All, p => p.Id == id);

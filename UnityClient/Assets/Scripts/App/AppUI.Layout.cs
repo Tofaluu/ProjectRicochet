@@ -60,6 +60,7 @@ namespace Ricochet.Client.App
         private void InitLayout()
         {
             _app = _root.Q("app");
+            _app.RegisterCallback<CustomStyleResolvedEvent>(_ => SavePageColors());
             _practiceKeys = _root.Q("practice-keys");
             _nav = _root.Q("nav");
             _topbarSettings = Click("topbar-settings", () => TogglePopover(_settings));
