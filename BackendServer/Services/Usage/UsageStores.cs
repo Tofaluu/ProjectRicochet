@@ -45,6 +45,12 @@ namespace BackendServer.Services
             return Task.CompletedTask;
         }
 
+        public Task<bool> IsInternalAsync(string guestId)
+        {
+            lock (_gate)
+                return Task.FromResult(_events.Any(e => e.Internal && e.GuestId == guestId));
+        }
+
         public Task DeleteGuestAsync(string guestId)
         {
             lock (_gate)
@@ -107,6 +113,12 @@ namespace BackendServer.Services
             else
                 return;
             await db.SaveChangesAsync();
+        }
+
+        public async Task<bool> IsInternalAsync(string guestId)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            return await db.UsageEvents.AnyAsync(e => e.Internal && e.GuestId == guestId);
         }
 
         public async Task DeleteGuestAsync(string guestId)

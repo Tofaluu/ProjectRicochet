@@ -91,6 +91,11 @@ public class AccountTests
         Assert.Equal(2, (await s.Store.GetEntriesAsync(Laptop)).Count); // Sam's progress stays Sam's
         Assert.Equal("alex@gmail.com", (await s.Accounts.GetAccountAsync(other.GuestId))!.Email);
 
+        // The stats page's counts: new accounts and sign-ins to existing ones, under the account's home id.
+        IReadOnlyList<UsageEventRecord> events = await s.Usage.GetSinceAsync(DateTime.MinValue);
+        Assert.Equal(new[] { Laptop, other.GuestId }, events.Where(e => e.Kind == UsageService.AccountNew).Select(e => e.GuestId));
+        Assert.Equal(new[] { Laptop, Laptop }, events.Where(e => e.Kind == UsageService.SignIn).Select(e => e.GuestId));
+
         await Assert.ThrowsAsync<HubException>(() => s.Accounts.DeleteAccountAsync(Tablet)); // not an account
         await s.Accounts.DeleteAccountAsync(Laptop);
         Assert.Null(await s.Accounts.GetAccountAsync(Laptop));
@@ -98,8 +103,10 @@ public class AccountTests
         Assert.DoesNotContain(await s.Usage.GetSinceAsync(DateTime.MinValue), e => e.GuestId == Laptop);
         Assert.NotNull(await s.Accounts.GetAccountAsync(other.GuestId)); // other accounts untouched
 
+        await s.Usage.AddAsync(new UsageEventRecord { AtUtc = LaunchNoon.UtcDateTime, GuestId = Tablet, Kind = "visit", Internal = true });
         AccountInfo again = await s.Accounts.SignInWithGoogleAsync(Tablet, "google:sam"); // a deleted account starts over
         Assert.Equal(Tablet, again.GuestId);
+        Assert.DoesNotContain(await s.Usage.GetSinceAsync(DateTime.MinValue), e => e.GuestId == Tablet); // signed in on a device marked internal: not counted
     }
 
     [Fact]

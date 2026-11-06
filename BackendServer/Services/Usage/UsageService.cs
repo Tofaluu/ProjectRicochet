@@ -60,7 +60,7 @@ namespace BackendServer.Services
     /// <summary>One day on the stats page (non-internal players only). <c>PeakOnline</c> is 0 for days before it was tracked.</summary>
     public sealed record UsageDay(DateOnly Day, int Players, int NewPlayers, int ReturningPlayers, int Visits,
         int PracticeSolves, int LobbyJoins, int DailyOpens, int DailySolves, int TutorialStarts, int TutorialFinishes,
-        int TutorialSkips, int PeakOnline);
+        int TutorialSkips, int PeakOnline, int NewAccounts, int SignIns);
 
     /// <summary>The stats page's data: players online right now and the last days.</summary>
     public sealed record UsageSummary(int OnlineNow, IReadOnlyList<UsageDay> Days);
@@ -80,6 +80,9 @@ namespace BackendServer.Services
 
         /// <summary>The online peaks of the days from <paramref name="first"/> on.</summary>
         Task<IReadOnlyDictionary<DateOnly, int>> GetPeaksAsync(DateOnly first);
+
+        /// <summary>Whether this guest ever sent an event from a device marked internal.</summary>
+        Task<bool> IsInternalAsync(string guestId);
 
         /// <summary>Removes this guest's events (an account deletion).</summary>
         Task DeleteGuestAsync(string guestId);
@@ -101,6 +104,8 @@ namespace BackendServer.Services
         {
             "visit", "practice_solve", "lobby_join", "daily_open", "daily_solve", "tutorial_start", "tutorial_finish", "tutorial_skip",
         };
+        /// <summary>Written by the server itself (<see cref="AccountService"/>), never accepted from the game.</summary>
+        public const string AccountNew = "account_new", SignIn = "sign_in";
         private static readonly Regex GuestIdPattern = new("^[A-Za-z0-9_-]{16,64}$");
 
         private readonly IUsageStore _store;
@@ -131,6 +136,16 @@ namespace BackendServer.Services
                 return false;
             await _store.AddAsync(new UsageEventRecord { AtUtc = now, GuestId = request.GuestId, Kind = request.Kind!, Internal = request.Internal });
             return true;
+        }
+
+        /// <summary>
+        /// A sign-in (<see cref="AccountNew"/> for a new account, else <see cref="SignIn"/>) under the account's home id;
+        /// internal if the signing-in device was marked internal.
+        /// </summary>
+        public static async Task RecordAccountAsync(IUsageStore store, string kind, string homeGuestId, string deviceGuestId, DateTime now)
+        {
+            bool isInternal = await store.IsInternalAsync(deviceGuestId) || await store.IsInternalAsync(homeGuestId);
+            await store.AddAsync(new UsageEventRecord { AtUtc = now, GuestId = homeGuestId, Kind = kind, Internal = isInternal });
         }
 
         private bool UnderCap(string guestId, DateTime now)
@@ -214,12 +229,13 @@ namespace BackendServer.Services
             for (DateOnly day = today; day >= first; day = day.AddDays(-1))
             {
                 List<UsageEventRecord> on = events.Where(e => DayOf(e.AtUtc) == day).ToList();
-                List<string> players = on.Select(e => e.GuestId).Distinct().ToList();
+                List<string> players = on.Where(e => e.Kind != AccountNew && e.Kind != SignIn).Select(e => e.GuestId).Distinct().ToList();
                 int newPlayers = players.Count(g => DayOf(firstSeen[g]) == day);
                 int Count(string kind) => on.Count(e => e.Kind == kind);
                 days.Add(new UsageDay(day, players.Count, newPlayers, players.Count - newPlayers, Count("visit"),
                     Count("practice_solve"), Count("lobby_join"), Count("daily_open"), Count("daily_solve"),
-                    Count("tutorial_start"), Count("tutorial_finish"), Count("tutorial_skip"), peaks.GetValueOrDefault(day)));
+                    Count("tutorial_start"), Count("tutorial_finish"), Count("tutorial_skip"), peaks.GetValueOrDefault(day),
+                    Count(AccountNew), Count(SignIn)));
             }
             return new UsageSummary(OnlineNow(now), days);
         }

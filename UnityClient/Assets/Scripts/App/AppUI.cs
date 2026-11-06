@@ -241,7 +241,16 @@ namespace Ricochet.Client.App
             _accountMessage = _root.Q<Label>("account-message");
             _accountActions = _root.Q("account-actions");
             _accountConfirm = _root.Q("account-confirm");
-            _signIn = Click("account-sign-in", _account.SignIn);
+            _signIn = Click("account-sign-in", () =>
+            {
+                ClosePopover(_profilePopover); // Google's dialog takes over
+                _account.SignIn();
+            });
+            _account.SignInFailed += () =>
+            {
+                if (!_profilePopover.ClassListContains("is-open"))
+                    TogglePopover(_profilePopover);
+            };
             _signOut = Click("account-sign-out", _account.SignOut);
             _deleteAccount = Click("account-delete", () => _account.ConfirmingDelete = true);
             Click("account-delete-cancel", () => _account.ConfirmingDelete = false);
@@ -1832,7 +1841,7 @@ namespace Ricochet.Client.App
                 _account.ConfirmingDelete = false;
                 _account.ClearMessage();
             }
-            _profileSub.text = signedIn ? "Signed in" : "Playing as a guest";
+            _profileSub.text = signedIn ? "Signed in" : "Sign in to save your streak";
             _accountTitle.text = signedIn ? "Signed in as" : "Playing as a guest";
             _accountEmail.text = signedIn ? _account.Email : "";
             _accountEmail.style.display = signedIn ? DisplayStyle.Flex : DisplayStyle.None;

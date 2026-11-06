@@ -282,7 +282,7 @@
 .profile-row { flex-direction: row; align-items: center; }
 .avatar { width: 34px; height: 34px; border-radius: 17px; background-color: #3b74e6; -unity-text-align: middle-center; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); color: #ffffff; }
 .profile-name { margin-left: 10px; flex-shrink: 1; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; font-size: 15px; -unity-font: url("/Assets/Fonts/Nunito-ExtraBold.ttf"); }
-.profile-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.profile-sub { font-size: 13px; color: var(--muted); margin-top: 6px; white-space: normal; }
 
 /* ---- Main area: the board stage and the side panel ---- */
 .main { flex-grow: 1; flex-direction: row; padding: 28px 40px; }

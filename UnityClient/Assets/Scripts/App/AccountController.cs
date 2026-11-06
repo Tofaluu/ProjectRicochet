@@ -51,6 +51,9 @@ namespace Ricochet.Client.App
 
         public void ClearMessage() => Message = null;
 
+        /// <summary>A sign-in failed: <see cref="Message"/> says why (the profile closes while Google's dialog is up).</summary>
+        public event Action SignInFailed;
+
         /// <summary>The player asked to delete the account and hasn't confirmed or cancelled yet.</summary>
         public bool ConfirmingDelete { get; set; }
 
@@ -106,6 +109,8 @@ namespace Ricochet.Client.App
             catch (Exception e)
             {
                 Message = NetworkManager.DescribeError(e);
+                Busy = false;
+                SignInFailed?.Invoke();
             }
             finally
             {

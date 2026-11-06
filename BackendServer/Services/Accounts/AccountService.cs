@@ -96,12 +96,14 @@ namespace BackendServer.Services
                 {
                     account = await _accounts.CreateAsync(deviceIsAnAccount ? NewGuestId() : guestId, provider, identity.Subject, identity.Email, now);
                     _log.LogInformation("New account {Id} ({Provider})", account.Id, provider);
+                    await RecordAsync(UsageService.AccountNew, account.HomeGuestId, guestId, now);
                 }
                 else
                 {
                     if (account.HomeGuestId != guestId && !deviceIsAnAccount)
                         merged = await _daily.MergeGuestAsync(guestId, account.HomeGuestId) > 0;
                     await _accounts.TouchAsync(account.Id, identity.Email, now);
+                    await RecordAsync(UsageService.SignIn, account.HomeGuestId, guestId, now);
                 }
                 return new AccountInfo { GuestId = account.HomeGuestId, Email = identity.Email ?? account.Email ?? "", Merged = merged };
             }
@@ -139,6 +141,19 @@ namespace BackendServer.Services
             finally
             {
                 _gate.Release();
+            }
+        }
+
+        // For the stats page; a failure here never fails the sign-in.
+        private async Task RecordAsync(string kind, string homeGuestId, string deviceGuestId, DateTime now)
+        {
+            try
+            {
+                await UsageService.RecordAccountAsync(_usage, kind, homeGuestId, deviceGuestId, now);
+            }
+            catch (Exception e)
+            {
+                _log.LogWarning(e, "Couldn't record a {Kind} event", kind);
             }
         }
 

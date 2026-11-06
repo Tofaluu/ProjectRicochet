@@ -38,7 +38,7 @@
                         <ui:Label name="profile-avatar" text="?" class="avatar" />
                         <ui:Label name="profile-name" text="Guest" class="profile-name" />
                     </ui:VisualElement>
-                    <ui:Label name="profile-sub" text="Playing as a guest" class="profile-sub" />
+                    <ui:Label name="profile-sub" text="Sign in to save your streak" class="profile-sub" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

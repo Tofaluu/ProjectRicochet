@@ -30,32 +30,35 @@ namespace BackendServer.Services
             html.Append("""
                 <p>Days in Toronto time, newest first. Devices marked internal (?internal=1) are left out.
                 Players = different devices; new = first seen that day. Online = the game open and visible in the last
-                2 minutes; peak = the most at once that day (blank before it was tracked).</p>
+                2 minutes; peak = the most at once that day (blank before it was tracked). Sign-ins = signing in to an
+                account that already existed (new accounts are counted on their own).</p>
                 <div class="wrap"><table>
                 <tr><th>Day</th><th>Peak online</th><th>Players</th><th>New</th><th>Returning</th><th>Visits</th><th>Practice solves</th>
                 <th>Lobby joins</th><th>Daily opened</th><th>Daily solved</th>
-                <th>Tutorial started</th><th>Tutorial finished</th><th>Tutorial skipped</th></tr>
+                <th>Tutorial started</th><th>Tutorial finished</th><th>Tutorial skipped</th><th>New accounts</th><th>Sign-ins</th></tr>
                 """);
             foreach (UsageDay d in days)
                 Row(html, d.Day.ToString("ddd MMM d"), d.PeakOnline > 0 ? d.PeakOnline : null, d.Players, d.NewPlayers, d.ReturningPlayers, d.Visits, d.PracticeSolves,
-                    d.LobbyJoins, d.DailyOpens, d.DailySolves, d.TutorialStarts, d.TutorialFinishes, d.TutorialSkips);
+                    d.LobbyJoins, d.DailyOpens, d.DailySolves, d.TutorialStarts, d.TutorialFinishes, d.TutorialSkips,
+                    d.NewAccounts, d.SignIns);
             html.Append("<tr class=\"total\">");
             Row(html, "Total (new players)", null, null, days.Sum(d => d.NewPlayers), null, days.Sum(d => d.Visits),
                 days.Sum(d => d.PracticeSolves), days.Sum(d => d.LobbyJoins), days.Sum(d => d.DailyOpens), days.Sum(d => d.DailySolves),
-                days.Sum(d => d.TutorialStarts), days.Sum(d => d.TutorialFinishes), days.Sum(d => d.TutorialSkips), open: false);
+                days.Sum(d => d.TutorialStarts), days.Sum(d => d.TutorialFinishes), days.Sum(d => d.TutorialSkips),
+                days.Sum(d => d.NewAccounts), days.Sum(d => d.SignIns), open: false);
             html.Append("</table></div></body></html>");
             return html.ToString();
         }
 
         private static void Row(StringBuilder html, string label, int? peak, int? players, int? newPlayers, int? returning, int visits,
             int practice, int lobbies, int dailyOpens, int dailySolves, int tutorialStarts, int tutorialFinishes, int tutorialSkips,
-            bool open = true)
+            int newAccounts, int signIns, bool open = true)
         {
             if (open)
                 html.Append("<tr>");
             html.Append("<td>").Append(label).Append("</td>");
             foreach (int? v in new[] { peak, players, newPlayers, returning, visits, practice, lobbies, dailyOpens, dailySolves, tutorialStarts,
-                tutorialFinishes, tutorialSkips })
+                tutorialFinishes, tutorialSkips, newAccounts, signIns })
                 html.Append("<td>").Append(v?.ToString() ?? "").Append("</td>");
             html.Append("</tr>\n");
         }

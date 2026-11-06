@@ -137,8 +137,8 @@ public class UsageTests
         IReadOnlyList<UsageDay> days = summary.Days;
         Assert.Equal(3, days.Count); // StatsDays, newest first
         Assert.Equal(new DateOnly(2026, 10, 19), days[0].Day);
-        Assert.Equal(new UsageDay(new DateOnly(2026, 10, 19), 2, 1, 1, 2, 0, 0, 1, 1, 1, 1, 0, 0), days[0]);
-        Assert.Equal(new UsageDay(new DateOnly(2026, 10, 18), 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0), days[1]);
+        Assert.Equal(new UsageDay(new DateOnly(2026, 10, 19), 2, 1, 1, 2, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0), days[0]);
+        Assert.Equal(new UsageDay(new DateOnly(2026, 10, 18), 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0), days[1]);
         Assert.Equal(0, days[2].Players);
 
         string page = UsagePage.Render(summary);
