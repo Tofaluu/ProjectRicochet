@@ -62,8 +62,24 @@ namespace BackendServer.Services
         int PracticeSolves, int LobbyJoins, int DailyOpens, int DailySolves, int TutorialStarts, int TutorialFinishes,
         int TutorialSkips, int PeakOnline, int NewAccounts, int SignIns);
 
-    /// <summary>The stats page's data: players online right now and the last days.</summary>
-    public sealed record UsageSummary(int OnlineNow, IReadOnlyList<UsageDay> Days);
+    /// <summary>
+    /// Totals over a span of days: <c>Players</c> = different devices over the whole span (a player back on 5 days counts
+    /// once), <c>NewPlayers</c> = first seen within it, <c>PeakOnline</c> = the highest day's peak.
+    /// </summary>
+    public sealed record UsageTotals(int Players, int NewPlayers, int Visits, int PracticeSolves, int LobbyJoins, int DailyOpens,
+        int DailySolves, int TutorialStarts, int TutorialFinishes, int TutorialSkips, int PeakOnline, int NewAccounts, int SignIns)
+    {
+        public static UsageTotals From(int players, int newPlayers, Func<string, int> count, int peak) =>
+            new(players, newPlayers, count("visit"), count("practice_solve"), count("lobby_join"), count("daily_open"),
+                count("daily_solve"), count("tutorial_start"), count("tutorial_finish"), count("tutorial_skip"), peak,
+                count(UsageService.AccountNew), count(UsageService.SignIn));
+    }
+
+    /// <summary>Every non-internal event ever, counted by the store: different players, events per kind, the highest daily peak.</summary>
+    public sealed record UsageCounts(int Players, IReadOnlyDictionary<string, int> Kinds, int PeakOnline);
+
+    /// <summary>The stats page's data: players online right now, the last days, their totals and the all-time totals.</summary>
+    public sealed record UsageSummary(int OnlineNow, IReadOnlyList<UsageDay> Days, UsageTotals Recent, UsageTotals AllTime);
 
     public interface IUsageStore
     {
@@ -83,6 +99,12 @@ namespace BackendServer.Services
 
         /// <summary>Whether this guest ever sent an event from a device marked internal.</summary>
         Task<bool> IsInternalAsync(string guestId);
+
+        /// <summary>
+        /// All-time counts (non-internal events; players leave out the server's own account events). Counted by the
+        /// database, so the page never loads every event.
+        /// </summary>
+        Task<UsageCounts> GetAllTimeAsync();
 
         /// <summary>Removes this guest's events (an account deletion).</summary>
         Task DeleteGuestAsync(string guestId);
@@ -226,10 +248,12 @@ namespace BackendServer.Services
             IReadOnlyDictionary<DateOnly, int> peaks = await _store.GetPeaksAsync(first);
 
             var days = new List<UsageDay>();
+            var recentPlayers = new HashSet<string>();
             for (DateOnly day = today; day >= first; day = day.AddDays(-1))
             {
                 List<UsageEventRecord> on = events.Where(e => DayOf(e.AtUtc) == day).ToList();
-                List<string> players = on.Where(e => e.Kind != AccountNew && e.Kind != SignIn).Select(e => e.GuestId).Distinct().ToList();
+                List<string> players = on.Where(e => !IsAccountKind(e.Kind)).Select(e => e.GuestId).Distinct().ToList();
+                recentPlayers.UnionWith(players);
                 int newPlayers = players.Count(g => DayOf(firstSeen[g]) == day);
                 int Count(string kind) => on.Count(e => e.Kind == kind);
                 days.Add(new UsageDay(day, players.Count, newPlayers, players.Count - newPlayers, Count("visit"),
@@ -237,7 +261,15 @@ namespace BackendServer.Services
                     Count("tutorial_start"), Count("tutorial_finish"), Count("tutorial_skip"), peaks.GetValueOrDefault(day),
                     Count(AccountNew), Count(SignIn)));
             }
-            return new UsageSummary(OnlineNow(now), days);
+            UsageTotals recent = UsageTotals.From(recentPlayers.Count, days.Sum(d => d.NewPlayers),
+                kind => events.Count(e => e.Kind == kind), days.Max(d => d.PeakOnline));
+
+            UsageCounts all = await _store.GetAllTimeAsync();
+            UsageTotals allTime = UsageTotals.From(all.Players, all.Players, kind => all.Kinds.GetValueOrDefault(kind), all.PeakOnline);
+            return new UsageSummary(OnlineNow(now), days, recent, allTime);
         }
+
+        /// <summary>Events the server writes for accounts: not a sign of someone playing, so left out of player counts.</summary>
+        public static bool IsAccountKind(string kind) => kind == AccountNew || kind == SignIn;
     }
 }

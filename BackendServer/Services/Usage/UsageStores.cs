@@ -51,6 +51,17 @@ namespace BackendServer.Services
                 return Task.FromResult(_events.Any(e => e.Internal && e.GuestId == guestId));
         }
 
+        public Task<UsageCounts> GetAllTimeAsync()
+        {
+            lock (_gate)
+            {
+                List<UsageEventRecord> counted = _events.Where(e => !e.Internal).ToList();
+                int players = counted.Where(e => !UsageService.IsAccountKind(e.Kind)).Select(e => e.GuestId).Distinct().Count();
+                IReadOnlyDictionary<string, int> kinds = counted.GroupBy(e => e.Kind).ToDictionary(g => g.Key, g => g.Count());
+                return Task.FromResult(new UsageCounts(players, kinds, _peaks.Values.DefaultIfEmpty(0).Max()));
+            }
+        }
+
         public Task DeleteGuestAsync(string guestId)
         {
             lock (_gate)
@@ -119,6 +130,20 @@ namespace BackendServer.Services
         {
             await using DailyDbContext db = await _contexts.CreateDbContextAsync();
             return await db.UsageEvents.AnyAsync(e => e.Internal && e.GuestId == guestId);
+        }
+
+        public async Task<UsageCounts> GetAllTimeAsync()
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            IQueryable<UsageEventRecord> counted = db.UsageEvents.AsNoTracking().Where(e => !e.Internal);
+            int players = await counted
+                .Where(e => e.Kind != UsageService.AccountNew && e.Kind != UsageService.SignIn)
+                .Select(e => e.GuestId).Distinct().CountAsync();
+            Dictionary<string, int> kinds = await counted.GroupBy(e => e.Kind)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Key, x => x.Count);
+            int peak = await db.OnlinePeaks.AsNoTracking().MaxAsync(p => (int?)p.Peak) ?? 0;
+            return new UsageCounts(players, kinds, peak);
         }
 
         public async Task DeleteGuestAsync(string guestId)

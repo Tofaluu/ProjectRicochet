@@ -13,6 +13,7 @@ public class UsageTests
     private static readonly DateTimeOffset Noon = new(2026, 10, 19, 16, 0, 0, TimeSpan.Zero);
     private const string Alice = "alice-guest-id-0001";
     private const string Bob = "bob-guest-id-000002";
+    private const string Carol = "carol-guest-id-0003";
     private const string Me = "developer-guest-0001";
 
     private static (UsageService usage, FakeTimeProvider time) Create(IUsageStore? store = null, string? key = "secret",
@@ -118,7 +119,11 @@ public class UsageTests
     // and the developer's marked device plays too (never counted).
     private static async Task SummaryScenario(IUsageStore store)
     {
-        var (usage, time) = Create(store, start: Noon.AddDays(-1));
+        var (usage, time) = Create(store, start: Noon.AddDays(-10)); // Carol: before the page's days, only in all time
+        await usage.RecordAsync(E(Carol, "visit"));
+        await usage.RecordAsync(E(Carol, "practice_solve"));
+
+        time.SetUtcNow(Noon.AddDays(-1));
         await usage.RecordAsync(E(Alice, "visit"));
         await usage.RecordAsync(E(Alice, "practice_solve"));
         await usage.RecordAsync(E(Me, "visit", isInternal: true));
@@ -140,10 +145,15 @@ public class UsageTests
         Assert.Equal(new UsageDay(new DateOnly(2026, 10, 19), 2, 1, 1, 2, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0), days[0]);
         Assert.Equal(new UsageDay(new DateOnly(2026, 10, 18), 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0), days[1]);
         Assert.Equal(0, days[2].Players);
+        // Alice played on 2 days but is one player; Carol only counts all time; the developer's device never
+        Assert.Equal(new UsageTotals(2, 2, 3, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0), summary.Recent);
+        Assert.Equal(new UsageTotals(3, 3, 4, 2, 0, 1, 1, 1, 1, 0, 0, 0, 0), summary.AllTime);
 
         string page = UsagePage.Render(summary);
         Assert.Contains("Mon Oct 19", page);
         Assert.Contains("Tutorial finished", page);
+        Assert.Contains("Last 3 days", page);
+        Assert.Contains("All time", page);
         Assert.DoesNotContain(Me, page); // no ids on the page
     }
 
