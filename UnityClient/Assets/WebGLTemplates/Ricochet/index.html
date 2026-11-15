@@ -17,12 +17,26 @@
          which cut off the bottom of the game. */
       #unity-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block;
         background: var(--bg); outline: none; touch-action: none; }
-      #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
-        justify-content: center; gap: 14px; padding: 0 16px; text-align: center; }
-      #loading h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: 0.02em; }
-      #loading p { margin: 0; color: var(--muted); font-size: 14px; }
-      #bar { width: min(320px, 80vw); height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
-      #bar-fill { width: 0; height: 100%; background: var(--accent); transition: width 0.2s; }
+      #loading { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: 18px; padding: 0 16px; text-align: center; background: var(--bg);
+        font-family: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif; }
+      #loading h1 { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: 0.06em; text-shadow: 0 3px 0 #000; }
+      #loading p { margin: 0; color: var(--muted); font-size: 15px; }
+      /* The four robots start asleep (grey, eyes shut) and wake as the load reaches 25/50/75% and the game is ready. */
+      #robots { display: flex; gap: min(28px, 5vw); margin: 6px 0 2px; }
+      .rb { position: relative; width: min(72px, 17vw); padding-bottom: 12px; }
+      .rb::after { content: ""; position: absolute; left: 8%; right: 8%; bottom: 0; height: 9px; border-radius: 50%; background: #000; opacity: 0.4; }
+      .rb svg { display: block; width: 100%; animation: breathe 2.6s ease-in-out infinite; transform-origin: 50% 90%; will-change: transform; }
+      .rb:nth-child(2) svg { animation-delay: -0.6s; } .rb:nth-child(3) svg { animation-delay: -1.2s; } .rb:nth-child(4) svg { animation-delay: -1.8s; }
+      .rb .col { opacity: 0; transition: opacity 0.2s; }
+      .rb .grey { opacity: 0.6; }
+      .rb .eyes { transform-box: fill-box; transform-origin: center; transform: scaleY(0.08); transition: transform 0.15s; }
+      .rb.awake .col { opacity: 1; }
+      .rb.awake .eyes { transform: scaleY(1); }
+      .rb.awake svg { animation: hop 0.45s ease-out; }
+      @keyframes breathe { 50% { transform: scale(1.04, 0.97); } }
+      @keyframes hop { 0% { transform: translateY(0); } 40% { transform: translateY(-16px); } 100% { transform: translateY(0); } }
+      @media (prefers-reduced-motion: reduce) { .rb svg, .rb.awake svg { animation: none; } }
       #error { display: none; color: #f07a7a; max-width: 480px; }
     </style>
     <script>
@@ -43,14 +57,51 @@
     <canvas id="unity-canvas" tabindex="-1"></canvas>
     <div id="loading">
       <h1>{{{ PRODUCT_NAME }}}</h1>
-      <div id="bar"><div id="bar-fill"></div></div>
-      <p id="hint">Loading...</p>
+      <div id="robots"></div>
+      <p id="hint">Waking up the robots <span id="count">0 of 4</span></p>
       <p id="error"></p>
     </div>
     <!-- The JavaScript SignalR client used by Plugins/WebGL/RicochetHub.jslib (MIT, see THIRD-PARTY-NOTICES.md). -->
     <script src="signalr.min.js"></script>
     <script src="Build/{{{ LOADER_FILENAME }}}"></script>
     <script>
+      // The four robots (the game's faces): grey body + colour body, eyes on top.
+      var ROBOTS = [["#952e32", "#e6474d", "#b8393e", "#ea6a6d"], ["#25489a", "#3d7be0", "#2f5cb3", "#6a9bec"],
+                    ["#1f6b38", "#3fb060", "#2b8a4a", "#6bcf88"], ["#a77f12", "#f2c230", "#c99a1c", "#f7d66a"]];
+      function body(c) {
+        return '<ellipse cx="32" cy="34.5" rx="28" ry="28" fill="' + c[0] + '"/><ellipse cx="32" cy="31.5" rx="28" ry="28" fill="' + c[1] + '"/>' +
+          '<ellipse cx="32" cy="29.5" rx="22" ry="22" fill="' + c[2] + '"/><ellipse cx="32" cy="29.5" rx="19" ry="19" fill="' + c[3] + '"/>';
+      }
+      var robotsBox = document.querySelector("#robots"), robotEls = [], woke = [false, false, false, false], awake = 0;
+      ROBOTS.forEach(function (c) {
+        var el = document.createElement("div"); el.className = "rb";
+        el.innerHTML = '<svg viewBox="0 0 64 64"><g class="grey">' + body(["#2e2822", "#5a5148", "#4a423a", "#6a6056"]) + '</g><g class="col">' + body(c) + '</g>' +
+          '<g class="eyes"><ellipse cx="22.5" cy="28.5" rx="8" ry="9.5" fill="#fff"/><ellipse cx="41.5" cy="28.5" rx="8" ry="9.5" fill="#fff"/>' +
+          '<ellipse cx="23.5" cy="30.5" rx="4.6" ry="5.4" fill="#291708"/><ellipse cx="42.5" cy="30.5" rx="4.6" ry="5.4" fill="#291708"/></g></svg>';
+        robotsBox.appendChild(el); robotEls.push(el);
+      });
+      // Robots that cross a threshold together (a cached load jumps straight to 90%) wake one after the other, 130 ms apart.
+      var nextWake = 0, fourthAwakeAt = 0, gameReady = false, opened = false;
+      function wake(i) {
+        if (woke[i]) return;
+        woke[i] = true;
+        var delay = Math.max(0, nextWake - performance.now());
+        nextWake = performance.now() + delay + 130;
+        setTimeout(function () {
+          awake++;
+          robotEls[i].classList.add("awake");
+          document.querySelector("#count").textContent = awake + " of 4";
+          if (awake === 4) { fourthAwakeAt = performance.now(); setTimeout(tryOpen, 650); }
+        }, delay);
+      }
+      // The game opens once it is ready AND the fourth robot has finished its hop.
+      function tryOpen() {
+        if (opened || !gameReady || awake < 4 || performance.now() - fourthAwakeAt < 650) return;
+        opened = true;
+        var loading = document.querySelector("#loading");
+        loading.remove();
+        canvas.focus();
+      }
       var canvas = document.querySelector("#unity-canvas");
       createUnityInstance(canvas, {
         arguments: [],
@@ -67,10 +118,14 @@
         productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
         productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
       }, function (progress) {
-        document.querySelector("#bar-fill").style.width = Math.round(progress * 100) + "%";
+        // Unity's progress is 0-90% while the files download (by bytes; mostly the wasm file) and the last 10% only comes once
+        // the game is ready, after startup blocks the page for a couple of seconds. So robot i wakes when the download passes
+        // (i + 1) / 4 of its way, and the fourth when the download is complete: that is the last moment the page can animate.
+        for (var i = 0; i < 4; i++) if (progress >= 0.9 * (i + 1) / 4 - 0.0001) wake(i);
       }).then(function () {
-        document.querySelector("#loading").remove();
-        canvas.focus();
+        for (var i = 0; i < 4; i++) wake(i);
+        gameReady = true;
+        tryOpen();
       }).catch(function (message) {
         document.querySelector("#hint").style.display = "none";
         var error = document.querySelector("#error");

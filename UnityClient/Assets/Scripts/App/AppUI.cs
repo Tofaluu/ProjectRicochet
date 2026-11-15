@@ -209,7 +209,7 @@ namespace Ricochet.Client.App
             }
             _tutorialSkip = Click("tutorial-skip", () => EndTutorial(finished: false));
             _tutorialDone = Click("tutorial-done", () => EndTutorial(finished: true));
-            Click("practice-tutorial", StartTutorial);
+            Click("practice-tutorial", () => StartTutorial(automatic: false));
             _overlayCaption = _root.Q<Label>("overlay-caption");
             _overlayNumber = _root.Q<Label>("overlay-number");
             _overlayHint = _root.Q<Label>("overlay-hint");
@@ -1976,7 +1976,9 @@ namespace Ricochet.Client.App
 
         // ---- The first-time tutorial (TutorialState): a hand-made board with a prompt card over its bottom ----
 
-        private void StartTutorial()
+        // automatic = a new player's first visit: on a computer it runs on Home's own board (no jump to the Practice tab,
+        // which looked like a flicker); phones hide the board on Home, and the Practice button's tutorial stays on Practice.
+        private void StartTutorial(bool automatic)
         {
             if (_game.Match.InLobby)
                 return;
@@ -1987,7 +1989,8 @@ namespace Ricochet.Client.App
             _tutorialShown = null;
             UsageTracker.Track("tutorial_start");
             Scratchpad.ShowTutorial(_tutorial.Round, TutorialState.BestMoves);
-            _chosen = Screen.Practice;
+            if (!automatic || Compact)
+                _chosen = Screen.Practice;
             _sheetTarget = 0f; // phones: the panel slides down to show the board (pressed from Practice, it's up)
         }
 
@@ -2009,7 +2012,7 @@ namespace Ricochet.Client.App
                 // from a lobby link starts here.
                 _tutorialChecked = true;
                 if (_newPlayer && !_game.LaunchedIntoLobby && !_game.SkipTutorial)
-                    StartTutorial();
+                    StartTutorial(automatic: true);
             }
             if (_tutorial.IsActive && Session.Round != _tutorial.Round)
                 _tutorial.End(); // another board took over (the daily, a lobby): the tutorial is over
