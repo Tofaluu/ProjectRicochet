@@ -34,7 +34,24 @@ namespace BackendServer.Services
             }
         }
 
-        public async Task<DailyEntryRecord> OpenAsync(int number, string guestId, string name, DateTime now)
+        public async Task<string?> GetNameAsync(string guestId)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            return await db.Players.AsNoTracking().Where(p => p.GuestId == guestId).Select(p => p.Name).FirstOrDefaultAsync();
+        }
+
+        public async Task SetNameAsync(string guestId, string name, DateTime now)
+        {
+            await using DailyDbContext db = await _contexts.CreateDbContextAsync();
+            DailyPlayerRecord? player = await db.Players.FindAsync(guestId);
+            if (player == null)
+                db.Players.Add(new DailyPlayerRecord { GuestId = guestId, Name = name, CreatedUtc = now, LastSeenUtc = now });
+            else
+                player.Name = name;
+            await db.SaveChangesAsync();
+        }
+
+        public async Task<DailyEntryRecord> OpenAsync(int number, string guestId, string name, bool rename, DateTime now)
         {
             await using DailyDbContext db = await _contexts.CreateDbContextAsync();
             DailyPlayerRecord? player = await db.Players.FindAsync(guestId);
@@ -42,7 +59,8 @@ namespace BackendServer.Services
                 db.Players.Add(new DailyPlayerRecord { GuestId = guestId, Name = name, CreatedUtc = now, LastSeenUtc = now });
             else
             {
-                player.Name = name;
+                if (rename)
+                    player.Name = name;
                 player.LastSeenUtc = now;
             }
             DailyEntryRecord? entry = await db.Entries.FindAsync(number, guestId);

@@ -217,10 +217,10 @@ namespace Ricochet.Client.Network
         // ---- Daily puzzle (no lobby needed; errors surface as exceptions, see DescribeError) ----
 
         /// <summary>Today's daily puzzle; the day's first call starts the player's clock.</summary>
-        public async Task<DailyPuzzleInfo> GetDailyAsync(string guestId, string playerName)
+        public async Task<DailyPuzzleInfo> GetDailyAsync(string guestId, string playerName, bool nameChanged)
         {
             await EnsureConnectedAsync();
-            return await _connection.InvokeAsync<DailyPuzzleInfo>(HubMethods.GetDaily, guestId, playerName, HubMethods.ProtocolVersion);
+            return await _connection.InvokeAsync<DailyPuzzleInfo>(HubMethods.GetDaily, guestId, playerName, nameChanged, HubMethods.ProtocolVersion);
         }
 
         /// <summary>Pauses the player's clock on today's puzzle; the seconds played.</summary>
@@ -285,10 +285,11 @@ namespace Ricochet.Client.Network
         // ---- Accounts (optional; see AccountService on the server) ----
 
         /// <summary>Signs in with a Google ID token; the device plays as <see cref="AccountInfo.GuestId"/> from then on.</summary>
-        public async Task<AccountInfo> SignInWithGoogleAsync(string guestId, string idToken)
+        public async Task<AccountInfo> SignInWithGoogleAsync(string guestId, string idToken, string playerName, bool nameChanged)
         {
             await EnsureConnectedAsync();
-            return await _connection.InvokeAsync<AccountInfo>(HubMethods.SignInWithGoogle, guestId, idToken, HubMethods.ProtocolVersion);
+            return await _connection.InvokeAsync<AccountInfo>(HubMethods.SignInWithGoogle, guestId, idToken, playerName, nameChanged,
+                HubMethods.ProtocolVersion);
         }
 
         /// <summary>The account this guest id belongs to, or null (a plain guest, or the account was deleted).</summary>

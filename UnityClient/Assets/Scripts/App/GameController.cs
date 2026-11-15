@@ -21,6 +21,10 @@ namespace Ricochet.Client.App
         // Time to see the robot land before a solved board goes back to the start.
         private const float SolvedResetDelay = 0.9f;
         private const string NamePrefKey = "Ricochet.PlayerName";
+        // Set when the player renames on this device; cleared once the server has the name (protocol 18: the server owns it).
+        private const string NameChangedPrefKey = "Ricochet.NameChanged";
+        // The server's name for players who never chose one.
+        private const string DefaultServerName = "Player";
         // Letters that can't be misread for each other (no I/O/0/1).
         private const string CodeLetters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 
@@ -39,11 +43,42 @@ namespace Ricochet.Client.App
         /// <summary>?tutorial=0 / -notutorial: never start the first-time tutorial (automated tests use fresh profiles).</summary>
         public bool SkipTutorial { get; private set; }
 
-        /// <summary>The name shown in lobbies and on the daily leaderboard (remembered on this device).</summary>
+        /// <summary>
+        /// The name shown in lobbies and on the daily leaderboard (remembered on this device). Setting it is the player
+        /// renaming: the next daily load / sign-in tells the server (<see cref="NameChanged"/>). The server's stored name
+        /// wins otherwise (another device of the same account may have renamed them): <see cref="AdoptName"/>.
+        /// </summary>
         public string PlayerName
         {
             get => PlayerPrefs.GetString(NamePrefKey, "");
-            set => PlayerPrefs.SetString(NamePrefKey, (value ?? "").Trim());
+            set
+            {
+                string name = (value ?? "").Trim();
+                if (name == PlayerName)
+                    return;
+                PlayerPrefs.SetString(NamePrefKey, name);
+                PlayerPrefs.SetInt(NameChangedPrefKey, 1);
+            }
+        }
+
+        /// <summary>
+        /// Renamed on this device since the server last told it the stored name. Unknown counts as yes, so the first load
+        /// after protocol 18 keeps a rename made since the daily was last opened (names used to be sent every time).
+        /// </summary>
+        public bool NameChanged => PlayerPrefs.GetInt(NameChangedPrefKey, 1) == 1;
+
+        /// <summary>
+        /// Takes the server's stored name, answering a request sent with <paramref name="sent"/>; ignored if the player
+        /// renamed again meanwhile (that rename goes with the next request). An empty name stays empty rather than
+        /// becoming the server's default.
+        /// </summary>
+        public void AdoptName(string sent, string stored)
+        {
+            if (string.IsNullOrEmpty(stored) || PlayerName != (sent ?? "").Trim())
+                return;
+            PlayerPrefs.SetInt(NameChangedPrefKey, 0);
+            if (!(stored == DefaultServerName && PlayerName.Length == 0))
+                PlayerPrefs.SetString(NamePrefKey, stored);
         }
 
         private BoardSession Board => Scratchpad.Session;

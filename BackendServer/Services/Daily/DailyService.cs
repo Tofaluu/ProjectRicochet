@@ -84,8 +84,13 @@ namespace BackendServer.Services
         private DateTime NextResetUtc(DateOnly day) =>
             TimeZoneInfo.ConvertTimeToUtc(day.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), _zone);
 
+        /// <param name="name">The device's name: a new player's name, else only saved with <paramref name="rename"/>.</param>
         /// <param name="connectionId">The caller's connection: its clock pauses if the connection drops (null = never).</param>
-        public async Task<DailyPuzzleInfo> GetDailyAsync(string guestId, string name, string? connectionId = null)
+        /// <param name="rename">
+        /// The player changed their name on this device since it last heard the stored one. Otherwise the stored name stands
+        /// (it may come from another device of the same account) and goes back in <see cref="DailyPuzzleInfo.Name"/>.
+        /// </param>
+        public async Task<DailyPuzzleInfo> GetDailyAsync(string guestId, string name, string? connectionId = null, bool rename = true)
         {
             guestId = Player(guestId);
             DateTime now = UtcNow;
@@ -95,7 +100,8 @@ namespace BackendServer.Services
                 throw new HubException($"The daily puzzle starts on {_launch:yyyy-MM-dd}.");
 
             DailyPuzzleRecord puzzle = await EnsurePuzzleAsync(number);
-            DailyEntryRecord entry = await _store.OpenAsync(number, guestId, CleanName(name), now);
+            DailyEntryRecord entry = await _store.OpenAsync(number, guestId, CleanName(name), rename, now);
+            string storedName = await _store.GetNameAsync(guestId) ?? CleanName(name);
             await StartClockAsync(entry, now, connectionId);
             return new DailyPuzzleInfo
             {
@@ -109,6 +115,7 @@ namespace BackendServer.Services
                 BestSeconds = entry.BestSeconds,
                 BestSolution = entry.BestSolution ?? Array.Empty<byte>(),
                 Streak = await StreakAsync(guestId, number),
+                Name = storedName,
             };
         }
 
@@ -526,12 +533,16 @@ namespace BackendServer.Services
                 throw new HubException("Invalid player id.");
         }
 
-        private static string CleanName(string name)
+        /// <summary>The name given to players who never chose one.</summary>
+        public const string DefaultName = "Player";
+
+        /// <summary>Trimmed and cut to the length limit; empty = <see cref="DefaultName"/>.</summary>
+        public static string CleanName(string? name)
         {
             name = (name ?? "").Trim();
             if (name.Length > MaxNameLength)
                 name = name.Substring(0, MaxNameLength);
-            return name.Length == 0 ? "Player" : name;
+            return name.Length == 0 ? DefaultName : name;
         }
     }
 }

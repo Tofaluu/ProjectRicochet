@@ -22,13 +22,32 @@ namespace BackendServer.Services
             return Task.CompletedTask;
         }
 
-        public Task<DailyEntryRecord> OpenAsync(int number, string guestId, string name, DateTime now)
+        public Task<string?> GetNameAsync(string guestId)
+        {
+            lock (_gate)
+                return Task.FromResult(_players.TryGetValue(guestId, out DailyPlayerRecord? player) ? player.Name : null);
+        }
+
+        public Task SetNameAsync(string guestId, string name, DateTime now)
+        {
+            lock (_gate)
+            {
+                if (_players.TryGetValue(guestId, out DailyPlayerRecord? player))
+                    player.Name = name;
+                else
+                    _players[guestId] = new DailyPlayerRecord { GuestId = guestId, Name = name, CreatedUtc = now, LastSeenUtc = now };
+            }
+            return Task.CompletedTask;
+        }
+
+        public Task<DailyEntryRecord> OpenAsync(int number, string guestId, string name, bool rename, DateTime now)
         {
             lock (_gate)
             {
                 if (_players.TryGetValue(guestId, out DailyPlayerRecord? player))
                 {
-                    player.Name = name;
+                    if (rename)
+                        player.Name = name;
                     player.LastSeenUtc = now;
                 }
                 else

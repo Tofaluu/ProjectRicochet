@@ -99,7 +99,9 @@ namespace Ricochet.Client.App
                 if (token == null)
                     return; // closed the dialog
                 Network.ServerUrl = _game.ServerUrl;
-                AccountInfo account = await Network.SignInWithGoogleAsync(GuestIdentity.Id, token);
+                string sentName = _game.PlayerName;
+                AccountInfo account = await Network.SignInWithGoogleAsync(GuestIdentity.Id, token, sentName, _game.NameChanged);
+                _game.AdoptName(sentName, account.Name); // before ChangePlayer reloads the daily with it
                 Email = string.IsNullOrEmpty(account.Email) ? "your Google account" : account.Email;
                 _checked = true;
                 if (account.GuestId != GuestIdentity.Id)

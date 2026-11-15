@@ -146,7 +146,9 @@ namespace Ricochet.Client.App
             try
             {
                 Network.ServerUrl = _game.ServerUrl;
-                DailyPuzzleInfo info = await Network.GetDailyAsync(GuestIdentity.Id, _game.PlayerName);
+                string sentName = _game.PlayerName;
+                DailyPuzzleInfo info = await Network.GetDailyAsync(GuestIdentity.Id, sentName, _game.NameChanged);
+                _game.AdoptName(sentName, info.Name);
                 if (State.Stage != DailyStage.Loading || Network.IsInLobby)
                     return; // closed, or joined a lobby, meanwhile
                 State.OnLoaded(info, Time.time);

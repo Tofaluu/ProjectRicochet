@@ -74,15 +74,23 @@ namespace BackendServer.Services
             _log = log;
         }
 
-        public async Task<AccountInfo> SignInWithGoogleAsync(string guestId, string idToken)
+        /// <param name="name">The device's name (see <see cref="SignInAsync"/> for which name the account keeps).</param>
+        /// <param name="rename">The player changed their name on this device since it last heard the stored one.</param>
+        public async Task<AccountInfo> SignInWithGoogleAsync(string guestId, string idToken, string? name = null, bool rename = false)
         {
             CheckGuestId(guestId);
             ExternalIdentity identity = await _google.ValidateAsync(idToken)
                 ?? throw new HubException("Google sign-in didn't work. Please try again.");
-            return await SignInAsync(guestId, Google, identity);
+            return await SignInAsync(guestId, Google, identity, name, rename);
         }
 
-        private async Task<AccountInfo> SignInAsync(string guestId, string provider, ExternalIdentity identity)
+        /// <summary>
+        /// Names (2026-11-14): the account's name is the home guest id's daily name, and devices adopt it
+        /// (<see cref="AccountInfo.Name"/>), so a new device or a private window never overwrites it with its own default.
+        /// Signing in on the device that is the home itself keeps that device's name if it renamed meanwhile; elsewhere the
+        /// account's name stands, unless it never chose one (still the default) and this device has.
+        /// </summary>
+        private async Task<AccountInfo> SignInAsync(string guestId, string provider, ExternalIdentity identity, string? deviceName, bool rename)
         {
             DateTime now = _time.GetUtcNow().UtcDateTime;
             await _gate.WaitAsync();
@@ -105,7 +113,8 @@ namespace BackendServer.Services
                     await _accounts.TouchAsync(account.Id, identity.Email, now);
                     await RecordAsync(UsageService.SignIn, account.HomeGuestId, guestId, now);
                 }
-                return new AccountInfo { GuestId = account.HomeGuestId, Email = identity.Email ?? account.Email ?? "", Merged = merged };
+                string name = await SettleNameAsync(account.HomeGuestId, guestId, DailyService.CleanName(deviceName), rename, now);
+                return new AccountInfo { GuestId = account.HomeGuestId, Email = identity.Email ?? account.Email ?? "", Merged = merged, Name = name };
             }
             finally
             {
@@ -142,6 +151,18 @@ namespace BackendServer.Services
             {
                 _gate.Release();
             }
+        }
+
+        private async Task<string> SettleNameAsync(string home, string device, string deviceName, bool rename, DateTime now)
+        {
+            string? stored = await _daily.GetNameAsync(home);
+            bool deviceWins = home == device
+                ? stored == null || rename
+                : (stored == null || stored == DailyService.DefaultName) && deviceName != DailyService.DefaultName;
+            if (!deviceWins)
+                return stored ?? deviceName;
+            await _daily.SetNameAsync(home, deviceName, now);
+            return deviceName;
         }
 
         // For the stats page; a failure here never fails the sign-in.

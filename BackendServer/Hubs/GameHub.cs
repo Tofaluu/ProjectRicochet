@@ -22,10 +22,10 @@ namespace BackendServer.Hubs
         }
 
         [HubMethodName(HubMethods.SignInWithGoogle)]
-        public Task<AccountInfo> SignInWithGoogle(string guestId, string idToken, int protocolVersion)
+        public Task<AccountInfo> SignInWithGoogle(string guestId, string idToken, string name, bool nameChanged, int protocolVersion)
         {
             CheckVersion(protocolVersion);
-            return _accounts.SignInWithGoogleAsync(guestId, idToken);
+            return _accounts.SignInWithGoogleAsync(guestId, idToken, name, nameChanged);
         }
 
         [HubMethodName(HubMethods.GetAccount)]
@@ -50,10 +50,10 @@ namespace BackendServer.Hubs
         }
 
         [HubMethodName(HubMethods.GetDaily)]
-        public Task<DailyPuzzleInfo> GetDaily(string guestId, string name, int protocolVersion)
+        public Task<DailyPuzzleInfo> GetDaily(string guestId, string name, bool nameChanged, int protocolVersion)
         {
             CheckVersion(protocolVersion);
-            return _daily.GetDailyAsync(guestId, name, Context.ConnectionId);
+            return _daily.GetDailyAsync(guestId, name, Context.ConnectionId, nameChanged);
         }
 
         [HubMethodName(HubMethods.PauseDaily)]

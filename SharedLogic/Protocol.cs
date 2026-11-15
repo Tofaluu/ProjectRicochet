@@ -17,7 +17,7 @@ namespace SharedLogic
         /// Bump whenever the wire contract changes (method names, arguments, DTOs, codecs). The server
         /// refuses joins from any other version with a clear "update your game" message.
         /// </summary>
-        public const int ProtocolVersion = 17;
+        public const int ProtocolVersion = 18;
 
         // Client -> server
 
@@ -70,9 +70,11 @@ namespace SharedLogic
         // results and streak without an account. Errors (bad id, invalid solution, a day that's over) are HubExceptions.
 
         /// <summary>
-        /// (string guestId, string name, int protocolVersion) returns <see cref="DailyPuzzleInfo"/>: today's puzzle
-        /// and how the player stands on it. Starts (or restarts) the player's clock; name is shown on the
-        /// leaderboard (updated each call). Fails if protocolVersion != <see cref="ProtocolVersion"/>.
+        /// (string guestId, string name, bool nameChanged, int protocolVersion) returns <see cref="DailyPuzzleInfo"/>: today's
+        /// puzzle and how the player stands on it. Starts (or restarts) the player's clock. Protocol 18: the server owns the
+        /// name - name is saved for a new player or with nameChanged (renamed on this device since it last heard the stored
+        /// one); <see cref="DailyPuzzleInfo.Name"/> is the stored name, which the device adopts. Fails if protocolVersion !=
+        /// <see cref="ProtocolVersion"/>.
         /// </summary>
         public const string GetDaily = "GetDaily";
 
@@ -126,8 +128,9 @@ namespace SharedLogic
         // out is the client starting a fresh guest id.
 
         /// <summary>
-        /// (string guestId, string googleIdToken, int protocolVersion) returns <see cref="AccountInfo"/>: signs in with a Google
-        /// ID token (Google Identity Services); the client then uses <see cref="AccountInfo.GuestId"/> as its guest id.
+        /// (string guestId, string googleIdToken, string name, bool nameChanged, int protocolVersion) returns
+        /// <see cref="AccountInfo"/>: signs in with a Google ID token (Google Identity Services); the client then uses
+        /// <see cref="AccountInfo.GuestId"/> as its guest id and <see cref="AccountInfo.Name"/> as its name.
         /// </summary>
         public const string SignInWithGoogle = "SignInWithGoogle";
 
@@ -386,6 +389,9 @@ namespace SharedLogic
 
         /// <summary>This sign-in brought the device's guest progress into the account.</summary>
         public bool Merged { get; set; }
+
+        /// <summary>The account's name (protocol 18; from <see cref="HubMethods.SignInWithGoogle"/>): the device adopts it.</summary>
+        public string Name { get; set; }
     }
 
     /// <summary>Today's daily puzzle and how the asking player stands on it (<see cref="HubMethods.GetDaily"/>).</summary>
@@ -393,6 +399,9 @@ namespace SharedLogic
     {
         /// <summary>Puzzle #1 was the launch day; one per day after that.</summary>
         public int Number { get; set; }
+
+        /// <summary>The player's stored name (protocol 18): the device adopts it, since another device may have renamed them.</summary>
+        public string Name { get; set; }
 
         /// <summary>The puzzle's day in Eastern time, "yyyy-MM-dd".</summary>
         public string Date { get; set; }

@@ -12,10 +12,17 @@ namespace BackendServer.Services
         Task SavePuzzleAsync(DailyPuzzleRecord puzzle);
 
         /// <summary>
-        /// Records the player (creating them, or updating their name) and returns their entry for the puzzle,
+        /// Records the player (creating them with <paramref name="name"/>; an existing player's name changes only with
+        /// <paramref name="rename"/>) and returns their entry for the puzzle,
         /// creating it with <paramref name="now"/> as the opening time if it's their first look (clock running from then).
         /// </summary>
-        Task<DailyEntryRecord> OpenAsync(int number, string guestId, string name, DateTime now);
+        Task<DailyEntryRecord> OpenAsync(int number, string guestId, string name, bool rename, DateTime now);
+
+        /// <summary>The player's stored name, or null if they have never played.</summary>
+        Task<string?> GetNameAsync(string guestId);
+
+        /// <summary>Sets the player's name, creating the player if they have never played.</summary>
+        Task SetNameAsync(string guestId, string name, DateTime now);
 
         /// <summary>Sets the player's clock on the puzzle (see <see cref="DailyEntryRecord.PlayedSeconds"/>); no entry = nothing.</summary>
         Task SetClockAsync(int number, string guestId, double playedSeconds, DateTime? since);

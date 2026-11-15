@@ -110,6 +110,48 @@ public class AccountTests
     }
 
     [Fact]
+    public async Task Names_InMemory() => await NamesScenario(Create(new InMemoryDailyStore(), new InMemoryUsageStore(), new InMemoryAccountStore()));
+
+    [Fact]
+    public async Task Names_TheDatabaseStores()
+    {
+        using var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        var options = new DbContextOptionsBuilder<DailyDbContext>().UseSqlite(connection).Options;
+        using (var db = new DailyDbContext(options))
+            db.Database.EnsureCreated();
+        var factory = new Factory(options);
+        await NamesScenario(Create(new EfDailyStore(factory), new EfUsageStore(factory), new EfAccountStore(factory)));
+    }
+
+    // The server owns the name: a device's own name only replaces the stored one when renamed there, and signing in on a
+    // new device (a private window's "Player") brings the account's name instead of overwriting it.
+    private static async Task NamesScenario(Setup s)
+    {
+        const string Desk = "desk-guest-id-000004";
+        Assert.Equal("Sam", (await s.Daily.GetDailyAsync(Laptop, "Sam", rename: false)).Name); // new player: their name
+        Assert.Equal("Sam", (await s.Daily.GetDailyAsync(Laptop, "", rename: false)).Name); // not renamed here: stored name stands
+        Assert.Equal("Sammy", (await s.Daily.GetDailyAsync(Laptop, "Sammy", rename: true)).Name);
+
+        Assert.Equal("Sammy", (await s.Accounts.SignInWithGoogleAsync(Laptop, "google:sam", "Sammy")).Name);
+        Assert.Equal("Sammy", (await s.Accounts.SignInWithGoogleAsync(Phone, "google:sam", "")).Name); // private window
+        Assert.Equal("Sammy", await s.Store.GetNameAsync(Laptop));
+
+        // Renamed on the phone; the laptop's stale local name doesn't undo it.
+        Assert.Equal("Sam L", (await s.Daily.GetDailyAsync(Laptop, "Sam L", rename: true)).Name);
+        Assert.Equal("Sam L", (await s.Daily.GetDailyAsync(Laptop, "Sammy", rename: false)).Name);
+
+        // An account that never chose a name takes the first real one a device brings; after that it stands.
+        await s.Daily.GetDailyAsync(Tablet, "", rename: false);
+        Assert.Equal("Player", (await s.Accounts.SignInWithGoogleAsync(Tablet, "google:alex", "")).Name);
+        Assert.Equal("Alex", (await s.Accounts.SignInWithGoogleAsync(Desk, "google:alex", "Alex")).Name);
+        Assert.Equal("Alex", (await s.Accounts.SignInWithGoogleAsync(Phone, "google:alex", "Al", rename: true)).Name);
+        // ...except on the home device itself, where a rename since it last heard the name is the player's choice.
+        Assert.Equal("Lexi", (await s.Accounts.SignInWithGoogleAsync(Tablet, "google:alex", "Lexi", rename: true)).Name);
+        Assert.Equal("Lexi", await s.Store.GetNameAsync(Tablet));
+    }
+
+    [Fact]
     public async Task TheRealGoogleCheck_RefusesJunk_AndIsOffWithoutAClientId()
     {
         var off = new GoogleTokenValidator(Options.Create(new AccountOptions()));
